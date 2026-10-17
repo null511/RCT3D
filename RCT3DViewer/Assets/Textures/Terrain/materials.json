@@ -1,7 +1,7 @@
 {
   "fallback": "rct2.terrain_surface.grass",
   "materials": [
-    { "objectId": "rct2.terrain_surface.chequerboard", "texture": "checkerboard.png" },
+    { "objectId": "rct2.terrain_surface.chequerboard", "texture": "chequerboard.png" },
     { "objectId": "rct2.terrain_surface.dirt", "texture": "dirt.png" },
     { "objectId": "rct2.terrain_surface.grass", "texture": "grass.png" },
     { "objectId": "rct2.terrain_surface.grass_clumps", "texture": "grass_clumps.png" },

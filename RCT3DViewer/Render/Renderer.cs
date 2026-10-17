@@ -71,11 +71,15 @@ public sealed class Renderer : IDisposable
     private RCTTileSurfaceData[]? _surfaceData;
     private int _mapWidth;
     private int _mapHeight;
+    private int _terrainSkirtSections;
+    private int _terrainSkirtTriangles;
+    private int _terrainSkirtFlatEdges;
 
     public string? LibraryPath { get; set; }
     public string? OpenRCT2Path { get; set; }
     public string? Rct2Path { get; set; }
     public string? ParkPath { get; set; }
+    public float TerrainSkirtFloor { get; set; } = -24.0f;
 
 
     public void Run()
@@ -867,9 +871,13 @@ public sealed class Renderer : IDisposable
     {
         _vertices.Clear();
         _indices.Clear();
+        _terrainSkirtSections = 0;
+        _terrainSkirtTriangles = 0;
+        _terrainSkirtFlatEdges = 0;
         const float tileSize = 3.0f;
         const float baseHeightScale = 0.75f;
         const float cornerHeightScale = 1.5f;
+        var perimeterSkirtFloor = TerrainSkirtFloor;
 
         for (var y = 0; y < height; y++)
         for (var x = 0; x < width; x++) {
@@ -900,7 +908,123 @@ public sealed class Renderer : IDisposable
             _indices.Add(baseIdx + 1);
             _indices.Add(baseIdx + 3);
             _indices.Add(baseIdx + 2);
+
+            var eastEdgeNormal = Vector3.UnitX;
+            if (x + 1 < width) {
+                var eastNeighbor = surfaces[y * width + x + 1];
+                var neighborBase = eastNeighbor.BaseZ * baseHeightScale;
+                var neighborSouth = neighborBase + eastNeighbor.SouthCornerHeight * cornerHeightScale;
+                var neighborWest = neighborBase + eastNeighbor.WestCornerHeight * cornerHeightScale;
+                AddSkirtEdge(cEast, east, cNorth, north, neighborSouth, neighborWest,
+                    materialId, GetTerrainMaterialId(eastNeighbor.TerrainSurfaceIdHash), eastEdgeNormal);
+            }
+            else {
+                AddSkirtEdge(cEast, east, cNorth, north, perimeterSkirtFloor, perimeterSkirtFloor,
+                    materialId, materialId, eastEdgeNormal);
+            }
+
+            var northEdgeNormal = Vector3.UnitZ;
+            if (y + 1 < height) {
+                var northNeighbor = surfaces[(y + 1) * width + x];
+                var neighborBase = northNeighbor.BaseZ * baseHeightScale;
+                var neighborSouth = neighborBase + northNeighbor.SouthCornerHeight * cornerHeightScale;
+                var neighborEast = neighborBase + northNeighbor.EastCornerHeight * cornerHeightScale;
+                AddSkirtEdge(cWest, west, cNorth, north, neighborSouth, neighborEast,
+                    materialId, GetTerrainMaterialId(northNeighbor.TerrainSurfaceIdHash), northEdgeNormal);
+            }
+            else {
+                AddSkirtEdge(cWest, west, cNorth, north, perimeterSkirtFloor, perimeterSkirtFloor,
+                    materialId, materialId, northEdgeNormal);
+            }
+
+            if (x == 0)
+                AddSkirtEdge(cSouth, south, cWest, west, perimeterSkirtFloor, perimeterSkirtFloor,
+                    materialId, materialId, -Vector3.UnitX);
+            if (y == 0)
+                AddSkirtEdge(cSouth, south, cEast, east, perimeterSkirtFloor, perimeterSkirtFloor,
+                    materialId, materialId, -Vector3.UnitZ);
         }
+    }
+
+    private void AddSkirtEdge(Vector3 edgeStart, float surfaceAStart, Vector3 edgeEnd, float surfaceAEnd,
+        float surfaceBStart, float surfaceBEnd, uint materialA, uint materialB, Vector3 normalA)
+    {
+        var startDifference = surfaceAStart - surfaceBStart;
+        var endDifference = surfaceAEnd - surfaceBEnd;
+        if (MathF.Abs(startDifference) < 0.0001f && MathF.Abs(endDifference) < 0.0001f) {
+            _terrainSkirtFlatEdges++;
+            return;
+        }
+
+        if (startDifference * endDifference < 0.0f) {
+            var crossing = startDifference / (startDifference - endDifference);
+            AddSkirtSection(edgeStart, edgeEnd, surfaceAStart, surfaceAEnd, surfaceBStart, surfaceBEnd,
+                0.0f, crossing, materialA, materialB, normalA);
+            AddSkirtSection(edgeStart, edgeEnd, surfaceAStart, surfaceAEnd, surfaceBStart, surfaceBEnd,
+                crossing, 1.0f, materialA, materialB, normalA);
+        }
+        else {
+            AddSkirtSection(edgeStart, edgeEnd, surfaceAStart, surfaceAEnd, surfaceBStart, surfaceBEnd,
+                0.0f, 1.0f, materialA, materialB, normalA);
+        }
+    }
+
+    private void AddSkirtSection(Vector3 edgeStart, Vector3 edgeEnd, float surfaceAStart, float surfaceAEnd,
+        float surfaceBStart, float surfaceBEnd, float startT, float endT, uint materialA, uint materialB, Vector3 normalA)
+    {
+        var startA = float.Lerp(surfaceAStart, surfaceAEnd, startT);
+        var endA = float.Lerp(surfaceAStart, surfaceAEnd, endT);
+        var startB = float.Lerp(surfaceBStart, surfaceBEnd, startT);
+        var endB = float.Lerp(surfaceBStart, surfaceBEnd, endT);
+        var aIsHigher = (startA + endA) >= (startB + endB);
+        var startHigh = aIsHigher ? startA : startB;
+        var endHigh = aIsHigher ? endA : endB;
+        var startLow = aIsHigher ? startB : startA;
+        var endLow = aIsHigher ? endB : endA;
+        if (MathF.Abs(startHigh - startLow) < 0.0001f && MathF.Abs(endHigh - endLow) < 0.0001f)
+            return;
+
+        var materialId = aIsHigher ? materialA : materialB;
+        var normal = aIsHigher ? normalA : -normalA;
+        var startPosition = Vector3.Lerp(edgeStart, edgeEnd, startT);
+        var endPosition = Vector3.Lerp(edgeStart, edgeEnd, endT);
+        var topStart = new Vector3(startPosition.X, startHigh, startPosition.Z);
+        var topEnd = new Vector3(endPosition.X, endHigh, endPosition.Z);
+        var bottomStart = new Vector3(startPosition.X, startLow, startPosition.Z);
+        var bottomEnd = new Vector3(endPosition.X, endLow, endPosition.Z);
+        var edgeUStart = (MathF.Abs(edgeEnd.X - edgeStart.X) > 0.0001f ? startPosition.X : startPosition.Z) / 3.0f;
+        var edgeUEnd = (MathF.Abs(edgeEnd.X - edgeStart.X) > 0.0001f ? endPosition.X : endPosition.Z) / 3.0f;
+        var baseIndex = (uint)_vertices.Count;
+        _terrainSkirtSections++;
+        _vertices.Add(new TerrainVertex(topStart, normal, new Vector2(edgeUStart, startHigh / 3.0f), materialId));
+        _vertices.Add(new TerrainVertex(bottomStart, normal, new Vector2(edgeUStart, startLow / 3.0f), materialId));
+        _vertices.Add(new TerrainVertex(topEnd, normal, new Vector2(edgeUEnd, endHigh / 3.0f), materialId));
+        _vertices.Add(new TerrainVertex(bottomEnd, normal, new Vector2(edgeUEnd, endLow / 3.0f), materialId));
+
+        if (MathF.Abs(startHigh - startLow) < 0.0001f) {
+            AddSkirtTriangle(baseIndex, baseIndex + 2, baseIndex + 3, normal);
+        }
+        else if (MathF.Abs(endHigh - endLow) < 0.0001f) {
+            AddSkirtTriangle(baseIndex, baseIndex + 1, baseIndex + 2, normal);
+        }
+        else {
+            AddSkirtTriangle(baseIndex, baseIndex + 1, baseIndex + 2, normal);
+            AddSkirtTriangle(baseIndex + 2, baseIndex + 1, baseIndex + 3, normal);
+        }
+    }
+
+    private void AddSkirtTriangle(uint indexA, uint indexB, uint indexC, Vector3 expectedNormal)
+    {
+        var positionA = _vertices[(int)indexA].Position;
+        var positionB = _vertices[(int)indexB].Position;
+        var positionC = _vertices[(int)indexC].Position;
+        if (Vector3.Dot(Vector3.Cross(positionB - positionA, positionC - positionA), expectedNormal) < 0.0f)
+            (indexB, indexC) = (indexC, indexB);
+
+        _indices.Add(indexA);
+        _indices.Add(indexB);
+        _indices.Add(indexC);
+        _terrainSkirtTriangles++;
     }
 
     private uint GetTerrainMaterialId(uint surfaceObjectIdHash)
@@ -932,6 +1056,7 @@ public sealed class Renderer : IDisposable
             var v = _vertices[0];
             Console.WriteLine($"[Mesh] Uploaded vertices={_vertices.Count}, indices={_indices.Count}, firstPos=({v.Position.X:F2},{v.Position.Y:F2},{v.Position.Z:F2})");
         }
+        Console.WriteLine($"[Mesh] Terrain skirt sections={_terrainSkirtSections}, triangles={_terrainSkirtTriangles}, flat edges skipped={_terrainSkirtFlatEdges}");
     }
 
     private unsafe void AllocateBuffer(ulong size, BufferUsageFlags usage, MemoryPropertyFlags properties, out Buffer buffer, out DeviceMemory bufferMemory)
