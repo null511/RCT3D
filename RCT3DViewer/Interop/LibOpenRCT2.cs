@@ -6,9 +6,9 @@ namespace RCT3DViewer.Interop;
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct RCTTileSurfaceData
 {
+    public uint TerrainSurfaceIdHash;
     public byte BaseZ;
     public byte SlopeFlags;
-    public ushort GroundType;
     public byte NorthCornerHeight;
     public byte EastCornerHeight;
     public byte SouthCornerHeight;
@@ -20,7 +20,7 @@ public struct RCTTileSurfaceData
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 3;
+    private const uint ExpectedAbiVersion = 4;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();

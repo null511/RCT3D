@@ -40,6 +40,14 @@ public sealed class Renderer : IDisposable
     private RenderPass _renderPass;
     private PipelineLayout _pipelineLayout;
     private Pipeline _graphicsPipeline;
+    private DescriptorSetLayout _terrainDescriptorSetLayout;
+    private DescriptorPool _terrainDescriptorPool;
+    private DescriptorSet _terrainDescriptorSet;
+    private Image _terrainTextureImage;
+    private DeviceMemory _terrainTextureMemory;
+    private ImageView _terrainTextureView;
+    private Silk.NET.Vulkan.Sampler _terrainTextureSampler;
+    private TerrainMaterialLibrary? _terrainMaterials;
     private CommandPool _commandPool;
     private CommandBuffer[] _commandBuffers = Array.Empty<CommandBuffer>();
 
@@ -117,6 +125,7 @@ public sealed class Renderer : IDisposable
 
             _surfaceData = new RCTTileSurfaceData[checked(width * height)];
             _simulation.FillSurfaceData(_surfaceData);
+            _terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures", "Terrain"));
             _mapWidth = width;
             _mapHeight = height;
             _camera.Position = new Vector3(width * 1.5f, 120.0f, -height * 1.5f);
@@ -150,6 +159,7 @@ public sealed class Renderer : IDisposable
         UploadMeshToGPU();
 
         CreateCommandInfrastructure();
+        CreateTerrainTextureResources();
         CreateSyncPrimitives();
 
         Console.WriteLine("\n=== Vulkan Engine Pipeline Fully Operational ===");
@@ -438,6 +448,179 @@ public sealed class Renderer : IDisposable
         _depthImageViews = Array.Empty<ImageView>();
     }
 
+    private unsafe void CreateTerrainTextureResources()
+    {
+        var materials = _terrainMaterials ?? throw new InvalidOperationException("Terrain materials were not loaded.");
+        var layerBytes = checked((ulong)materials.Width * (ulong)materials.Height * 4);
+        var textureBytes = checked(layerBytes * (ulong)materials.LayerCount);
+
+        AllocateBuffer(textureBytes, BufferUsageFlags.TransferSrcBit,
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out var stagingBuffer, out var stagingMemory);
+        try {
+            void* mapped;
+            if (_vk!.MapMemory(_logicalDevice, stagingMemory, 0, textureBytes, 0, &mapped) != Result.Success)
+                throw new Exception("Failed to map terrain texture staging memory.");
+            Marshal.Copy(materials.Pixels, 0, (IntPtr)mapped, materials.Pixels.Length);
+            _vk.UnmapMemory(_logicalDevice, stagingMemory);
+
+            ImageCreateInfo imageInfo = new() {
+                SType = StructureType.ImageCreateInfo,
+                ImageType = ImageType.Type2D,
+                Format = Format.R8G8B8A8Srgb,
+                Extent = new Extent3D((uint)materials.Width, (uint)materials.Height, 1),
+                MipLevels = 1,
+                ArrayLayers = (uint)materials.LayerCount,
+                Samples = SampleCountFlags.Count1Bit,
+                Tiling = ImageTiling.Optimal,
+                Usage = ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
+                SharingMode = SharingMode.Exclusive,
+                InitialLayout = ImageLayout.Undefined
+            };
+            if (_vk.CreateImage(_logicalDevice, ref imageInfo, null, out _terrainTextureImage) != Result.Success)
+                throw new Exception("Failed to create terrain texture array image.");
+
+            _vk.GetImageMemoryRequirements(_logicalDevice, _terrainTextureImage, out var requirements);
+            MemoryAllocateInfo allocationInfo = new() {
+                SType = StructureType.MemoryAllocateInfo,
+                AllocationSize = requirements.Size,
+                MemoryTypeIndex = FindMemoryType(requirements.MemoryTypeBits, MemoryPropertyFlags.DeviceLocalBit)
+            };
+            if (_vk.AllocateMemory(_logicalDevice, ref allocationInfo, null, out _terrainTextureMemory) != Result.Success)
+                throw new Exception("Failed to allocate terrain texture array memory.");
+            if (_vk.BindImageMemory(_logicalDevice, _terrainTextureImage, _terrainTextureMemory, 0) != Result.Success)
+                throw new Exception("Failed to bind terrain texture array memory.");
+
+            var regions = new BufferImageCopy[materials.LayerCount];
+            for (uint layer = 0; layer < regions.Length; layer++) {
+                regions[layer] = new BufferImageCopy {
+                    BufferOffset = layerBytes * layer,
+                    ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, layer, 1),
+                    ImageExtent = new Extent3D((uint)materials.Width, (uint)materials.Height, 1)
+                };
+            }
+            UploadTerrainTexture(stagingBuffer, regions);
+        }
+        finally {
+            _vk!.DestroyBuffer(_logicalDevice, stagingBuffer, null);
+            _vk.FreeMemory(_logicalDevice, stagingMemory, null);
+        }
+
+        ImageViewCreateInfo viewInfo = new() {
+            SType = StructureType.ImageViewCreateInfo,
+            Image = _terrainTextureImage,
+            ViewType = ImageViewType.Type2DArray,
+            Format = Format.R8G8B8A8Srgb,
+            SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)materials.LayerCount)
+        };
+        if (_vk!.CreateImageView(_logicalDevice, in viewInfo, null, out _terrainTextureView) != Result.Success)
+            throw new Exception("Failed to create terrain texture array view.");
+
+        SamplerCreateInfo samplerInfo = new() {
+            SType = StructureType.SamplerCreateInfo,
+            MagFilter = Filter.Linear,
+            MinFilter = Filter.Linear,
+            MipmapMode = SamplerMipmapMode.Linear,
+            AddressModeU = SamplerAddressMode.Repeat,
+            AddressModeV = SamplerAddressMode.Repeat,
+            AddressModeW = SamplerAddressMode.Repeat,
+            MaxAnisotropy = 1,
+            MinLod = 0,
+            MaxLod = 0,
+            BorderColor = BorderColor.IntOpaqueBlack
+        };
+        if (_vk.CreateSampler(_logicalDevice, in samplerInfo, null, out _terrainTextureSampler) != Result.Success)
+            throw new Exception("Failed to create terrain texture sampler.");
+
+        var poolSizes = new DescriptorPoolSize[] {
+            new() { Type = DescriptorType.SampledImage, DescriptorCount = 1 },
+            new() { Type = DescriptorType.Sampler, DescriptorCount = 1 }
+        };
+        fixed (DescriptorPoolSize* poolSizesPtr = poolSizes) {
+            DescriptorPoolCreateInfo poolInfo = new() {
+                SType = StructureType.DescriptorPoolCreateInfo,
+                MaxSets = 1,
+                PoolSizeCount = (uint)poolSizes.Length,
+                PPoolSizes = poolSizesPtr
+            };
+            if (_vk.CreateDescriptorPool(_logicalDevice, in poolInfo, null, out _terrainDescriptorPool) != Result.Success)
+                throw new Exception("Failed to create terrain texture descriptor pool.");
+        }
+
+        var setLayout = _terrainDescriptorSetLayout;
+        DescriptorSetAllocateInfo setInfo = new() {
+            SType = StructureType.DescriptorSetAllocateInfo,
+            DescriptorPool = _terrainDescriptorPool,
+            DescriptorSetCount = 1,
+            PSetLayouts = &setLayout
+        };
+        if (_vk.AllocateDescriptorSets(_logicalDevice, in setInfo, out _terrainDescriptorSet) != Result.Success)
+            throw new Exception("Failed to allocate terrain texture descriptor set.");
+
+        DescriptorImageInfo imageDescriptor = new() { ImageView = _terrainTextureView, ImageLayout = ImageLayout.ShaderReadOnlyOptimal };
+        DescriptorImageInfo samplerDescriptor = new() { Sampler = _terrainTextureSampler };
+        var writes = new WriteDescriptorSet[] {
+            new() { SType = StructureType.WriteDescriptorSet, DstSet = _terrainDescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
+            new() { SType = StructureType.WriteDescriptorSet, DstSet = _terrainDescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.Sampler }
+        };
+        fixed (WriteDescriptorSet* writesPtr = writes) {
+            writes[0].PImageInfo = &imageDescriptor;
+            writes[1].PImageInfo = &samplerDescriptor;
+            _vk.UpdateDescriptorSets(_logicalDevice, (uint)writes.Length, writesPtr, 0, null);
+        }
+    }
+
+    private unsafe void UploadTerrainTexture(Buffer stagingBuffer, BufferImageCopy[] regions)
+    {
+        CommandBufferAllocateInfo allocationInfo = new() {
+            SType = StructureType.CommandBufferAllocateInfo,
+            CommandPool = _commandPool,
+            Level = CommandBufferLevel.Primary,
+            CommandBufferCount = 1
+        };
+        if (_vk!.AllocateCommandBuffers(_logicalDevice, in allocationInfo, out var commandBuffer) != Result.Success)
+            throw new Exception("Failed to allocate a one-time command buffer.");
+        try {
+            CommandBufferBeginInfo beginInfo = new() { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
+            _vk.BeginCommandBuffer(commandBuffer, in beginInfo);
+            ImageMemoryBarrier toTransfer = new() {
+                SType = StructureType.ImageMemoryBarrier,
+                OldLayout = ImageLayout.Undefined,
+                NewLayout = ImageLayout.TransferDstOptimal,
+                SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                Image = _terrainTextureImage,
+                SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)_terrainMaterials!.LayerCount),
+                SrcAccessMask = AccessFlags.None,
+                DstAccessMask = AccessFlags.TransferWriteBit
+            };
+            _vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TopOfPipeBit, PipelineStageFlags.TransferBit,
+                0, 0, null, 0, null, 1, &toTransfer);
+            fixed (BufferImageCopy* regionsPtr = regions)
+                _vk.CmdCopyBufferToImage(commandBuffer, stagingBuffer, _terrainTextureImage,
+                    ImageLayout.TransferDstOptimal, (uint)regions.Length, regionsPtr);
+            ImageMemoryBarrier toShader = new() {
+                SType = StructureType.ImageMemoryBarrier,
+                OldLayout = ImageLayout.TransferDstOptimal,
+                NewLayout = ImageLayout.ShaderReadOnlyOptimal,
+                SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                Image = _terrainTextureImage,
+                SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)_terrainMaterials.LayerCount),
+                SrcAccessMask = AccessFlags.TransferWriteBit,
+                DstAccessMask = AccessFlags.ShaderReadBit
+            };
+            _vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit,
+                0, 0, null, 0, null, 1, &toShader);
+            _vk.EndCommandBuffer(commandBuffer);
+            SubmitInfo submitInfo = new() { SType = StructureType.SubmitInfo, CommandBufferCount = 1, PCommandBuffers = &commandBuffer };
+            if (_vk.QueueSubmit(_graphicsQueue, 1, in submitInfo, default) != Result.Success || _vk.QueueWaitIdle(_graphicsQueue) != Result.Success)
+                throw new Exception("Failed to submit terrain texture upload commands.");
+        }
+        finally {
+            _vk.FreeCommandBuffers(_logicalDevice, _commandPool, 1, in commandBuffer);
+        }
+    }
+
     private uint FindMemoryType(uint typeFilter, MemoryPropertyFlags properties)
     {
         _vk!.GetPhysicalDeviceMemoryProperties(_physicalDevice, out var memoryProperties);
@@ -561,7 +744,8 @@ public sealed class Renderer : IDisposable
         var attributeDescriptions = new VertexInputAttributeDescription[] {
             new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Position)) },
             new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Normal)) },
-            new() { Binding = 0, Location = 2, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Color)) }
+            new() { Binding = 0, Location = 2, Format = Format.R32G32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.TextureCoordinate)) },
+            new() { Binding = 0, Location = 3, Format = Format.R32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.MaterialId)) }
         };
 
         PipelineVertexInputStateCreateInfo vertexInputInfo = new() {
@@ -594,8 +778,29 @@ public sealed class Renderer : IDisposable
 
         PipelineColorBlendAttachmentState colorBlendAttachment = new() { ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit, BlendEnable = false };
         PipelineColorBlendStateCreateInfo colorBlending = new() { SType = StructureType.PipelineColorBlendStateCreateInfo, AttachmentCount = 1, PAttachments = &colorBlendAttachment };
+        var descriptorBindings = new DescriptorSetLayoutBinding[] {
+            new() { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+            new() { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
+        };
+        fixed (DescriptorSetLayoutBinding* bindingsPtr = descriptorBindings) {
+            DescriptorSetLayoutCreateInfo descriptorLayoutInfo = new() {
+                SType = StructureType.DescriptorSetLayoutCreateInfo,
+                BindingCount = (uint)descriptorBindings.Length,
+                PBindings = bindingsPtr
+            };
+            if (_vk!.CreateDescriptorSetLayout(_logicalDevice, in descriptorLayoutInfo, null, out _terrainDescriptorSetLayout) != Result.Success)
+                throw new Exception("Failed to create the terrain texture descriptor-set layout.");
+        }
+
+        var descriptorLayout = _terrainDescriptorSetLayout;
         PushConstantRange pushConstantRange = new() { StageFlags = ShaderStageFlags.VertexBit, Offset = 0, Size = (uint)Marshal.SizeOf<UniformBufferObject>() };
-        PipelineLayoutCreateInfo pipelineLayoutInfo = new() { SType = StructureType.PipelineLayoutCreateInfo, PushConstantRangeCount = 1, PPushConstantRanges = &pushConstantRange };
+        PipelineLayoutCreateInfo pipelineLayoutInfo = new() {
+            SType = StructureType.PipelineLayoutCreateInfo,
+            SetLayoutCount = 1,
+            PSetLayouts = &descriptorLayout,
+            PushConstantRangeCount = 1,
+            PPushConstantRanges = &pushConstantRange
+        };
         _vk!.CreatePipelineLayout(_logicalDevice, in pipelineLayoutInfo, null, out _pipelineLayout);
 
         GraphicsPipelineCreateInfo pipelineInfo = new() {
@@ -683,12 +888,12 @@ public sealed class Renderer : IDisposable
             // Keep both triangles counter-clockwise from above (positive Y normal).
             var normal1 = Vector3.Normalize(Vector3.Cross(cEast - cNorth, cWest - cNorth));
             var normal2 = Vector3.Normalize(Vector3.Cross(cSouth - cEast, cWest - cEast));
-            var groundColor = GetTerrainColor(surface.MapColour);
+            var materialId = GetTerrainMaterialId(surface.TerrainSurfaceIdHash);
             var baseIdx = (uint)_vertices.Count;
-            _vertices.Add(new TerrainVertex(cNorth, normal1, groundColor));
-            _vertices.Add(new TerrainVertex(cEast, normal1, groundColor));
-            _vertices.Add(new TerrainVertex(cWest, normal1, groundColor));
-            _vertices.Add(new TerrainVertex(cSouth, normal2, groundColor));
+            _vertices.Add(new TerrainVertex(cNorth, normal1, new Vector2(x + 1, y + 1), materialId));
+            _vertices.Add(new TerrainVertex(cEast, normal1, new Vector2(x + 1, y), materialId));
+            _vertices.Add(new TerrainVertex(cWest, normal1, new Vector2(x, y + 1), materialId));
+            _vertices.Add(new TerrainVertex(cSouth, normal2, new Vector2(x, y), materialId));
             _indices.Add(baseIdx);
             _indices.Add(baseIdx + 1);
             _indices.Add(baseIdx + 2);
@@ -698,20 +903,9 @@ public sealed class Renderer : IDisposable
         }
     }
 
-    private static Vector3 GetTerrainColor(byte mapColour)
+    private uint GetTerrainMaterialId(uint surfaceObjectIdHash)
     {
-        var value = mapColour & 0x0F;
-        var shade = (mapColour >> 4) & 0x07;
-        var intensity = 0.45f + shade * 0.08f;
-        return value switch {
-            0 => new Vector3(0.42f, 0.36f, 0.30f) * intensity,
-            1 => new Vector3(0.30f, 0.56f, 0.25f) * intensity,
-            2 => new Vector3(0.63f, 0.55f, 0.36f) * intensity,
-            3 => new Vector3(0.26f, 0.48f, 0.64f) * intensity,
-            4 => new Vector3(0.52f, 0.42f, 0.32f) * intensity,
-            5 => new Vector3(0.58f, 0.38f, 0.25f) * intensity,
-            _ => new Vector3(0.34f, 0.52f, 0.28f) * intensity,
-        };
+        return _terrainMaterials!.GetLayer(surfaceObjectIdHash);
     }
 
     private unsafe void UploadMeshToGPU()
@@ -944,6 +1138,7 @@ public sealed class Renderer : IDisposable
         Rect2D scissor = new() { Offset = new Offset2D(0, 0), Extent = _swapchainExtent };
         _vk.CmdSetViewport(cmd, 0, 1, &viewport);
         _vk.CmdSetScissor(cmd, 0, 1, &scissor);
+        _vk.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, _pipelineLayout, 0, 1, in _terrainDescriptorSet, 0, null);
 
         var aspect = (float)_swapchainExtent.Width / _swapchainExtent.Height;
         // Row-vector convention in shader: clip = position * viewProjection
@@ -1020,8 +1215,12 @@ public sealed class Renderer : IDisposable
                 _vk.FreeMemory(_logicalDevice, _indexBufferMemory, null);
             if (_graphicsPipeline.Handle != 0)
                 _vk.DestroyPipeline(_logicalDevice, _graphicsPipeline, null);
+
             if (_pipelineLayout.Handle != 0)
                 _vk.DestroyPipelineLayout(_logicalDevice, _pipelineLayout, null);
+            DestroyTerrainTextureResources();
+            if (_terrainDescriptorSetLayout.Handle != 0)
+                _vk.DestroyDescriptorSetLayout(_logicalDevice, _terrainDescriptorSetLayout, null);
             if (_renderPass.Handle != 0)
                 _vk.DestroyRenderPass(_logicalDevice, _renderPass, null);
 
@@ -1044,6 +1243,30 @@ public sealed class Renderer : IDisposable
             _vk.DestroyInstance(_instance, null);
 
         Dispose();
+    }
+
+    private unsafe void DestroyTerrainTextureResources()
+    {
+        if (_vk is null || _logicalDevice.Handle == 0)
+            return;
+
+        if (_terrainDescriptorPool.Handle != 0)
+            _vk.DestroyDescriptorPool(_logicalDevice, _terrainDescriptorPool, null);
+        if (_terrainTextureSampler.Handle != 0)
+            _vk.DestroySampler(_logicalDevice, _terrainTextureSampler, null);
+        if (_terrainTextureView.Handle != 0)
+            _vk.DestroyImageView(_logicalDevice, _terrainTextureView, null);
+        if (_terrainTextureImage.Handle != 0)
+            _vk.DestroyImage(_logicalDevice, _terrainTextureImage, null);
+        if (_terrainTextureMemory.Handle != 0)
+            _vk.FreeMemory(_logicalDevice, _terrainTextureMemory, null);
+
+        _terrainDescriptorPool = default;
+        _terrainDescriptorSet = default;
+        _terrainTextureSampler = default;
+        _terrainTextureView = default;
+        _terrainTextureImage = default;
+        _terrainTextureMemory = default;
     }
 
     public void Dispose()

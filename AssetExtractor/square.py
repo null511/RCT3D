@@ -23,7 +23,7 @@ def isometric_to_square(iso_img: ImageFile, output_path, target_dim = 16):
 
     # Center anchors of the source 32x31 sprite
     center_x = 15
-    center_y = -1
+    center_y = 0
 
     # Direct structural coordinate mapping loop
     for u in range(target_dim):

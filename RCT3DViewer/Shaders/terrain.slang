@@ -11,15 +11,23 @@ struct VertexInput
 {
     float3 position  : POSITION;
     float3 normal    : NORMAL;
-    float3 color     : COLOR;
+    float2 texCoord  : TEXCOORD0;
+    float materialId : TEXCOORD1;
 };
 
 struct VertexStageOutput
 {
     float4 position  : SV_Position;
     float3 normal    : NORMAL;
-    float3 color     : COLOR;
+    float2 texCoord  : TEXCOORD0;
+    nointerpolation uint materialId : TEXCOORD1;
 };
+
+[[vk::binding(0, 0)]]
+Texture2DArray<float4> terrainTextures;
+
+[[vk::binding(1, 0)]]
+SamplerState terrainSampler;
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input)
@@ -28,7 +36,8 @@ VertexStageOutput vertexMain(VertexInput input)
     
     output.position = mul(float4(input.position, 1.0), globalUniforms.viewProjection);
     output.normal = input.normal;
-    output.color = input.color;
+    output.texCoord = input.texCoord;
+    output.materialId = (uint)input.materialId;
     
     return output;
 }
@@ -36,11 +45,10 @@ VertexStageOutput vertexMain(VertexInput input)
 [shader("fragment")]
 float4 fragmentMain(VertexStageOutput input) : SV_Target
 {
-    // Directional shading to emphasize elevation slopes
-    float3 lightDir = normalize(float3(0.4, 0.9, 0.2));
-    float ambient = 0.4;
-    float diffuse = max(dot(normalize(input.normal), lightDir), 0.0) * 0.6;
-    
-    float3 finalColor = input.color * (ambient + diffuse);
-    return float4(finalColor, 1.0);
+    float4 color = terrainTextures.Sample(terrainSampler, float3(input.texCoord, input.materialId));
+
+    const float3 sunDir = normalize(float3(0.5, 1.0, 0.5));   // Example sun direction
+    color *= max(dot(input.normal, sunDir), 0.0) * 0.8 + 0.2; // Simple Lambertian lighting with ambient term
+
+    return color;
 }

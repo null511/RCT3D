@@ -8,12 +8,14 @@ public struct TerrainVertex
 {
     public Vector3 Position;
     public Vector3 Normal;
-    public Vector3 Color;
+    public Vector2 TextureCoordinate;
+    public float MaterialId;
 
-    public TerrainVertex(Vector3 pos, Vector3 norm, Vector3 col)
+    public TerrainVertex(Vector3 pos, Vector3 norm, Vector2 textureCoordinate, uint materialId)
     {
         Position = pos;
         Normal = norm;
-        Color = col;
+        TextureCoordinate = textureCoordinate;
+        MaterialId = materialId;
     }
 }
