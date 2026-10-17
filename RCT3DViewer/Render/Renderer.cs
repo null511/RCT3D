@@ -1,5 +1,5 @@
-using RCT3DViewer.Simulation;
 using RCT3DViewer.Interop;
+using RCT3DViewer.Simulation;
 using Silk.NET.Core.Native;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -14,10 +14,6 @@ namespace RCT3DViewer.Render;
 
 public sealed class Renderer : IDisposable
 {
-    private const string DefaultParkPath = @"C:\Users\null5\Documents\OpenRCT2\save\Mothball Mountain.park";
-    private const string DefaultRCT2Path = @"Z:\SteamLibrary\steamapps\common\Rollercoaster Tycoon 2";
-    private const string DefaultOpenRCT2Path = "openrct2-data";
-
     private IWindow? _window;
     private Vk? _vk;
     private Instance _instance;
@@ -68,6 +64,12 @@ public sealed class Renderer : IDisposable
     private int _mapWidth;
     private int _mapHeight;
 
+    public string? LibraryPath { get; set; }
+    public string? OpenRCT2Path { get; set; }
+    public string? Rct2Path { get; set; }
+    public string? ParkPath { get; set; }
+
+
     public void Run()
     {
         var options = WindowOptions.DefaultVulkan;
@@ -80,29 +82,35 @@ public sealed class Renderer : IDisposable
         _window.Render += OnRenderFrame;
         _window.Update += OnUpdateFrame;
         _window.Closing += OnEngineShutdown;
-        try
-        {
+
+        try {
             _window.Run();
         }
-        finally
-        {
+        finally {
             Dispose();
         }
     }
 
     public void Initialize()
     {
-        try
-        {
-            var libraryPath = Environment.GetEnvironmentVariable("RCT3DVIEWER_OPENRCT2_DLL") ?? LibOpenRCT2.DefaultLibraryPath;
-            var openRCT2Path = Environment.GetEnvironmentVariable("RCT3DVIEWER_OPENRCT2_DATA") ?? DefaultOpenRCT2Path;
-            var rct2Path = Environment.GetEnvironmentVariable("RCT3DVIEWER_RCT2_DATA") ?? DefaultRCT2Path;
-            var parkPath = Environment.GetEnvironmentVariable("RCT3DVIEWER_PARK") ?? DefaultParkPath;
-            if (!Path.IsPathRooted(openRCT2Path))
-                openRCT2Path = Path.Combine(AppContext.BaseDirectory, openRCT2Path);
+        if (string.IsNullOrEmpty(OpenRCT2Path))
+            throw new InvalidOperationException("OpenRCT2Path is undefined!");
 
-            _simulation = new SimulationBridge(libraryPath, openRCT2Path, rct2Path);
-            _simulation.LoadPark(parkPath);
+        if (string.IsNullOrEmpty(Rct2Path))
+            throw new InvalidOperationException("Rct2Path is undefined!");
+        
+        if (string.IsNullOrEmpty(ParkPath))
+            throw new InvalidOperationException("ParkPath is undefined!");
+
+        if (string.IsNullOrEmpty(LibraryPath))
+            throw new InvalidOperationException("LibraryPath is undefined!");
+
+        try {
+            if (!Path.IsPathRooted(OpenRCT2Path))
+                OpenRCT2Path = Path.Combine(AppContext.BaseDirectory, OpenRCT2Path);
+
+            _simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path);
+            _simulation.LoadPark(ParkPath);
             var (width, height) = _simulation.GetDimensions();
             if (width <= 0 || height <= 0 || (long)width * height > int.MaxValue)
                 throw new InvalidOperationException($"OpenRCT2 returned invalid map dimensions {width}x{height}.");
@@ -112,13 +120,13 @@ public sealed class Renderer : IDisposable
             _mapWidth = width;
             _mapHeight = height;
             _camera.Position = new Vector3(width * 1.5f, 120.0f, -height * 1.5f);
-            Console.WriteLine($"Loaded park '{parkPath}' ({width}x{height}) through the OpenRCT2 adapter.");
+            Console.WriteLine($"Loaded park '{ParkPath}' ({width}x{height}) through the OpenRCT2 adapter.");
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             _simulation?.Dispose();
             _simulation = null;
             _surfaceData = null;
+
             throw new InvalidOperationException("Failed to initialize OpenRCT2 and load the configured park.", ex);
         }
 
@@ -284,8 +292,7 @@ public sealed class Renderer : IDisposable
                     ? CompositeAlphaFlagsKHR.PostMultipliedBitKhr
                     : CompositeAlphaFlagsKHR.InheritBitKhr;
 
-        SwapchainCreateInfoKHR createInfo = new()
-        {
+        SwapchainCreateInfoKHR createInfo = new() {
             SType = StructureType.SwapchainCreateInfoKhr,
             Surface = _surface,
             MinImageCount = requestedImageCount,
@@ -309,8 +316,7 @@ public sealed class Renderer : IDisposable
         uint imageCount = 0;
         _khrSwapchain.GetSwapchainImages(_logicalDevice, _swapchain, ref imageCount, null);
         _swapchainImages = new Image[imageCount];
-        fixed (Image* imgPtr = _swapchainImages)
-        {
+        fixed (Image* imgPtr = _swapchainImages) {
             _khrSwapchain.GetSwapchainImages(_logicalDevice, _swapchain, ref imageCount, imgPtr);
         }
     }
@@ -318,16 +324,15 @@ public sealed class Renderer : IDisposable
     private unsafe void CreateImageViews()
     {
         _swapchainImageViews = new ImageView[_swapchainImages.Length];
-        for (var i = 0; i < _swapchainImages.Length; i++)
-        {
-            ImageViewCreateInfo createInfo = new()
-            {
+        for (var i = 0; i < _swapchainImages.Length; i++) {
+            ImageViewCreateInfo createInfo = new() {
                 SType = StructureType.ImageViewCreateInfo,
                 Image = _swapchainImages[i],
                 ViewType = ImageViewType.Type2D,
                 Format = _swapchainFormat,
                 SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1)
             };
+
             if (_vk!.CreateImageView(_logicalDevice, in createInfo, null, out _swapchainImageViews[i]) != Result.Success)
                 throw new Exception($"Failed to generate View Target for Frame buffer index: {i}");
         }
@@ -335,16 +340,15 @@ public sealed class Renderer : IDisposable
 
     private Format FindDepthFormat()
     {
-        var candidates = new[]
-        {
+        var candidates = new[] {
             Format.D32Sfloat,
             Format.D32SfloatS8Uint,
             Format.D24UnormS8Uint
         };
 
-        foreach (var candidate in candidates)
-        {
+        foreach (var candidate in candidates) {
             _vk!.GetPhysicalDeviceFormatProperties(_physicalDevice, candidate, out var properties);
+
             if ((properties.OptimalTilingFeatures & FormatFeatureFlags.DepthStencilAttachmentBit) != 0)
                 return candidate;
         }
@@ -359,13 +363,11 @@ public sealed class Renderer : IDisposable
         _depthImageMemories = new DeviceMemory[_swapchainImages.Length];
         _depthImageViews = new ImageView[_swapchainImages.Length];
 
-        try
-        {
+        try {
             for (var i = 0; i < _depthImages.Length; i++)
                 CreateDepthResource(i);
         }
-        catch
-        {
+        catch {
             DestroyDepthResources();
             throw;
         }
@@ -373,8 +375,7 @@ public sealed class Renderer : IDisposable
 
     private unsafe void CreateDepthResource(int index)
     {
-        ImageCreateInfo imageInfo = new()
-        {
+        ImageCreateInfo imageInfo = new() {
             SType = StructureType.ImageCreateInfo,
             ImageType = ImageType.Type2D,
             Extent = new Extent3D(_swapchainExtent.Width, _swapchainExtent.Height, 1),
@@ -392,8 +393,8 @@ public sealed class Renderer : IDisposable
             throw new Exception("Failed to create a Vulkan depth image.");
 
         _vk.GetImageMemoryRequirements(_logicalDevice, _depthImages[index], out var requirements);
-        MemoryAllocateInfo allocationInfo = new()
-        {
+
+        MemoryAllocateInfo allocationInfo = new() {
             SType = StructureType.MemoryAllocateInfo,
             AllocationSize = requirements.Size,
             MemoryTypeIndex = FindMemoryType(requirements.MemoryTypeBits, MemoryPropertyFlags.DeviceLocalBit)
@@ -401,32 +402,33 @@ public sealed class Renderer : IDisposable
 
         if (_vk.AllocateMemory(_logicalDevice, ref allocationInfo, null, out _depthImageMemories[index]) != Result.Success)
             throw new Exception("Failed to allocate Vulkan depth image memory.");
+
         if (_vk.BindImageMemory(_logicalDevice, _depthImages[index], _depthImageMemories[index], 0) != Result.Success)
             throw new Exception("Failed to bind Vulkan depth image memory.");
 
-        ImageViewCreateInfo viewInfo = new()
-        {
+        ImageViewCreateInfo viewInfo = new() {
             SType = StructureType.ImageViewCreateInfo,
             Image = _depthImages[index],
             ViewType = ImageViewType.Type2D,
             Format = _depthFormat,
             SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.DepthBit, 0, 1, 0, 1)
         };
+
         if (_vk.CreateImageView(_logicalDevice, in viewInfo, null, out _depthImageViews[index]) != Result.Success)
             throw new Exception("Failed to create a Vulkan depth image view.");
     }
 
     private unsafe void DestroyDepthResources()
     {
-        if (_vk is null || _logicalDevice.Handle == 0)
-            return;
+        if (_vk is null || _logicalDevice.Handle == 0) return;
 
-        for (var i = 0; i < _depthImages.Length; i++)
-        {
+        for (var i = 0; i < _depthImages.Length; i++) {
             if (_depthImageViews[i].Handle != 0)
                 _vk.DestroyImageView(_logicalDevice, _depthImageViews[i], null);
+
             if (_depthImages[i].Handle != 0)
                 _vk.DestroyImage(_logicalDevice, _depthImages[i], null);
+
             if (_depthImageMemories[i].Handle != 0)
                 _vk.FreeMemory(_logicalDevice, _depthImageMemories[i], null);
         }
@@ -439,8 +441,7 @@ public sealed class Renderer : IDisposable
     private uint FindMemoryType(uint typeFilter, MemoryPropertyFlags properties)
     {
         _vk!.GetPhysicalDeviceMemoryProperties(_physicalDevice, out var memoryProperties);
-        for (uint i = 0; i < memoryProperties.MemoryTypeCount; i++)
-        {
+        for (uint i = 0; i < memoryProperties.MemoryTypeCount; i++) {
             if ((typeFilter & (1 << (int)i)) != 0 &&
                 (memoryProperties.MemoryTypes[(int)i].PropertyFlags & properties) == properties)
                 return i;
@@ -451,8 +452,7 @@ public sealed class Renderer : IDisposable
 
     private unsafe void CreateRenderPass()
     {
-        AttachmentDescription colorAttachment = new()
-        {
+        AttachmentDescription colorAttachment = new() {
             Format = _swapchainFormat,
             Samples = SampleCountFlags.Count1Bit,
             LoadOp = AttachmentLoadOp.Clear,
@@ -462,13 +462,13 @@ public sealed class Renderer : IDisposable
             InitialLayout = ImageLayout.Undefined,
             FinalLayout = ImageLayout.PresentSrcKhr
         };
-        AttachmentReference colorAttachmentRef = new()
-        {
+
+        AttachmentReference colorAttachmentRef = new() {
             Attachment = 0,
             Layout = ImageLayout.ColorAttachmentOptimal
         };
-        AttachmentDescription depthAttachment = new()
-        {
+
+        AttachmentDescription depthAttachment = new() {
             Format = _depthFormat,
             Samples = SampleCountFlags.Count1Bit,
             LoadOp = AttachmentLoadOp.Clear,
@@ -478,29 +478,30 @@ public sealed class Renderer : IDisposable
             InitialLayout = ImageLayout.Undefined,
             FinalLayout = ImageLayout.DepthStencilAttachmentOptimal
         };
-        AttachmentReference depthAttachmentRef = new()
-        {
+
+        AttachmentReference depthAttachmentRef = new() {
             Attachment = 1,
             Layout = ImageLayout.DepthStencilAttachmentOptimal
         };
-        SubpassDescription subpass = new()
-        {
+
+        SubpassDescription subpass = new() {
             PipelineBindPoint = PipelineBindPoint.Graphics,
             ColorAttachmentCount = 1,
             PColorAttachments = &colorAttachmentRef,
             PDepthStencilAttachment = &depthAttachmentRef
         };
+
         var attachments = new[] { colorAttachment, depthAttachment };
-        fixed (AttachmentDescription* attachmentsPtr = attachments)
-        {
-            RenderPassCreateInfo renderPassInfo = new()
-            {
+
+        fixed (AttachmentDescription* attachmentsPtr = attachments) {
+            RenderPassCreateInfo renderPassInfo = new() {
                 SType = StructureType.RenderPassCreateInfo,
                 AttachmentCount = (uint)attachments.Length,
                 PAttachments = attachmentsPtr,
                 SubpassCount = 1,
                 PSubpasses = &subpass
             };
+
             if (_vk!.CreateRenderPass(_logicalDevice, in renderPassInfo, null, out _renderPass) != Result.Success)
                 throw new Exception("Failed to configure Vulkan RenderPass structures.");
         }
@@ -514,63 +515,56 @@ public sealed class Renderer : IDisposable
         byte[] vertShaderCode;
         byte[] fragShaderCode;
 
-        if (File.Exists(vertPath) && File.Exists(fragPath))
-        {
+        if (File.Exists(vertPath) && File.Exists(fragPath)) {
             Console.WriteLine($"Successfully loaded native SPIR-V shaders from output: {vertPath}");
             vertShaderCode = File.ReadAllBytes(vertPath);
             fragShaderCode = File.ReadAllBytes(fragPath);
         }
-        else
-        {
+        else {
             throw new FileNotFoundException($"CRITICAL: Shader binaries missing even after compilation pass. Check: {vertPath}");
         }
 
         ShaderModule vertModule;
         ShaderModule fragModule;
-        fixed (byte* codePtr = vertShaderCode)
-        {
+        fixed (byte* codePtr = vertShaderCode) {
             ShaderModuleCreateInfo info = new() { SType = StructureType.ShaderModuleCreateInfo, CodeSize = (nuint)vertShaderCode.Length, PCode = (uint*)codePtr };
             _vk!.CreateShaderModule(_logicalDevice, in info, null, out vertModule);
         }
 
-        fixed (byte* codePtr = fragShaderCode)
-        {
+        fixed (byte* codePtr = fragShaderCode) {
             ShaderModuleCreateInfo info = new() { SType = StructureType.ShaderModuleCreateInfo, CodeSize = (nuint)fragShaderCode.Length, PCode = (uint*)codePtr };
             _vk!.CreateShaderModule(_logicalDevice, in info, null, out fragModule);
         }
 
-        PipelineShaderStageCreateInfo vertStageInfo = new()
-        {
+        PipelineShaderStageCreateInfo vertStageInfo = new() {
             SType = StructureType.PipelineShaderStageCreateInfo,
             Stage = ShaderStageFlags.VertexBit,
             Module = vertModule,
             PName = (byte*)Marshal.StringToHGlobalAnsi("main")
         };
-        PipelineShaderStageCreateInfo fragStageInfo = new()
-        {
+
+        PipelineShaderStageCreateInfo fragStageInfo = new() {
             SType = StructureType.PipelineShaderStageCreateInfo,
             Stage = ShaderStageFlags.FragmentBit,
             Module = fragModule,
             PName = (byte*)Marshal.StringToHGlobalAnsi("main")
         };
+
         var shaderStages = new[] { vertStageInfo, fragStageInfo };
 
-        VertexInputBindingDescription bindingDescription = new()
-        {
+        VertexInputBindingDescription bindingDescription = new() {
             Binding = 0,
             Stride = (uint)Marshal.SizeOf<TerrainVertex>(),
             InputRate = VertexInputRate.Vertex
         };
 
-        var attributeDescriptions = new VertexInputAttributeDescription[]
-        {
+        var attributeDescriptions = new VertexInputAttributeDescription[] {
             new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Position)) },
             new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Normal)) },
             new() { Binding = 0, Location = 2, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Color)) }
         };
 
-        PipelineVertexInputStateCreateInfo vertexInputInfo = new()
-        {
+        PipelineVertexInputStateCreateInfo vertexInputInfo = new() {
             SType = StructureType.PipelineVertexInputStateCreateInfo,
             VertexBindingDescriptionCount = 1,
             PVertexBindingDescriptions = &bindingDescription,
@@ -580,15 +574,16 @@ public sealed class Renderer : IDisposable
         PipelineInputAssemblyStateCreateInfo inputAssembly = new() { SType = StructureType.PipelineInputAssemblyStateCreateInfo, Topology = PrimitiveTopology.TriangleList };
         PipelineViewportStateCreateInfo viewportState = new() { SType = StructureType.PipelineViewportStateCreateInfo, ViewportCount = 1, ScissorCount = 1 };
         var dynamicStates = new[] { DynamicState.Viewport, DynamicState.Scissor };
-        PipelineDynamicStateCreateInfo dynamicState = new()
-        {
+
+        PipelineDynamicStateCreateInfo dynamicState = new() {
             SType = StructureType.PipelineDynamicStateCreateInfo,
             DynamicStateCount = (uint)dynamicStates.Length
         };
+
         PipelineRasterizationStateCreateInfo rasterizer = new() { SType = StructureType.PipelineRasterizationStateCreateInfo, PolygonMode = PolygonMode.Fill, CullMode = CullModeFlags.None, FrontFace = FrontFace.CounterClockwise, LineWidth = 1.0f };
         PipelineMultisampleStateCreateInfo multisampling = new() { SType = StructureType.PipelineMultisampleStateCreateInfo, RasterizationSamples = SampleCountFlags.Count1Bit };
-        PipelineDepthStencilStateCreateInfo depthStencil = new()
-        {
+        
+        PipelineDepthStencilStateCreateInfo depthStencil = new() {
             SType = StructureType.PipelineDepthStencilStateCreateInfo,
             DepthTestEnable = true,
             DepthWriteEnable = true,
@@ -596,13 +591,14 @@ public sealed class Renderer : IDisposable
             MinDepthBounds = 0.0f,
             MaxDepthBounds = 1.0f
         };
+
         PipelineColorBlendAttachmentState colorBlendAttachment = new() { ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit, BlendEnable = false };
         PipelineColorBlendStateCreateInfo colorBlending = new() { SType = StructureType.PipelineColorBlendStateCreateInfo, AttachmentCount = 1, PAttachments = &colorBlendAttachment };
         PushConstantRange pushConstantRange = new() { StageFlags = ShaderStageFlags.VertexBit, Offset = 0, Size = (uint)Marshal.SizeOf<UniformBufferObject>() };
         PipelineLayoutCreateInfo pipelineLayoutInfo = new() { SType = StructureType.PipelineLayoutCreateInfo, PushConstantRangeCount = 1, PPushConstantRanges = &pushConstantRange };
         _vk!.CreatePipelineLayout(_logicalDevice, in pipelineLayoutInfo, null, out _pipelineLayout);
-        GraphicsPipelineCreateInfo pipelineInfo = new()
-        {
+
+        GraphicsPipelineCreateInfo pipelineInfo = new() {
             SType = StructureType.GraphicsPipelineCreateInfo,
             StageCount = 2,
             Layout = _pipelineLayout,
@@ -620,14 +616,12 @@ public sealed class Renderer : IDisposable
 
         fixed (PipelineShaderStageCreateInfo* stagePtr = shaderStages)
         fixed (VertexInputAttributeDescription* attrPtr = attributeDescriptions)
-        fixed (DynamicState* dynamicStatesPtr = dynamicStates)
-        {
+        fixed (DynamicState* dynamicStatesPtr = dynamicStates) {
             vertexInputInfo.PVertexAttributeDescriptions = attrPtr;
             dynamicState.PDynamicStates = dynamicStatesPtr;
             pipelineInfo.PStages = stagePtr;
             var result = _vk.CreateGraphicsPipelines(_logicalDevice, default, 1, in pipelineInfo, null, out _graphicsPipeline);
-            if (result != Result.Success || _graphicsPipeline.Handle == 0UL)
-            {
+            if (result != Result.Success || _graphicsPipeline.Handle == 0UL) {
                 throw new Exception($"Failed to create graphics pipeline. VkResult={result}, pipelineHandle={_graphicsPipeline.Handle}");
             }
         }
@@ -641,13 +635,14 @@ public sealed class Renderer : IDisposable
     private unsafe void CreateFramebuffers()
     {
         _framebuffers = new Framebuffer[_swapchainImageViews.Length];
-        for (var i = 0; i < _swapchainImageViews.Length; i++)
-        {
-            var attachments = new[] { _swapchainImageViews[i], _depthImageViews[i] };
-            fixed (ImageView* attachmentsPtr = attachments)
-            {
-                FramebufferCreateInfo framebufferInfo = new()
-                {
+        for (var i = 0; i < _swapchainImageViews.Length; i++) {
+            var attachments = new[] {
+                _swapchainImageViews[i],
+                _depthImageViews[i],
+            };
+
+            fixed (ImageView* attachmentsPtr = attachments) {
+                FramebufferCreateInfo framebufferInfo = new() {
                     SType = StructureType.FramebufferCreateInfo,
                     RenderPass = _renderPass,
                     AttachmentCount = (uint)attachments.Length,
@@ -656,6 +651,7 @@ public sealed class Renderer : IDisposable
                     Height = _swapchainExtent.Height,
                     Layers = 1
                 };
+
                 if (_vk!.CreateFramebuffer(_logicalDevice, in framebufferInfo, null, out _framebuffers[i]) != Result.Success)
                     throw new Exception($"Failed to create framebuffer {i}.");
             }
@@ -671,8 +667,7 @@ public sealed class Renderer : IDisposable
         const float cornerHeightScale = 1.5f;
 
         for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
-        {
+        for (var x = 0; x < width; x++) {
             var surface = surfaces[y * width + x];
             var baseHeight = surface.BaseZ * baseHeightScale;
             var north = baseHeight + surface.NorthCornerHeight * cornerHeightScale;
@@ -708,8 +703,7 @@ public sealed class Renderer : IDisposable
         var value = mapColour & 0x0F;
         var shade = (mapColour >> 4) & 0x07;
         var intensity = 0.45f + shade * 0.08f;
-        return value switch
-        {
+        return value switch {
             0 => new Vector3(0.42f, 0.36f, 0.30f) * intensity,
             1 => new Vector3(0.30f, 0.56f, 0.25f) * intensity,
             2 => new Vector3(0.63f, 0.55f, 0.36f) * intensity,
@@ -740,8 +734,7 @@ public sealed class Renderer : IDisposable
         CollectionsMarshal.AsSpan(_indices).CopyTo(iSpan);
         _vk.UnmapMemory(_logicalDevice, _indexBufferMemory);
 
-        if (_vertices.Count > 0)
-        {
+        if (_vertices.Count > 0) {
             var v = _vertices[0];
             Console.WriteLine($"[Mesh] Uploaded vertices={_vertices.Count}, indices={_indices.Count}, firstPos=({v.Position.X:F2},{v.Position.Y:F2},{v.Position.Z:F2})");
         }
@@ -758,8 +751,7 @@ public sealed class Renderer : IDisposable
         _vk.GetPhysicalDeviceMemoryProperties(_physicalDevice, out PhysicalDeviceMemoryProperties memProperties);
 
         uint memoryTypeIndex = uint.MaxValue;
-        for (uint i = 0; i < memProperties.MemoryTypeCount; i++)
-        {
+        for (uint i = 0; i < memProperties.MemoryTypeCount; i++) {
             if ((memRequirements.MemoryTypeBits & (1 << (int)i)) != 0 && (memProperties.MemoryTypes[(int)i].PropertyFlags & properties) == properties)
             {
                 memoryTypeIndex = i;
@@ -778,8 +770,7 @@ public sealed class Renderer : IDisposable
         _vk!.CreateCommandPool(_logicalDevice, in poolInfo, null, out _commandPool);
         CommandBufferAllocateInfo allocInfo = new() { SType = StructureType.CommandBufferAllocateInfo, CommandPool = _commandPool, Level = CommandBufferLevel.Primary, CommandBufferCount = (uint)_framebuffers.Length };
         _commandBuffers = new CommandBuffer[_framebuffers.Length];
-        fixed (CommandBuffer* cbPtr = _commandBuffers)
-        {
+        fixed (CommandBuffer* cbPtr = _commandBuffers) {
             _vk.AllocateCommandBuffers(_logicalDevice, in allocInfo, cbPtr);
         }
     }
@@ -800,8 +791,7 @@ public sealed class Renderer : IDisposable
         for (var i = 0; i < imageCount; i++)
             _vk.CreateSemaphore(_logicalDevice, in semaphoreInfo, null, out _renderFinishedSemaphores[i]);
 
-        for (uint i = 0; i < MaxFramesInFlight; i++)
-        {
+        for (uint i = 0; i < MaxFramesInFlight; i++) {
             _vk!.CreateFence(_logicalDevice, in fenceInfo, null, out _inFlightFences[i]);
         }
 
@@ -811,21 +801,19 @@ public sealed class Renderer : IDisposable
 
     private unsafe void DestroySyncPrimitives()
     {
-        if (_vk is null || _logicalDevice.Handle == 0)
-            return;
+        if (_vk is null || _logicalDevice.Handle == 0) return;
 
-        foreach (var semaphore in _imageAvailableSemaphores)
-        {
+        foreach (var semaphore in _imageAvailableSemaphores) {
             if (semaphore.Handle != 0)
                 _vk.DestroySemaphore(_logicalDevice, semaphore, null);
         }
-        foreach (var semaphore in _renderFinishedSemaphores)
-        {
+
+        foreach (var semaphore in _renderFinishedSemaphores) {
             if (semaphore.Handle != 0)
                 _vk.DestroySemaphore(_logicalDevice, semaphore, null);
         }
-        foreach (var fence in _inFlightFences)
-        {
+
+        foreach (var fence in _inFlightFences) {
             if (fence.Handle != 0)
                 _vk.DestroyFence(_logicalDevice, fence, null);
         }
@@ -838,11 +826,11 @@ public sealed class Renderer : IDisposable
 
     private unsafe void DestroyFramebuffers()
     {
-        foreach (var framebuffer in _framebuffers)
-        {
+        foreach (var framebuffer in _framebuffers) {
             if (framebuffer.Handle != 0)
                 _vk!.DestroyFramebuffer(_logicalDevice, framebuffer, null);
         }
+
         _framebuffers = Array.Empty<Framebuffer>();
     }
 
@@ -881,17 +869,14 @@ public sealed class Renderer : IDisposable
     private void SetupInputs()
     {
         _inputContext = _window!.CreateInput();
-        foreach (var mouse in _inputContext.Mice)
-        {
-            mouse.MouseMove += (m, pos) =>
-            {
-                if (m.IsButtonPressed(MouseButton.Right))
-                {
+
+        foreach (var mouse in _inputContext.Mice) {
+            mouse.MouseMove += (m, pos) => {
+                if (m.IsButtonPressed(MouseButton.Right)) {
                     _camera.HandleMouse(new Vector2(pos.X, pos.Y));
                     m.Cursor.CursorMode = CursorMode.Raw;
                 }
-                else
-                {
+                else {
                     m.Cursor.CursorMode = CursorMode.Normal;
                 }
             };
@@ -906,25 +891,23 @@ public sealed class Renderer : IDisposable
 
     private unsafe void OnRenderFrame(double deltaTime)
     {
-        if (_window!.FramebufferSize.X == 0 || _window.FramebufferSize.Y == 0)
-            return;
-        if (_framebufferResized && !RecreateSwapchain())
-            return;
+        if (_window!.FramebufferSize.X == 0 || _window.FramebufferSize.Y == 0) return;
+        if (_framebufferResized && !RecreateSwapchain()) return;
 
         uint imageIndex = 0;
         _vk!.WaitForFences(_logicalDevice, 1, in _inFlightFences[_currentFrame], true, ulong.MaxValue);
         var acquireResult = _khrSwapchain!.AcquireNextImage(_logicalDevice, _swapchain, ulong.MaxValue, _imageAvailableSemaphores[_currentFrame], default, ref imageIndex);
-        if (acquireResult == Result.ErrorOutOfDateKhr)
-        {
+        if (acquireResult == Result.ErrorOutOfDateKhr) {
             RecreateSwapchain();
             return;
         }
+
         if (acquireResult != Result.Success && acquireResult != Result.SuboptimalKhr)
             throw new Exception($"Failed to acquire a swapchain image: {acquireResult}.");
+
         var recreateAfterPresent = acquireResult == Result.SuboptimalKhr;
 
-        if (_imagesInFlight[imageIndex].Handle != 0)
-        {
+        if (_imagesInFlight[imageIndex].Handle != 0) {
             _vk.WaitForFences(_logicalDevice, 1, in _imagesInFlight[imageIndex], true, ulong.MaxValue);
         }
 
@@ -937,8 +920,8 @@ public sealed class Renderer : IDisposable
         ClearValue* clearValues = stackalloc ClearValue[2];
         clearValues[0] = new ClearValue { Color = new ClearColorValue(0.4f, 0.6f, 0.9f, 1.0f) };
         clearValues[1] = new ClearValue { DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 } };
-        RenderPassBeginInfo renderPassInfo = new()
-        {
+
+        RenderPassBeginInfo renderPassInfo = new() {
             SType = StructureType.RenderPassBeginInfo,
             RenderPass = _renderPass,
             Framebuffer = _framebuffers[imageIndex],
@@ -949,8 +932,7 @@ public sealed class Renderer : IDisposable
 
         _vk.CmdBeginRenderPass(cmd, in renderPassInfo, SubpassContents.Inline);
         _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, _graphicsPipeline);
-        Viewport viewport = new()
-        {
+        Viewport viewport = new() {
             X = 0.0f,
             Y = 0.0f,
             Width = _swapchainExtent.Width,
@@ -958,6 +940,7 @@ public sealed class Renderer : IDisposable
             MinDepth = 0.0f,
             MaxDepth = 1.0f
         };
+
         Rect2D scissor = new() { Offset = new Offset2D(0, 0), Extent = _swapchainExtent };
         _vk.CmdSetViewport(cmd, 0, 1, &viewport);
         _vk.CmdSetScissor(cmd, 0, 1, &scissor);
@@ -980,8 +963,7 @@ public sealed class Renderer : IDisposable
         var imgAnimSema = _imageAvailableSemaphores[_currentFrame];
         var rendFinSema = _renderFinishedSemaphores[imageIndex];
 
-        SubmitInfo submitInfo = new()
-        {
+        SubmitInfo submitInfo = new() {
             SType = StructureType.SubmitInfo,
             WaitSemaphoreCount = 1,
             PWaitSemaphores = &imgAnimSema,
@@ -996,8 +978,7 @@ public sealed class Renderer : IDisposable
         _vk.QueueSubmit(_graphicsQueue, 1, in submitInfo, _inFlightFences[_currentFrame]);
 
         var swap = _swapchain;
-        PresentInfoKHR presentInfo = new()
-        {
+        PresentInfoKHR presentInfo = new() {
             SType = StructureType.PresentInfoKhr,
             WaitSemaphoreCount = 1,
             PWaitSemaphores = &rendFinSema,
@@ -1005,9 +986,11 @@ public sealed class Renderer : IDisposable
             PSwapchains = &swap,
             PImageIndices = &imageIndex
         };
+
         var presentResult = _khrSwapchain.QueuePresent(_graphicsQueue, in presentInfo);
         if (presentResult != Result.Success && presentResult != Result.SuboptimalKhr && presentResult != Result.ErrorOutOfDateKhr)
             throw new Exception($"Failed to present a swapchain image: {presentResult}.");
+
         _currentFrame = (uint)((_currentFrame + 1) % MaxFramesInFlight);
         if (recreateAfterPresent || _framebufferResized || presentResult == Result.SuboptimalKhr || presentResult == Result.ErrorOutOfDateKhr)
             RecreateSwapchain();
@@ -1015,8 +998,7 @@ public sealed class Renderer : IDisposable
 
     private unsafe void OnEngineShutdown()
     {
-        if (_vk is not null && _logicalDevice.Handle != 0)
-        {
+        if (_vk is not null && _logicalDevice.Handle != 0) {
             _vk.DeviceWaitIdle(_logicalDevice);
             DestroySyncPrimitives();
 
@@ -1043,8 +1025,7 @@ public sealed class Renderer : IDisposable
             if (_renderPass.Handle != 0)
                 _vk.DestroyRenderPass(_logicalDevice, _renderPass, null);
 
-            foreach (var view in _swapchainImageViews)
-            {
+            foreach (var view in _swapchainImageViews) {
                 if (view.Handle != 0)
                     _vk.DestroyImageView(_logicalDevice, view, null);
             }
@@ -1058,8 +1039,10 @@ public sealed class Renderer : IDisposable
 
         if (_vk is not null && _surface.Handle != 0)
             _khrSurface!.DestroySurface(_instance, _surface, null);
+
         if (_vk is not null && _instance.Handle != 0)
             _vk.DestroyInstance(_instance, null);
+
         Dispose();
     }
 
