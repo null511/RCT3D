@@ -1,5 +1,7 @@
 using RCT3DViewer.Interop;
 using RCT3DViewer.Simulation;
+using ImGuiNET;
+using NativeFileDialogSharp;
 using Silk.NET.Core.Native;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -64,6 +66,15 @@ public sealed class Renderer : IDisposable
     private DeviceMemory _indexBufferMemory;
 
     private IInputContext? _inputContext;
+    private ImGuiVulkanRenderer? _imguiRenderer;
+    private string? _loadedParkPath;
+    private string? _parkLoadError;
+    private bool _showSkyModal;
+    private bool _showParkLoadError;
+    private bool _exitRequested;
+    private float _timeOfDayHours = 12.0f;
+    private float _sunAngleDegrees = 45.0f;
+    private float _displayedFps;
     private readonly FlightCamera _camera = new();
     private readonly List<TerrainVertex> _vertices = new();
     private readonly List<uint> _indices = new();
@@ -123,6 +134,7 @@ public sealed class Renderer : IDisposable
 
             _simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path);
             _simulation.LoadPark(ParkPath);
+            _loadedParkPath = ParkPath;
             var (width, height) = _simulation.GetDimensions();
             if (width <= 0 || height <= 0 || (long)width * height > int.MaxValue)
                 throw new InvalidOperationException($"OpenRCT2 returned invalid map dimensions {width}x{height}.");
@@ -165,6 +177,8 @@ public sealed class Renderer : IDisposable
         CreateCommandInfrastructure();
         CreateTerrainTextureResources();
         CreateSyncPrimitives();
+        _imguiRenderer = new ImGuiVulkanRenderer(_vk, _physicalDevice, _logicalDevice, _graphicsQueue, _renderPass, _commandPool,
+            Path.Combine(AppContext.BaseDirectory, "Shaders"), _swapchainImages.Length);
 
         Console.WriteLine("\n=== Vulkan Engine Pipeline Fully Operational ===");
         Console.WriteLine("Hold down RIGHT-MOUSE BUTTON to look around. Use W,A,S,D to fly.");
@@ -797,7 +811,7 @@ public sealed class Renderer : IDisposable
         }
 
         var descriptorLayout = _terrainDescriptorSetLayout;
-        PushConstantRange pushConstantRange = new() { StageFlags = ShaderStageFlags.VertexBit, Offset = 0, Size = (uint)Marshal.SizeOf<UniformBufferObject>() };
+        PushConstantRange pushConstantRange = new() { StageFlags = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, Offset = 0, Size = (uint)Marshal.SizeOf<UniformBufferObject>() };
         PipelineLayoutCreateInfo pipelineLayoutInfo = new() {
             SType = StructureType.PipelineLayoutCreateInfo,
             SetLayoutCount = 1,
@@ -1180,6 +1194,7 @@ public sealed class Renderer : IDisposable
         CreateFramebuffers();
         CreateCommandInfrastructure();
         CreateSyncPrimitives();
+        _imguiRenderer?.ResizeBuffers(_swapchainImages.Length);
         _currentFrame = 0;
         _framebufferResized = false;
         return true;
@@ -1191,7 +1206,7 @@ public sealed class Renderer : IDisposable
 
         foreach (var mouse in _inputContext.Mice) {
             mouse.MouseMove += (m, pos) => {
-                if (m.IsButtonPressed(MouseButton.Right)) {
+                if (m.IsButtonPressed(MouseButton.Right) && !(_imguiRenderer?.WantCaptureMouse ?? false)) {
                     _camera.HandleMouse(new Vector2(pos.X, pos.Y));
                     m.Cursor.CursorMode = CursorMode.Raw;
                 }
@@ -1204,8 +1219,154 @@ public sealed class Renderer : IDisposable
 
     private void OnUpdateFrame(double deltaTime)
     {
-        if (_inputContext != null && _inputContext.Keyboards.Count > 0)
+        if (_exitRequested) {
+            _exitRequested = false;
+            _window?.Close();
+            return;
+        }
+
+        if (_imguiRenderer is not null && _inputContext is not null) {
+            var io = ImGuiNET.ImGui.GetIO();
+            if (_inputContext.Mice.Count > 0) {
+                var mouse = _inputContext.Mice[0];
+                var position = mouse.Position;
+                io.AddMousePosEvent(position.X, position.Y);
+                io.AddMouseButtonEvent(0, mouse.IsButtonPressed(MouseButton.Left));
+                io.AddMouseButtonEvent(1, mouse.IsButtonPressed(MouseButton.Right));
+            }
+
+            if (_inputContext.Keyboards.Count > 0) {
+                var keyboard = _inputContext.Keyboards[0];
+                io.AddKeyEvent(ImGuiNET.ImGuiKey.Tab, keyboard.IsKeyPressed(Key.Tab));
+                io.AddKeyEvent(ImGuiNET.ImGuiKey.LeftArrow, keyboard.IsKeyPressed(Key.Left));
+                io.AddKeyEvent(ImGuiNET.ImGuiKey.RightArrow, keyboard.IsKeyPressed(Key.Right));
+                io.AddKeyEvent(ImGuiNET.ImGuiKey.UpArrow, keyboard.IsKeyPressed(Key.Up));
+                io.AddKeyEvent(ImGuiNET.ImGuiKey.DownArrow, keyboard.IsKeyPressed(Key.Down));
+                io.AddKeyEvent(ImGuiNET.ImGuiKey.Enter, keyboard.IsKeyPressed(Key.Enter));
+                io.AddKeyEvent(ImGuiNET.ImGuiKey.Escape, keyboard.IsKeyPressed(Key.Escape));
+                io.AddKeyEvent(ImGuiNET.ImGuiKey.LeftCtrl, keyboard.IsKeyPressed(Key.ControlLeft));
+                io.AddKeyEvent(ImGuiNET.ImGuiKey.LeftShift, keyboard.IsKeyPressed(Key.ShiftLeft));
+            }
+        }
+
+        if (_inputContext != null && _inputContext.Keyboards.Count > 0 && !(_imguiRenderer?.WantCaptureKeyboard ?? false))
             _camera.HandleKeyboard(_inputContext.Keyboards[0], (float)deltaTime);
+    }
+
+    private void BuildMenuBar(double deltaTime)
+    {
+        var instantFps = deltaTime > 0.0 ? (float)(1.0 / deltaTime) : 0.0f;
+        var smoothing = 1.0f - MathF.Exp(-Math.Max((float)deltaTime, 0.0f) * 5.0f);
+        _displayedFps = _displayedFps <= 0.0f ? instantFps : float.Lerp(_displayedFps, instantFps, smoothing);
+
+        if (ImGui.BeginMainMenuBar()) {
+            if (ImGui.BeginMenu("File")) {
+                if (ImGui.MenuItem("Load"))
+                    OpenParkPicker();
+                if (ImGui.MenuItem("Exit"))
+                    _exitRequested = true;
+                ImGui.EndMenu();
+            }
+
+            if (ImGui.BeginMenu("World")) {
+                if (ImGui.MenuItem("Sky"))
+                    ImGui.OpenPopup("Sky settings");
+                ImGui.EndMenu();
+            }
+
+            var fpsText = $"FPS: {_displayedFps:0}";
+            ImGui.SetCursorPosX(Math.Max(ImGui.GetCursorPosX(), ImGui.GetWindowWidth() - ImGui.CalcTextSize(fpsText).X - ImGui.GetStyle().WindowPadding.X));
+            ImGui.TextUnformatted(fpsText);
+            ImGui.EndMainMenuBar();
+        }
+
+        if (ImGui.BeginPopupModal("Sky settings", ImGuiWindowFlags.AlwaysAutoResize)) {
+            ImGui.SliderFloat("Time of day", ref _timeOfDayHours, 0.0f, 24.0f, "%.1f h");
+            ImGui.SliderFloat("Sun angle", ref _sunAngleDegrees, 0.0f, 360.0f, "%.0f°");
+            if (ImGui.Button("Close"))
+                ImGui.CloseCurrentPopup();
+            ImGui.EndPopup();
+        }
+
+        if (_showParkLoadError && ImGui.Begin("Park load error", ref _showParkLoadError, ImGuiWindowFlags.AlwaysAutoResize)) {
+            ImGui.TextWrapped(_parkLoadError ?? "The park could not be loaded.");
+            if (ImGui.Button("OK"))
+                _showParkLoadError = false;
+            ImGui.End();
+        }
+    }
+
+    private void OpenParkPicker()
+    {
+        var defaultPath = _loadedParkPath is null ? string.Empty : Path.GetDirectoryName(_loadedParkPath) ?? string.Empty;
+        try {
+            var result = Dialog.FileOpen("park", defaultPath);
+            if (result.IsError) {
+                _parkLoadError = result.ErrorMessage;
+                _showParkLoadError = true;
+            }
+            else if (result.IsOk) {
+                LoadPark(result.Path);
+            }
+        }
+        catch (Exception ex) {
+            _parkLoadError = ex.Message;
+            _showParkLoadError = true;
+        }
+    }
+
+    private void LoadPark(string parkPath)
+    {
+        var simulation = _simulation ?? throw new InvalidOperationException("OpenRCT2 is not initialized.");
+        _parkLoadError = null;
+        var previousVertices = _vertices.ToArray();
+        var previousIndices = _indices.ToArray();
+        var previousSkirtSections = _terrainSkirtSections;
+        var previousSkirtTriangles = _terrainSkirtTriangles;
+        var previousFlatEdges = _terrainSkirtFlatEdges;
+
+        try {
+            simulation.LoadPark(parkPath);
+            var (width, height) = simulation.GetDimensions();
+            if (width <= 0 || height <= 0 || (long)width * height > int.MaxValue)
+                throw new InvalidOperationException($"OpenRCT2 returned invalid map dimensions {width}x{height}.");
+
+            var surfaceData = new RCTTileSurfaceData[checked(width * height)];
+            simulation.FillSurfaceData(surfaceData);
+            GenerateTerrainMesh(surfaceData, width, height);
+            if (_vk!.DeviceWaitIdle(_logicalDevice) != Result.Success)
+                throw new InvalidOperationException("Could not wait for the Vulkan device before replacing terrain buffers.");
+            UploadMeshToGPU();
+
+            _surfaceData = surfaceData;
+            _mapWidth = width;
+            _mapHeight = height;
+            _loadedParkPath = parkPath;
+            ParkPath = parkPath;
+            _camera.Position = new Vector3(width * 1.5f, 120.0f, -height * 1.5f);
+            _parkLoadError = null;
+            _showParkLoadError = false;
+        }
+        catch (Exception ex) {
+            if (_loadedParkPath is not null) {
+                try {
+                    simulation.LoadPark(_loadedParkPath);
+                }
+                catch (Exception restoreException) {
+                    _parkLoadError = $"Failed to load '{parkPath}': {ex.Message} The previous park could not be restored: {restoreException.Message}";
+                }
+            }
+
+            _vertices.Clear();
+            _vertices.AddRange(previousVertices);
+            _indices.Clear();
+            _indices.AddRange(previousIndices);
+            _terrainSkirtSections = previousSkirtSections;
+            _terrainSkirtTriangles = previousSkirtTriangles;
+            _terrainSkirtFlatEdges = previousFlatEdges;
+            _parkLoadError ??= $"Failed to load '{parkPath}': {ex.Message}";
+            _showParkLoadError = true;
+        }
     }
 
     private unsafe void OnRenderFrame(double deltaTime)
@@ -1232,6 +1393,8 @@ public sealed class Renderer : IDisposable
 
         _imagesInFlight[imageIndex] = _inFlightFences[_currentFrame];
         var cmd = _commandBuffers[imageIndex];
+        _imguiRenderer?.BeginFrame((int)_swapchainExtent.Width, (int)_swapchainExtent.Height, (float)deltaTime);
+        BuildMenuBar(deltaTime);
         _vk.ResetCommandBuffer(cmd, 0);
         CommandBufferBeginInfo beginInfo = new() { SType = StructureType.CommandBufferBeginInfo };
         _vk.BeginCommandBuffer(cmd, in beginInfo);
@@ -1268,14 +1431,25 @@ public sealed class Renderer : IDisposable
         var aspect = (float)_swapchainExtent.Width / _swapchainExtent.Height;
         // Row-vector convention in shader: clip = position * viewProjection
         var viewProjection = _camera.GetViewMatrix() * _camera.GetProjectionMatrix(aspect);
-        UniformBufferObject ubo = new() { ViewProjection = viewProjection };
-        _vk.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit, 0, (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
+        var timeAngle = (_timeOfDayHours - 6.0f) * (MathF.PI / 12.0f);
+        var sunElevation = MathF.Sin(timeAngle);
+        var horizontalLength = MathF.Cos(timeAngle);
+        var sunAzimuth = _sunAngleDegrees * (MathF.PI / 180.0f);
+        var sunDirection = Vector3.Normalize(new Vector3(MathF.Cos(sunAzimuth) * horizontalLength, sunElevation, MathF.Sin(sunAzimuth) * horizontalLength));
+        var ambientLight = 0.15f + 0.15f * MathF.Max(sunElevation, 0.0f);
+        UniformBufferObject ubo = new() {
+            ViewProjection = viewProjection,
+            SunDirection = new Vector4(sunDirection, 0.0f),
+            Lighting = new Vector4(ambientLight, 0.85f, 0.0f, 0.0f)
+        };
+        _vk.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
 
         ulong offset = 0;
         var vBuf = _vertexBuffer;
         _vk.CmdBindVertexBuffers(cmd, 0, 1, in vBuf, in offset);
         _vk.CmdBindIndexBuffer(cmd, _indexBuffer, 0, IndexType.Uint32);
         _vk.CmdDrawIndexed(cmd, (uint)_indices.Count, 1, 0, 0, 0);
+        _imguiRenderer?.Render(cmd, imageIndex);
         _vk.CmdEndRenderPass(cmd);
         _vk.EndCommandBuffer(cmd);
 
@@ -1320,6 +1494,8 @@ public sealed class Renderer : IDisposable
     {
         if (_vk is not null && _logicalDevice.Handle != 0) {
             _vk.DeviceWaitIdle(_logicalDevice);
+            _imguiRenderer?.Dispose();
+            _imguiRenderer = null;
             DestroySyncPrimitives();
 
             if (_commandPool.Handle != 0)

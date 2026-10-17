@@ -7,4 +7,6 @@ namespace RCT3DViewer.Render;
 public struct UniformBufferObject
 {
     public Matrix4x4 ViewProjection;
+    public Vector4 SunDirection;
+    public Vector4 Lighting;
 }
