@@ -1,13 +1,5 @@
-struct Uniforms
-{
-    float4x4 viewProjection;
-    float4 sunDirection;
-    float4 lighting;
-};
+import lib.uniforms;
 
-// Directly maps to the CmdPushConstants layout passed during OnRenderFrame
-[[vk::push_constant]]
-Uniforms globalUniforms;
 
 struct VertexInput
 {

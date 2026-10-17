@@ -6,7 +6,7 @@ namespace RCT3DViewer.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 4;
+    private const uint ExpectedAbiVersion = 5;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -138,6 +138,5 @@ public struct RCTTileSurfaceData
     public byte EastCornerHeight;
     public byte SouthCornerHeight;
     public byte WestCornerHeight;
-    public byte MapColour;
-    public byte Reserved;
+    public ushort WaterHeight;
 }

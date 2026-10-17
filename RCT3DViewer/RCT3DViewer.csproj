@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <OpenRCT2AdapterDll Condition="'$(OpenRCT2AdapterDll)' == '' and Exists('$(MSBuildProjectDirectory)\..\OpenRCT2\bin\libopenrct2.dll')">$(MSBuildProjectDirectory)\..\OpenRCT2\bin\libopenrct2.dll</OpenRCT2AdapterDll>
     <OpenRCT2AdapterDll Condition="'$(OpenRCT2AdapterDll)' == ''">$(MSBuildProjectDirectory)\..\OpenRCT2\bin-adapter\libopenrct2.dll</OpenRCT2AdapterDll>
   </PropertyGroup>
 
@@ -45,6 +46,10 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Shaders\lib\" />
+  </ItemGroup>
+
   <Target Name="CopyOpenRCT2RuntimeData" AfterTargets="Build">
     <ItemGroup>
       <OpenRCT2Language Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\language\**\*" />
@@ -53,21 +58,11 @@
       <OpenRCT2Objects Include="$(MSBuildProjectDirectory)\..\OpenRCT2\bin-adapter\data\object\**\*" />
       <OpenRCT2Sequences Include="$(MSBuildProjectDirectory)\..\OpenRCT2\bin-adapter\data\sequence\**\*" />
     </ItemGroup>
-    <Copy SourceFiles="@(OpenRCT2Language)"
-          DestinationFiles="@(OpenRCT2Language->'$(OutDir)openrct2-data\language\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(OpenRCT2ScenarioPatches)"
-          DestinationFiles="@(OpenRCT2ScenarioPatches->'$(OutDir)openrct2-data\scenario_patches\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(OpenRCT2Shaders)"
-          DestinationFiles="@(OpenRCT2Shaders->'$(OutDir)openrct2-data\shaders\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(OpenRCT2Objects)"
-          DestinationFiles="@(OpenRCT2Objects->'$(OutDir)openrct2-data\object\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(OpenRCT2Sequences)"
-          DestinationFiles="@(OpenRCT2Sequences->'$(OutDir)openrct2-data\sequence\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OpenRCT2Language)" DestinationFiles="@(OpenRCT2Language->'$(OutDir)openrct2-data\language\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OpenRCT2ScenarioPatches)" DestinationFiles="@(OpenRCT2ScenarioPatches->'$(OutDir)openrct2-data\scenario_patches\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OpenRCT2Shaders)" DestinationFiles="@(OpenRCT2Shaders->'$(OutDir)openrct2-data\shaders\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OpenRCT2Objects)" DestinationFiles="@(OpenRCT2Objects->'$(OutDir)openrct2-data\object\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OpenRCT2Sequences)" DestinationFiles="@(OpenRCT2Sequences->'$(OutDir)openrct2-data\sequence\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

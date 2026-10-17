@@ -30,6 +30,7 @@ public sealed class Renderer : IDisposable
     private bool _framebufferResized;
 
     private TerrainGraphicsResources? _terrainGraphicsResources;
+    private WaterGraphicsResources? _waterGraphicsResources;
     private PipelineLayout _pipelineLayout => _terrainGraphicsResources?.PipelineLayout ?? default;
     private Pipeline _graphicsPipeline => _terrainGraphicsResources?.Pipeline ?? default;
     private DescriptorSet _terrainDescriptorSet => _terrainGraphicsResources?.DescriptorSet ?? default;
@@ -53,11 +54,12 @@ public sealed class Renderer : IDisposable
     private readonly FlightCamera _camera = new();
     private TerrainMeshBuilder? _terrainMeshBuilder;
     private TerrainMeshData? _terrainMesh;
+    private WaterMeshData? _waterMesh;
     private SimulationBridge? _simulation;
-    private RCTTileSurfaceData[]? _surfaceData;
+    //private RCTTileSurfaceData[]? _surfaceData;
     //private string? _parkPath;
-    private int _mapWidth;
-    private int _mapHeight;
+    //private int _mapWidth;
+    //private int _mapHeight;
 
     public string? LibraryPath { get; set; }
     public string? OpenRCT2Path { get; set; }
@@ -123,7 +125,7 @@ public sealed class Renderer : IDisposable
         catch (Exception ex) {
             _simulation?.Dispose();
             _simulation = null;
-            _surfaceData = null;
+            //_surfaceData = null;
 
             throw new InvalidOperationException("Failed to initialize OpenRCT2!", ex);
         }
@@ -138,6 +140,8 @@ public sealed class Renderer : IDisposable
         _swapchainResources.CreateRenderPass();
         _terrainGraphicsResources = new TerrainGraphicsResources(_deviceContext, _renderPass, _terrainMaterials!);
         _terrainGraphicsResources.CreatePipeline();
+        _waterGraphicsResources = new WaterGraphicsResources(_deviceContext, _renderPass);
+        _waterGraphicsResources.CreatePipeline();
         _swapchainResources.CreateFramebuffers();
 
         SetupInputs();
@@ -255,6 +259,7 @@ public sealed class Renderer : IDisposable
         var simulation = _simulation ?? throw new InvalidOperationException("OpenRCT2 is not initialized.");
         _ui.BeginParkLoad();
         var previousMesh = _terrainMesh;
+        var previousWaterMesh = _waterMesh;
 
         try {
             simulation.LoadPark(parkPath);
@@ -264,15 +269,18 @@ public sealed class Renderer : IDisposable
 
             var surfaceData = new RCTTileSurfaceData[checked(width * height)];
             simulation.FillSurfaceData(surfaceData);
-            var terrainMesh = _terrainMeshBuilder!.Build(surfaceData, width, height, TerrainSkirtFloor);
-            _terrainMesh = terrainMesh;
+            var meshData = _terrainMeshBuilder!.Build(surfaceData, width, height, TerrainSkirtFloor);
+            var terrainMesh = meshData.Terrain;
             if (_vk!.DeviceWaitIdle(_logicalDevice) != Result.Success)
                 throw new InvalidOperationException("Could not wait for the Vulkan device before replacing terrain buffers.");
             _terrainGraphicsResources!.UploadMesh(terrainMesh);
+            _waterGraphicsResources!.UploadMesh(meshData.Water);
 
-            _surfaceData = surfaceData;
-            _mapWidth = width;
-            _mapHeight = height;
+            _terrainMesh = terrainMesh;
+            _waterMesh = meshData.Water;
+            //_surfaceData = surfaceData;
+            //_mapWidth = width;
+            //_mapHeight = height;
             _ui.SetLoadedParkPath(parkPath);
             //_parkPath = parkPath;
             _camera.Position = new Vector3(width * 1.5f, 120.0f, -height * 1.5f);
@@ -289,6 +297,7 @@ public sealed class Renderer : IDisposable
             }
 
             _terrainMesh = previousMesh;
+            _waterMesh = previousWaterMesh;
             if (!_ui.HasParkLoadError)
                 _ui.ShowParkLoadError($"Failed to load '{parkPath}': {ex.Message}");
         }
@@ -378,10 +387,25 @@ public sealed class Renderer : IDisposable
         _vk.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
 
         ulong offset = 0;
-        var vBuf = _vertexBuffer;
-        _vk.CmdBindVertexBuffers(cmd, 0, 1, in vBuf, in offset);
-        _vk.CmdBindIndexBuffer(cmd, _indexBuffer, 0, IndexType.Uint32);
-        _vk.CmdDrawIndexed(cmd, (uint)(_terrainMesh?.Indices.Length ?? 0), 1, 0, 0, 0);
+        if (_terrainMesh is { } terrainMesh &&
+            terrainMesh.Vertices.Length > 0 && terrainMesh.Indices.Length > 0 &&
+            _vertexBuffer.Handle != 0 && _indexBuffer.Handle != 0) {
+            var vBuf = _vertexBuffer;
+            _vk.CmdBindVertexBuffers(cmd, 0, 1, in vBuf, in offset);
+            _vk.CmdBindIndexBuffer(cmd, _indexBuffer, 0, IndexType.Uint32);
+            _vk.CmdDrawIndexed(cmd, (uint)terrainMesh.Indices.Length, 1, 0, 0, 0);
+        }
+
+        if (_waterGraphicsResources is { IndexCount: > 0 } waterResources) {
+            _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, waterResources.Pipeline);
+            _vk.CmdPushConstants(cmd, waterResources.PipelineLayout, ShaderStageFlags.VertexBit, 0,
+                (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
+            var waterVertexBuffer = waterResources.VertexBuffer;
+            _vk.CmdBindVertexBuffers(cmd, 0, 1, in waterVertexBuffer, in offset);
+            _vk.CmdBindIndexBuffer(cmd, waterResources.IndexBuffer, 0, IndexType.Uint32);
+            _vk.CmdDrawIndexed(cmd, waterResources.IndexCount, 1, 0, 0, 0);
+        }
+
         _imguiRenderer?.Render(cmd, imageIndex);
         _vk.CmdEndRenderPass(cmd);
         _vk.EndCommandBuffer(cmd);
@@ -447,6 +471,10 @@ public sealed class Renderer : IDisposable
         var terrainResources = _terrainGraphicsResources;
         _terrainGraphicsResources = null;
         terrainResources?.Dispose();
+
+        var waterResources = _waterGraphicsResources;
+        _waterGraphicsResources = null;
+        waterResources?.Dispose();
 
         var swapchainResources = _swapchainResources;
         _swapchainResources = null;
