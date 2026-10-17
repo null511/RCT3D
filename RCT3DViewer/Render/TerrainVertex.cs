@@ -11,6 +11,7 @@ public struct TerrainVertex
     public Vector2 TextureCoordinate;
     public float MaterialId;
 
+
     public TerrainVertex(Vector3 pos, Vector3 norm, Vector2 textureCoordinate, uint materialId)
     {
         Position = pos;

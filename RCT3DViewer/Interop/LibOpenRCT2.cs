@@ -3,20 +3,6 @@ using System.Text;
 
 namespace RCT3DViewer.Interop;
 
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
-public struct RCTTileSurfaceData
-{
-    public uint TerrainSurfaceIdHash;
-    public byte BaseZ;
-    public byte SlopeFlags;
-    public byte NorthCornerHeight;
-    public byte EastCornerHeight;
-    public byte SouthCornerHeight;
-    public byte WestCornerHeight;
-    public byte MapColour;
-    public byte Reserved;
-}
-
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
@@ -24,16 +10,22 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int InitializeDelegate(byte* openRCT2Path, byte* rct2Path, out IntPtr context);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int LoadParkDelegate(IntPtr context, byte* parkPath);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int GetMapDimensionsDelegate(IntPtr context, int* width, int* height);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int CopySurfaceDataDelegate(IntPtr context, RCTTileSurfaceData* output, ulong capacity);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate IntPtr GetLastErrorDelegate();
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int ShutdownDelegate(IntPtr context);
 
@@ -46,7 +38,9 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private IntPtr _context;
     private bool _disposed;
 
+    public static string DefaultLibraryPath => Path.Combine(AppContext.BaseDirectory, LibName + ".dll");
     //public bool IsAvailable => !_disposed && _context != IntPtr.Zero;
+
 
     public LibOpenRCT2(string libraryPath, string openRCT2Path, string rct2Path)
     {
@@ -81,8 +75,6 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             throw;
         }
     }
-
-    public static string DefaultLibraryPath => Path.Combine(AppContext.BaseDirectory, LibName + ".dll");
 
     public void LoadPark(string parkPath)
     {
@@ -134,4 +126,18 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
         _disposed = true;
         NativeLibrary.Free(_nativeHandle);
     }
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct RCTTileSurfaceData
+{
+    public uint TerrainSurfaceIdHash;
+    public byte BaseZ;
+    public byte SlopeFlags;
+    public byte NorthCornerHeight;
+    public byte EastCornerHeight;
+    public byte SouthCornerHeight;
+    public byte WestCornerHeight;
+    public byte MapColour;
+    public byte Reserved;
 }
