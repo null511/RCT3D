@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "RCT3DViewer": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "VK_INSTANCE_LAYERS": "VK_LAYER_KHRONOS_validation"
+      },
+      "hotReloadEnabled": false
+    }
+  }
+}

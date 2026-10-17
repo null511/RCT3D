@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="OpenRCT2/openrct2.sln" />
+  </Folder>
+  <Project Path="RCT3DViewer/RCT3DViewer.csproj" />
+  <Project Path="ShaderCompiler/ShaderCompiler.csproj" />
+</Solution>
