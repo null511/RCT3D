@@ -1,7 +1,7 @@
-using RCT3DViewer.Interop;
-using RCT3DViewer.Simulation;
 using ImGuiNET;
 using NativeFileDialogSharp;
+using RCT3DViewer.Interop;
+using RCT3DViewer.Simulation;
 using Silk.NET.Core.Native;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -11,6 +11,7 @@ using Silk.NET.Windowing;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
+using Semaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace RCT3DViewer.Render;
 
@@ -48,14 +49,14 @@ public sealed class Renderer : IDisposable
     private Image _terrainTextureImage;
     private DeviceMemory _terrainTextureMemory;
     private ImageView _terrainTextureView;
-    private Silk.NET.Vulkan.Sampler _terrainTextureSampler;
+    private Sampler _terrainTextureSampler;
     private TerrainMaterialLibrary? _terrainMaterials;
     private CommandPool _commandPool;
     private CommandBuffer[] _commandBuffers = Array.Empty<CommandBuffer>();
 
     private const int MaxFramesInFlight = 2;
-    private Silk.NET.Vulkan.Semaphore[] _imageAvailableSemaphores = Array.Empty<Silk.NET.Vulkan.Semaphore>();
-    private Silk.NET.Vulkan.Semaphore[] _renderFinishedSemaphores = Array.Empty<Silk.NET.Vulkan.Semaphore>();
+    private Semaphore[] _imageAvailableSemaphores = Array.Empty<Semaphore>();
+    private Semaphore[] _renderFinishedSemaphores = Array.Empty<Semaphore>();
     private Fence[] _inFlightFences = Array.Empty<Fence>();
     private Fence[] _imagesInFlight = Array.Empty<Fence>();
     private uint _currentFrame;
@@ -80,6 +81,7 @@ public sealed class Renderer : IDisposable
     private readonly List<uint> _indices = new();
     private SimulationBridge? _simulation;
     private RCTTileSurfaceData[]? _surfaceData;
+    //private string? _parkPath;
     private int _mapWidth;
     private int _mapHeight;
     private int _terrainSkirtSections;
@@ -89,7 +91,6 @@ public sealed class Renderer : IDisposable
     public string? LibraryPath { get; set; }
     public string? OpenRCT2Path { get; set; }
     public string? Rct2Path { get; set; }
-    public string? ParkPath { get; set; }
     public float TerrainSkirtFloor { get; set; } = -24.0f;
 
 
@@ -122,8 +123,8 @@ public sealed class Renderer : IDisposable
         if (string.IsNullOrEmpty(Rct2Path))
             throw new InvalidOperationException("Rct2Path is undefined!");
         
-        if (string.IsNullOrEmpty(ParkPath))
-            throw new InvalidOperationException("ParkPath is undefined!");
+        //if (string.IsNullOrEmpty(_parkPath))
+        //    throw new InvalidOperationException("ParkPath is undefined!");
 
         if (string.IsNullOrEmpty(LibraryPath))
             throw new InvalidOperationException("LibraryPath is undefined!");
@@ -133,26 +134,26 @@ public sealed class Renderer : IDisposable
                 OpenRCT2Path = Path.Combine(AppContext.BaseDirectory, OpenRCT2Path);
 
             _simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path);
-            _simulation.LoadPark(ParkPath);
-            _loadedParkPath = ParkPath;
-            var (width, height) = _simulation.GetDimensions();
-            if (width <= 0 || height <= 0 || (long)width * height > int.MaxValue)
-                throw new InvalidOperationException($"OpenRCT2 returned invalid map dimensions {width}x{height}.");
+            //_simulation.LoadPark(_parkPath);
+            //_loadedParkPath = _parkPath;
+            //var (width, height) = _simulation.GetDimensions();
+            //if (width <= 0 || height <= 0 || (long)width * height > int.MaxValue)
+            //    throw new InvalidOperationException($"OpenRCT2 returned invalid map dimensions {width}x{height}.");
 
-            _surfaceData = new RCTTileSurfaceData[checked(width * height)];
-            _simulation.FillSurfaceData(_surfaceData);
+            //_surfaceData = new RCTTileSurfaceData[checked(width * height)];
+            //_simulation.FillSurfaceData(_surfaceData);
             _terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures", "Terrain"));
-            _mapWidth = width;
-            _mapHeight = height;
-            _camera.Position = new Vector3(width * 1.5f, 120.0f, -height * 1.5f);
-            Console.WriteLine($"Loaded park '{ParkPath}' ({width}x{height}) through the OpenRCT2 adapter.");
+            //_mapWidth = width;
+            //_mapHeight = height;
+            //_camera.Position = new Vector3(width * 1.5f, 120.0f, -height * 1.5f);
+            //Console.WriteLine($"Loaded park '{_parkPath}' ({width}x{height}) through the OpenRCT2 adapter.");
         }
         catch (Exception ex) {
             _simulation?.Dispose();
             _simulation = null;
             _surfaceData = null;
 
-            throw new InvalidOperationException("Failed to initialize OpenRCT2 and load the configured park.", ex);
+            throw new InvalidOperationException("Failed to initialize OpenRCT2!", ex);
         }
 
         Console.WriteLine("Initializing Graphics Subsystems via Silk.NET Vulkan...");
@@ -171,12 +172,16 @@ public sealed class Renderer : IDisposable
         CreateFramebuffers();
 
         SetupInputs();
-        GenerateTerrainMesh(_surfaceData!, _mapWidth, _mapHeight);
-        UploadMeshToGPU();
+
+        //if (_surfaceData != null) {
+        //    GenerateTerrainMesh(_surfaceData!, _mapWidth, _mapHeight);
+        //    UploadMeshToGPU();
+        //}
 
         CreateCommandInfrastructure();
         CreateTerrainTextureResources();
         CreateSyncPrimitives();
+
         _imguiRenderer = new ImGuiVulkanRenderer(_vk, _physicalDevice, _logicalDevice, _graphicsQueue, _renderPass, _commandPool,
             Path.Combine(AppContext.BaseDirectory, "Shaders"), _swapchainImages.Length);
 
@@ -186,8 +191,7 @@ public sealed class Renderer : IDisposable
 
     private unsafe void CreateVulkanInstance()
     {
-        ApplicationInfo appInfo = new()
-        {
+        ApplicationInfo appInfo = new() {
             SType = StructureType.ApplicationInfo,
             PApplicationName = (byte*)Marshal.StringToHGlobalAnsi("RCT3DViewer"),
             ApplicationVersion = Vk.MakeVersion(1, 0),
@@ -197,8 +201,8 @@ public sealed class Renderer : IDisposable
         };
 
         var extensions = _window!.VkSurface!.GetRequiredExtensions(out var extCount);
-        InstanceCreateInfo createInfo = new()
-        {
+
+        InstanceCreateInfo createInfo = new() {
             SType = StructureType.InstanceCreateInfo,
             PApplicationInfo = &appInfo,
             EnabledExtensionCount = extCount,
@@ -227,8 +231,7 @@ public sealed class Renderer : IDisposable
         uint deviceCount = 0;
         _vk!.EnumeratePhysicalDevices(_instance, ref deviceCount, null);
         var devices = new PhysicalDevice[deviceCount];
-        fixed (PhysicalDevice* devicesPtr = devices)
-        {
+        fixed (PhysicalDevice* devicesPtr = devices) {
             _vk.EnumeratePhysicalDevices(_instance, ref deviceCount, devicesPtr);
         }
 
@@ -240,23 +243,19 @@ public sealed class Renderer : IDisposable
         uint queueFamilyCount = 0;
         _vk!.GetPhysicalDeviceQueueFamilyProperties(_physicalDevice, ref queueFamilyCount, null);
         var queueFamilies = new QueueFamilyProperties[queueFamilyCount];
-        fixed (QueueFamilyProperties* qPtr = queueFamilies)
-        {
+        fixed (QueueFamilyProperties* qPtr = queueFamilies) {
             _vk.GetPhysicalDeviceQueueFamilyProperties(_physicalDevice, ref queueFamilyCount, qPtr);
         }
 
-        for (uint i = 0; i < queueFamilyCount; i++)
-        {
-            if ((queueFamilies[i].QueueFlags & QueueFlags.GraphicsBit) != 0)
-            {
+        for (uint i = 0; i < queueFamilyCount; i++) {
+            if ((queueFamilies[i].QueueFlags & QueueFlags.GraphicsBit) != 0) {
                 _graphicsQueueFamilyIndex = i;
                 break;
             }
         }
 
         var queuePriority = 1.0f;
-        DeviceQueueCreateInfo queueCreateInfo = new()
-        {
+        DeviceQueueCreateInfo queueCreateInfo = new() {
             SType = StructureType.DeviceQueueCreateInfo,
             QueueFamilyIndex = _graphicsQueueFamilyIndex,
             QueueCount = 1,
@@ -268,19 +267,18 @@ public sealed class Renderer : IDisposable
         var pSwapchainExt = (byte*)swapchainExtPtr;
 
         _vk.GetPhysicalDeviceFeatures(_physicalDevice, out PhysicalDeviceFeatures supportedFeatures);
-        PhysicalDeviceFeatures deviceFeatures = new()
-        {
-            SamplerAnisotropy = supportedFeatures.SamplerAnisotropy
+
+        PhysicalDeviceFeatures deviceFeatures = new() {
+            SamplerAnisotropy = supportedFeatures.SamplerAnisotropy,
         };
 
-        DeviceCreateInfo deviceCreateInfo = new()
-        {
+        DeviceCreateInfo deviceCreateInfo = new() {
             SType = StructureType.DeviceCreateInfo,
             QueueCreateInfoCount = 1,
             PQueueCreateInfos = &queueCreateInfo,
             EnabledExtensionCount = 1,
             PpEnabledExtensionNames = &pSwapchainExt,
-            PEnabledFeatures = &deviceFeatures
+            PEnabledFeatures = &deviceFeatures,
         };
 
         if (_vk.CreateDevice(_physicalDevice, in deviceCreateInfo, null, out _logicalDevice) != Result.Success)
@@ -296,8 +294,10 @@ public sealed class Renderer : IDisposable
     private unsafe void CreateSwapchain(SwapchainKHR oldSwapchain = default)
     {
         _swapchainFormat = Format.B8G8R8A8Unorm;
+
         if (_khrSurface!.GetPhysicalDeviceSurfaceCapabilities(_physicalDevice, _surface, out var capabilities) != Result.Success)
             throw new Exception("Failed to query Vulkan surface capabilities.");
+
         if ((capabilities.SupportedUsageFlags & ImageUsageFlags.ColorAttachmentBit) == 0)
             throw new NotSupportedException("The Vulkan surface does not support color attachment swapchain images.");
 
@@ -339,6 +339,7 @@ public sealed class Renderer : IDisposable
 
         if (_khrSwapchain!.CreateSwapchain(_logicalDevice, in createInfo, null, out var newSwapchain) != Result.Success)
             throw new Exception("Failed to generate Vulkan Presentation Swapchain.");
+
         _swapchain = newSwapchain;
 
         uint imageCount = 0;
@@ -352,6 +353,7 @@ public sealed class Renderer : IDisposable
     private unsafe void CreateImageViews()
     {
         _swapchainImageViews = new ImageView[_swapchainImages.Length];
+
         for (var i = 0; i < _swapchainImages.Length; i++) {
             ImageViewCreateInfo createInfo = new() {
                 SType = StructureType.ImageViewCreateInfo,
@@ -472,12 +474,13 @@ public sealed class Renderer : IDisposable
         var layerBytes = checked((ulong)materials.Width * (ulong)materials.Height * 4);
         var textureBytes = checked(layerBytes * (ulong)materials.LayerCount);
 
-        AllocateBuffer(textureBytes, BufferUsageFlags.TransferSrcBit,
-            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out var stagingBuffer, out var stagingMemory);
+        AllocateBuffer(textureBytes, BufferUsageFlags.TransferSrcBit, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out var stagingBuffer, out var stagingMemory);
+
         try {
             void* mapped;
             if (_vk!.MapMemory(_logicalDevice, stagingMemory, 0, textureBytes, 0, &mapped) != Result.Success)
                 throw new Exception("Failed to map terrain texture staging memory.");
+
             Marshal.Copy(materials.Pixels, 0, (IntPtr)mapped, materials.Pixels.Length);
             _vk.UnmapMemory(_logicalDevice, stagingMemory);
 
@@ -494,17 +497,21 @@ public sealed class Renderer : IDisposable
                 SharingMode = SharingMode.Exclusive,
                 InitialLayout = ImageLayout.Undefined
             };
+
             if (_vk.CreateImage(_logicalDevice, ref imageInfo, null, out _terrainTextureImage) != Result.Success)
                 throw new Exception("Failed to create terrain texture array image.");
 
             _vk.GetImageMemoryRequirements(_logicalDevice, _terrainTextureImage, out var requirements);
+
             MemoryAllocateInfo allocationInfo = new() {
                 SType = StructureType.MemoryAllocateInfo,
                 AllocationSize = requirements.Size,
                 MemoryTypeIndex = FindMemoryType(requirements.MemoryTypeBits, MemoryPropertyFlags.DeviceLocalBit)
             };
+
             if (_vk.AllocateMemory(_logicalDevice, ref allocationInfo, null, out _terrainTextureMemory) != Result.Success)
                 throw new Exception("Failed to allocate terrain texture array memory.");
+
             if (_vk.BindImageMemory(_logicalDevice, _terrainTextureImage, _terrainTextureMemory, 0) != Result.Success)
                 throw new Exception("Failed to bind terrain texture array memory.");
 
@@ -516,6 +523,7 @@ public sealed class Renderer : IDisposable
                     ImageExtent = new Extent3D((uint)materials.Width, (uint)materials.Height, 1)
                 };
             }
+
             UploadTerrainTexture(stagingBuffer, regions);
         }
         finally {
@@ -530,6 +538,7 @@ public sealed class Renderer : IDisposable
             Format = Format.R8G8B8A8Srgb,
             SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)materials.LayerCount)
         };
+
         if (_vk!.CreateImageView(_logicalDevice, in viewInfo, null, out _terrainTextureView) != Result.Success)
             throw new Exception("Failed to create terrain texture array view.");
 
@@ -546,6 +555,7 @@ public sealed class Renderer : IDisposable
             MaxLod = 0,
             BorderColor = BorderColor.IntOpaqueBlack
         };
+
         if (_vk.CreateSampler(_logicalDevice, in samplerInfo, null, out _terrainTextureSampler) != Result.Success)
             throw new Exception("Failed to create terrain texture sampler.");
 
@@ -553,6 +563,7 @@ public sealed class Renderer : IDisposable
             new() { Type = DescriptorType.SampledImage, DescriptorCount = 1 },
             new() { Type = DescriptorType.Sampler, DescriptorCount = 1 }
         };
+
         fixed (DescriptorPoolSize* poolSizesPtr = poolSizes) {
             DescriptorPoolCreateInfo poolInfo = new() {
                 SType = StructureType.DescriptorPoolCreateInfo,
@@ -560,6 +571,7 @@ public sealed class Renderer : IDisposable
                 PoolSizeCount = (uint)poolSizes.Length,
                 PPoolSizes = poolSizesPtr
             };
+
             if (_vk.CreateDescriptorPool(_logicalDevice, in poolInfo, null, out _terrainDescriptorPool) != Result.Success)
                 throw new Exception("Failed to create terrain texture descriptor pool.");
         }
@@ -571,15 +583,18 @@ public sealed class Renderer : IDisposable
             DescriptorSetCount = 1,
             PSetLayouts = &setLayout
         };
+
         if (_vk.AllocateDescriptorSets(_logicalDevice, in setInfo, out _terrainDescriptorSet) != Result.Success)
             throw new Exception("Failed to allocate terrain texture descriptor set.");
 
         DescriptorImageInfo imageDescriptor = new() { ImageView = _terrainTextureView, ImageLayout = ImageLayout.ShaderReadOnlyOptimal };
         DescriptorImageInfo samplerDescriptor = new() { Sampler = _terrainTextureSampler };
+
         var writes = new WriteDescriptorSet[] {
             new() { SType = StructureType.WriteDescriptorSet, DstSet = _terrainDescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
             new() { SType = StructureType.WriteDescriptorSet, DstSet = _terrainDescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.Sampler }
         };
+
         fixed (WriteDescriptorSet* writesPtr = writes) {
             writes[0].PImageInfo = &imageDescriptor;
             writes[1].PImageInfo = &samplerDescriptor;
@@ -595,11 +610,14 @@ public sealed class Renderer : IDisposable
             Level = CommandBufferLevel.Primary,
             CommandBufferCount = 1
         };
+
         if (_vk!.AllocateCommandBuffers(_logicalDevice, in allocationInfo, out var commandBuffer) != Result.Success)
             throw new Exception("Failed to allocate a one-time command buffer.");
+
         try {
             CommandBufferBeginInfo beginInfo = new() { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
             _vk.BeginCommandBuffer(commandBuffer, in beginInfo);
+
             ImageMemoryBarrier toTransfer = new() {
                 SType = StructureType.ImageMemoryBarrier,
                 OldLayout = ImageLayout.Undefined,
@@ -611,11 +629,13 @@ public sealed class Renderer : IDisposable
                 SrcAccessMask = AccessFlags.None,
                 DstAccessMask = AccessFlags.TransferWriteBit
             };
-            _vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TopOfPipeBit, PipelineStageFlags.TransferBit,
-                0, 0, null, 0, null, 1, &toTransfer);
+
+            _vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TopOfPipeBit, PipelineStageFlags.TransferBit, 0, 0, null, 0, null, 1, &toTransfer);
+
             fixed (BufferImageCopy* regionsPtr = regions)
                 _vk.CmdCopyBufferToImage(commandBuffer, stagingBuffer, _terrainTextureImage,
                     ImageLayout.TransferDstOptimal, (uint)regions.Length, regionsPtr);
+
             ImageMemoryBarrier toShader = new() {
                 SType = StructureType.ImageMemoryBarrier,
                 OldLayout = ImageLayout.TransferDstOptimal,
@@ -627,8 +647,9 @@ public sealed class Renderer : IDisposable
                 SrcAccessMask = AccessFlags.TransferWriteBit,
                 DstAccessMask = AccessFlags.ShaderReadBit
             };
-            _vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit,
-                0, 0, null, 0, null, 1, &toShader);
+
+            _vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit, 0, 0, null, 0, null, 1, &toShader);
+
             _vk.EndCommandBuffer(commandBuffer);
             SubmitInfo submitInfo = new() { SType = StructureType.SubmitInfo, CommandBufferCount = 1, PCommandBuffers = &commandBuffer };
             if (_vk.QueueSubmit(_graphicsQueue, 1, in submitInfo, default) != Result.Success || _vk.QueueWaitIdle(_graphicsQueue) != Result.Success)
@@ -796,22 +817,30 @@ public sealed class Renderer : IDisposable
 
         PipelineColorBlendAttachmentState colorBlendAttachment = new() { ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit, BlendEnable = false };
         PipelineColorBlendStateCreateInfo colorBlending = new() { SType = StructureType.PipelineColorBlendStateCreateInfo, AttachmentCount = 1, PAttachments = &colorBlendAttachment };
+        
         var descriptorBindings = new DescriptorSetLayoutBinding[] {
             new() { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
             new() { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
         };
+
         fixed (DescriptorSetLayoutBinding* bindingsPtr = descriptorBindings) {
             DescriptorSetLayoutCreateInfo descriptorLayoutInfo = new() {
                 SType = StructureType.DescriptorSetLayoutCreateInfo,
                 BindingCount = (uint)descriptorBindings.Length,
                 PBindings = bindingsPtr
             };
+
             if (_vk!.CreateDescriptorSetLayout(_logicalDevice, in descriptorLayoutInfo, null, out _terrainDescriptorSetLayout) != Result.Success)
                 throw new Exception("Failed to create the terrain texture descriptor-set layout.");
         }
 
         var descriptorLayout = _terrainDescriptorSetLayout;
-        PushConstantRange pushConstantRange = new() { StageFlags = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, Offset = 0, Size = (uint)Marshal.SizeOf<UniformBufferObject>() };
+        PushConstantRange pushConstantRange = new() {
+            StageFlags = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
+            Size = (uint)Marshal.SizeOf<UniformBufferObject>(),
+            Offset = 0,
+        };
+        
         PipelineLayoutCreateInfo pipelineLayoutInfo = new() {
             SType = StructureType.PipelineLayoutCreateInfo,
             SetLayoutCount = 1,
@@ -819,6 +848,7 @@ public sealed class Renderer : IDisposable
             PushConstantRangeCount = 1,
             PPushConstantRanges = &pushConstantRange
         };
+
         _vk!.CreatePipelineLayout(_logicalDevice, in pipelineLayoutInfo, null, out _pipelineLayout);
 
         GraphicsPipelineCreateInfo pipelineInfo = new() {
@@ -1114,8 +1144,8 @@ public sealed class Renderer : IDisposable
         FenceCreateInfo fenceInfo = new() { SType = StructureType.FenceCreateInfo, Flags = FenceCreateFlags.SignaledBit };
 
         var imageCount = _swapchainImages.Length;
-        _imageAvailableSemaphores = new Silk.NET.Vulkan.Semaphore[MaxFramesInFlight];
-        _renderFinishedSemaphores = new Silk.NET.Vulkan.Semaphore[imageCount];
+        _imageAvailableSemaphores = new Semaphore[MaxFramesInFlight];
+        _renderFinishedSemaphores = new Semaphore[imageCount];
         _inFlightFences = new Fence[MaxFramesInFlight];
 
         for (var i = 0; i < MaxFramesInFlight; i++)
@@ -1151,8 +1181,8 @@ public sealed class Renderer : IDisposable
                 _vk.DestroyFence(_logicalDevice, fence, null);
         }
 
-        _imageAvailableSemaphores = Array.Empty<Silk.NET.Vulkan.Semaphore>();
-        _renderFinishedSemaphores = Array.Empty<Silk.NET.Vulkan.Semaphore>();
+        _imageAvailableSemaphores = Array.Empty<Semaphore>();
+        _renderFinishedSemaphores = Array.Empty<Semaphore>();
         _inFlightFences = Array.Empty<Fence>();
         _imagesInFlight = Array.Empty<Fence>();
     }
@@ -1226,7 +1256,7 @@ public sealed class Renderer : IDisposable
         }
 
         if (_imguiRenderer is not null && _inputContext is not null) {
-            var io = ImGuiNET.ImGui.GetIO();
+            var io = ImGui.GetIO();
             if (_inputContext.Mice.Count > 0) {
                 var mouse = _inputContext.Mice[0];
                 var position = mouse.Position;
@@ -1237,15 +1267,15 @@ public sealed class Renderer : IDisposable
 
             if (_inputContext.Keyboards.Count > 0) {
                 var keyboard = _inputContext.Keyboards[0];
-                io.AddKeyEvent(ImGuiNET.ImGuiKey.Tab, keyboard.IsKeyPressed(Key.Tab));
-                io.AddKeyEvent(ImGuiNET.ImGuiKey.LeftArrow, keyboard.IsKeyPressed(Key.Left));
-                io.AddKeyEvent(ImGuiNET.ImGuiKey.RightArrow, keyboard.IsKeyPressed(Key.Right));
-                io.AddKeyEvent(ImGuiNET.ImGuiKey.UpArrow, keyboard.IsKeyPressed(Key.Up));
-                io.AddKeyEvent(ImGuiNET.ImGuiKey.DownArrow, keyboard.IsKeyPressed(Key.Down));
-                io.AddKeyEvent(ImGuiNET.ImGuiKey.Enter, keyboard.IsKeyPressed(Key.Enter));
-                io.AddKeyEvent(ImGuiNET.ImGuiKey.Escape, keyboard.IsKeyPressed(Key.Escape));
-                io.AddKeyEvent(ImGuiNET.ImGuiKey.LeftCtrl, keyboard.IsKeyPressed(Key.ControlLeft));
-                io.AddKeyEvent(ImGuiNET.ImGuiKey.LeftShift, keyboard.IsKeyPressed(Key.ShiftLeft));
+                io.AddKeyEvent(ImGuiKey.Tab, keyboard.IsKeyPressed(Key.Tab));
+                io.AddKeyEvent(ImGuiKey.LeftArrow, keyboard.IsKeyPressed(Key.Left));
+                io.AddKeyEvent(ImGuiKey.RightArrow, keyboard.IsKeyPressed(Key.Right));
+                io.AddKeyEvent(ImGuiKey.UpArrow, keyboard.IsKeyPressed(Key.Up));
+                io.AddKeyEvent(ImGuiKey.DownArrow, keyboard.IsKeyPressed(Key.Down));
+                io.AddKeyEvent(ImGuiKey.Enter, keyboard.IsKeyPressed(Key.Enter));
+                io.AddKeyEvent(ImGuiKey.Escape, keyboard.IsKeyPressed(Key.Escape));
+                io.AddKeyEvent(ImGuiKey.LeftCtrl, keyboard.IsKeyPressed(Key.ControlLeft));
+                io.AddKeyEvent(ImGuiKey.LeftShift, keyboard.IsKeyPressed(Key.ShiftLeft));
             }
         }
 
@@ -1270,22 +1300,32 @@ public sealed class Renderer : IDisposable
 
             if (ImGui.BeginMenu("World")) {
                 if (ImGui.MenuItem("Sky"))
-                    ImGui.OpenPopup("Sky settings");
+                    _showSkyModal = true;
                 ImGui.EndMenu();
+            }
+
+            // Open the modal from the main-menu-bar window, not the nested World
+            // menu window. Popup IDs are scoped to the current ImGui window.
+            if (_showSkyModal) {
+                ImGui.OpenPopup("Sky settings");
+                _showSkyModal = false;
+            }
+
+            ImGui.PushStyleColor(ImGuiCol.ModalWindowDimBg, new Vector4(0.0f, 0.0f, 0.0f, 0.0f));
+            var skyModalVisible = ImGui.BeginPopupModal("Sky settings", ImGuiWindowFlags.AlwaysAutoResize);
+            ImGui.PopStyleColor();
+            if (skyModalVisible) {
+                ImGui.SliderFloat("Time of day", ref _timeOfDayHours, 0.0f, 24.0f, "%.1f h");
+                ImGui.SliderFloat("Sun angle", ref _sunAngleDegrees, 0.0f, 360.0f, "%.0f°");
+                if (ImGui.Button("Close"))
+                    ImGui.CloseCurrentPopup();
+                ImGui.EndPopup();
             }
 
             var fpsText = $"FPS: {_displayedFps:0}";
             ImGui.SetCursorPosX(Math.Max(ImGui.GetCursorPosX(), ImGui.GetWindowWidth() - ImGui.CalcTextSize(fpsText).X - ImGui.GetStyle().WindowPadding.X));
             ImGui.TextUnformatted(fpsText);
             ImGui.EndMainMenuBar();
-        }
-
-        if (ImGui.BeginPopupModal("Sky settings", ImGuiWindowFlags.AlwaysAutoResize)) {
-            ImGui.SliderFloat("Time of day", ref _timeOfDayHours, 0.0f, 24.0f, "%.1f h");
-            ImGui.SliderFloat("Sun angle", ref _sunAngleDegrees, 0.0f, 360.0f, "%.0f°");
-            if (ImGui.Button("Close"))
-                ImGui.CloseCurrentPopup();
-            ImGui.EndPopup();
         }
 
         if (_showParkLoadError && ImGui.Begin("Park load error", ref _showParkLoadError, ImGuiWindowFlags.AlwaysAutoResize)) {
@@ -1342,7 +1382,7 @@ public sealed class Renderer : IDisposable
             _mapWidth = width;
             _mapHeight = height;
             _loadedParkPath = parkPath;
-            ParkPath = parkPath;
+            //_parkPath = parkPath;
             _camera.Position = new Vector3(width * 1.5f, 120.0f, -height * 1.5f);
             _parkLoadError = null;
             _showParkLoadError = false;

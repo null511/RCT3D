@@ -46,15 +46,14 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private IntPtr _context;
     private bool _disposed;
 
-    public bool IsAvailable => !_disposed && _context != IntPtr.Zero;
+    //public bool IsAvailable => !_disposed && _context != IntPtr.Zero;
 
     public LibOpenRCT2(string libraryPath, string openRCT2Path, string rct2Path)
     {
         if (!NativeLoader.TryLoadNativeLibrary(libraryPath, out _nativeHandle, out var error))
             throw new InvalidOperationException(error);
 
-        try
-        {
+        try {
             var getAbiVersion = Bind<GetAbiVersionDelegate>("rct3d_openrct2_get_abi_version");
             var initialize = Bind<InitializeDelegate>("rct3d_openrct2_initialize");
             _loadPark = Bind<LoadParkDelegate>("rct3d_openrct2_load_park");
@@ -69,16 +68,15 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 
             var openRCT2PathUtf8 = Encoding.UTF8.GetBytes(openRCT2Path + '\0');
             var rct2PathUtf8 = Encoding.UTF8.GetBytes(rct2Path + '\0');
+
             fixed (byte* openRCT2PathPointer = openRCT2PathUtf8)
-            fixed (byte* rct2PathPointer = rct2PathUtf8)
-            {
+            fixed (byte* rct2PathPointer = rct2PathUtf8) {
                 var status = initialize(openRCT2PathPointer, rct2PathPointer, out var context);
                 ThrowIfFailed(status);
                 _context = context;
             }
         }
-        catch
-        {
+        catch {
             NativeLibrary.Free(_nativeHandle);
             throw;
         }
@@ -89,6 +87,7 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     public void LoadPark(string parkPath)
     {
         var pathUtf8 = Encoding.UTF8.GetBytes(parkPath + '\0');
+
         fixed (byte* pathPointer = pathUtf8)
             ThrowIfFailed(_loadPark(_context, pathPointer));
     }
@@ -111,13 +110,13 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     {
         if (!NativeLibrary.TryGetExport(_nativeHandle, name, out var address))
             throw new EntryPointNotFoundException($"The loaded {LibName} does not export {name}.");
+
         return Marshal.GetDelegateForFunctionPointer<T>(address);
     }
 
     private void ThrowIfFailed(int status)
     {
-        if (status == 0)
-            return;
+        if (status == 0) return;
 
         var errorPointer = _getLastError();
         var message = errorPointer == IntPtr.Zero ? "Unknown native error." : Marshal.PtrToStringUTF8(errorPointer);
@@ -126,8 +125,7 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
-            return;
+        if (_disposed) return;
 
         if (_context != IntPtr.Zero)
             ThrowIfFailed(_shutdown(_context));

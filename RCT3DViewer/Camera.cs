@@ -1,6 +1,5 @@
-using System;
-using System.Numerics;
 using Silk.NET.Input;
+using System.Numerics;
 
 namespace RCT3DViewer
 {
@@ -40,6 +39,8 @@ namespace RCT3DViewer
         {
             float moveVelocity = _speed * deltaTime;
             Vector3 right = Vector3.Normalize(Vector3.Cross(Front, Up));
+
+            if (keyboard.IsKeyPressed(Key.ShiftLeft)) moveVelocity *= 3.0f;
 
             if (keyboard.IsKeyPressed(Key.W)) Position += Front * moveVelocity;
             if (keyboard.IsKeyPressed(Key.S)) Position -= Front * moveVelocity;
