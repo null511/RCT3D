@@ -364,6 +364,11 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
 
     public void UploadMesh(TerrainMeshData mesh)
     {
+        if (mesh.Vertices.Length == 0 || mesh.Indices.Length == 0) {
+            ClearMesh();
+            return;
+        }
+
         var vk = context.Api;
         var device = context.LogicalDevice;
         var vertexBufferSize = (ulong)(System.Runtime.InteropServices.Marshal.SizeOf<TerrainVertex>() * mesh.Vertices.Length);
@@ -392,6 +397,26 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         }
 
         Console.WriteLine($"[Mesh] Terrain skirt sections={mesh.SkirtSections}, triangles={mesh.SkirtTriangles}, flat edges skipped={mesh.FlatEdgesSkipped}");
+    }
+
+    public void ClearMesh()
+    {
+        var vk = context.Api;
+        var device = context.LogicalDevice;
+
+        if (_vertexBuffer.Handle != 0)
+            vk.DestroyBuffer(device, _vertexBuffer, null);
+        if (_vertexBufferMemory.Handle != 0)
+            vk.FreeMemory(device, _vertexBufferMemory, null);
+        if (_indexBuffer.Handle != 0)
+            vk.DestroyBuffer(device, _indexBuffer, null);
+        if (_indexBufferMemory.Handle != 0)
+            vk.FreeMemory(device, _indexBufferMemory, null);
+
+        _vertexBuffer = default;
+        _vertexBufferMemory = default;
+        _indexBuffer = default;
+        _indexBufferMemory = default;
     }
 
     private void UploadTerrainTexture(Buffer stagingBuffer, BufferImageCopy[] regions)
@@ -508,17 +533,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         var vk = context.Api;
         var device = context.LogicalDevice;
 
-        if (_vertexBuffer.Handle != 0)
-            vk.DestroyBuffer(device, _vertexBuffer, null);
-
-        if (_vertexBufferMemory.Handle != 0)
-            vk.FreeMemory(device, _vertexBufferMemory, null);
-
-        if (_indexBuffer.Handle != 0)
-            vk.DestroyBuffer(device, _indexBuffer, null);
-
-        if (_indexBufferMemory.Handle != 0)
-            vk.FreeMemory(device, _indexBufferMemory, null);
+        ClearMesh();
 
         if (Pipeline.Handle != 0)
             vk.DestroyPipeline(device, Pipeline, null);
@@ -531,10 +546,6 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         if (_descriptorSetLayout.Handle != 0)
             vk.DestroyDescriptorSetLayout(device, _descriptorSetLayout, null);
 
-        _vertexBuffer = default;
-        _vertexBufferMemory = default;
-        _indexBuffer = default;
-        _indexBufferMemory = default;
         Pipeline = default;
         PipelineLayout = default;
         _descriptorSetLayout = default;

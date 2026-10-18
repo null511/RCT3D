@@ -1,4 +1,3 @@
-using RCT3DViewer.Interop;
 using RCT3DViewer.Simulation;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
@@ -56,11 +55,9 @@ public sealed class Renderer : IDisposable
     private TerrainMeshData? _terrainMesh;
     private WaterMeshData? _waterMesh;
     private SimulationBridge? _simulation;
-    //private RCTTileSurfaceData[]? _surfaceData;
-    //private string? _parkPath;
-    //private int _mapWidth;
-    //private int _mapHeight;
-
+    private Task<ParkLoadResult>? _parkLoadTask;
+    private ParkLoadResult? _pendingParkLoadResult;
+    private string _parkLoadProgress = string.Empty;
     public string? LibraryPath { get; set; }
     public string? OpenRCT2Path { get; set; }
     public string? Rct2Path { get; set; }
@@ -107,26 +104,12 @@ public sealed class Renderer : IDisposable
                 OpenRCT2Path = Path.Combine(AppContext.BaseDirectory, OpenRCT2Path);
 
             _simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path);
-            //_simulation.LoadPark(_parkPath);
-            //_loadedParkPath = _parkPath;
-            //var (width, height) = _simulation.GetDimensions();
-            //if (width <= 0 || height <= 0 || (long)width * height > int.MaxValue)
-            //    throw new InvalidOperationException($"OpenRCT2 returned invalid map dimensions {width}x{height}.");
-
-            //_surfaceData = new RCTTileSurfaceData[checked(width * height)];
-            //_simulation.FillSurfaceData(_surfaceData);
             _terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures", "Terrain"));
             _terrainMeshBuilder = new TerrainMeshBuilder(_terrainMaterials);
-            //_mapWidth = width;
-            //_mapHeight = height;
-            //_camera.Position = new Vector3(width * 1.5f, 120.0f, -height * 1.5f);
-            //Console.WriteLine($"Loaded park '{_parkPath}' ({width}x{height}) through the OpenRCT2 adapter.");
         }
         catch (Exception ex) {
             _simulation?.Dispose();
             _simulation = null;
-            //_surfaceData = null;
-
             throw new InvalidOperationException("Failed to initialize OpenRCT2!", ex);
         }
 
@@ -256,51 +239,89 @@ public sealed class Renderer : IDisposable
 
     private void LoadPark(string parkPath)
     {
+        if (_ui.IsParkLoading || _parkLoadTask is not null || _pendingParkLoadResult is not null)
+            return;
+
         var simulation = _simulation ?? throw new InvalidOperationException("OpenRCT2 is not initialized.");
-        _ui.BeginParkLoad();
-        var previousMesh = _terrainMesh;
-        var previousWaterMesh = _waterMesh;
+        _ui.BeginParkLoad(parkPath);
+        Volatile.Write(ref _parkLoadProgress, "Loading park file...");
+        _parkLoadTask = BuildParkMeshesAsync(simulation, parkPath);
+    }
 
+    private async Task<ParkLoadResult> BuildParkMeshesAsync(SimulationBridge simulation, string parkPath)
+    {
         try {
-            simulation.LoadPark(parkPath);
-            var (width, height) = simulation.GetDimensions();
-            if (width <= 0 || height <= 0 || (long)width * height > int.MaxValue)
-                throw new InvalidOperationException($"OpenRCT2 returned invalid map dimensions {width}x{height}.");
-
-            var surfaceData = new RCTTileSurfaceData[checked(width * height)];
-            simulation.FillSurfaceData(surfaceData);
-            var meshData = _terrainMeshBuilder!.Build(surfaceData, width, height, TerrainSkirtFloor);
-            var terrainMesh = meshData.Terrain;
-            if (_vk!.DeviceWaitIdle(_logicalDevice) != Result.Success)
-                throw new InvalidOperationException("Could not wait for the Vulkan device before replacing terrain buffers.");
-            _terrainGraphicsResources!.UploadMesh(terrainMesh);
-            _waterGraphicsResources!.UploadMesh(meshData.Water);
-
-            _terrainMesh = terrainMesh;
-            _waterMesh = meshData.Water;
-            //_surfaceData = surfaceData;
-            //_mapWidth = width;
-            //_mapHeight = height;
-            _ui.SetLoadedParkPath(parkPath);
-            //_parkPath = parkPath;
-            _camera.Position = new Vector3(width * 1.5f, 120.0f, -height * 1.5f);
-            _ui.ClearParkLoadError();
+            var snapshot = await simulation.LoadParkAsync(parkPath, progress => Volatile.Write(ref _parkLoadProgress, progress));
+            Volatile.Write(ref _parkLoadProgress, "Generating terrain and water meshes...");
+            var meshData = await Task.Run(() => _terrainMeshBuilder!.Build(snapshot.SurfaceData,
+                snapshot.Width, snapshot.Height, TerrainSkirtFloor));
+            return new ParkLoadResult(parkPath, snapshot.Width, snapshot.Height, meshData.Terrain, meshData.Water);
         }
         catch (Exception ex) {
-            if (_ui.LoadedParkPath is not null) {
-                try {
-                    simulation.LoadPark(_ui.LoadedParkPath);
-                }
-                catch (Exception restoreException) {
-                    _ui.ShowParkLoadError($"Failed to load '{parkPath}': {ex.Message} The previous park could not be restored: {restoreException.Message}");
-                }
-            }
-
-            _terrainMesh = previousMesh;
-            _waterMesh = previousWaterMesh;
-            if (!_ui.HasParkLoadError)
-                _ui.ShowParkLoadError($"Failed to load '{parkPath}': {ex.Message}");
+            throw new InvalidOperationException($"Failed to load '{parkPath}': {ex.Message}", ex);
         }
+    }
+
+    private sealed record ParkLoadResult(string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water);
+
+    private void UpdateParkLoad()
+    {
+        if (_parkLoadTask is { IsCompleted: true } completedTask) {
+            _parkLoadTask = null;
+            try {
+                _pendingParkLoadResult = completedTask.GetAwaiter().GetResult();
+                _ui.SetParkLoadStatus("Uploading terrain and water meshes...");
+                return;
+            }
+            catch (Exception ex) {
+                ClearParkState(ex.Message);
+            }
+        }
+
+        if (_pendingParkLoadResult is { } result) {
+            try {
+                if (_vk!.DeviceWaitIdle(_logicalDevice) != Result.Success)
+                    throw new InvalidOperationException("Could not wait for the Vulkan device before replacing terrain buffers.");
+
+                _terrainGraphicsResources!.ClearMesh();
+                _terrainGraphicsResources.UploadMesh(result.Terrain);
+                _waterGraphicsResources!.UploadMesh(result.Water);
+                _terrainMesh = result.Terrain;
+                _waterMesh = result.Water;
+                _camera.Position = new Vector3(result.Width * 1.5f, 120.0f, -result.Height * 1.5f);
+                _pendingParkLoadResult = null;
+                _ui.CompleteParkLoad(result.ParkPath);
+            }
+            catch (Exception ex) {
+                ClearParkState($"Failed to upload meshes for '{result.ParkPath}': {ex.Message}");
+            }
+        }
+
+        if (_parkLoadTask is not null)
+            _ui.SetParkLoadStatus(Volatile.Read(ref _parkLoadProgress));
+    }
+
+    private void ClearParkState(string failure)
+    {
+        _terrainMesh = null;
+        _waterMesh = null;
+        _pendingParkLoadResult = null;
+        _parkLoadTask = null;
+
+        try {
+            if (_vk is not null && _logicalDevice.Handle != 0) {
+                if (_vk.DeviceWaitIdle(_logicalDevice) != Result.Success)
+                    throw new InvalidOperationException("Could not wait for the Vulkan device before clearing park meshes.");
+
+                _terrainGraphicsResources?.ClearMesh();
+                _waterGraphicsResources?.ClearMesh();
+            }
+        }
+        catch (Exception clearException) {
+            failure += $" Park graphics could not be fully cleared: {clearException.Message}";
+        }
+
+        _ui.ClearParkAfterLoadFailure(failure);
     }
 
     private unsafe void OnRenderFrame(double deltaTime)
@@ -328,6 +349,7 @@ public sealed class Renderer : IDisposable
         _imagesInFlight[imageIndex] = _inFlightFences[_currentFrame];
         var cmd = _commandBuffers[imageIndex];
         _imguiRenderer?.BeginFrame((int)_swapchainExtent.Width, (int)_swapchainExtent.Height, (float)deltaTime);
+        UpdateParkLoad();
         _ui.BuildFrameUi(deltaTime, LoadPark, () => _exitRequested = true);
         _vk.ResetCommandBuffer(cmd, 0);
         CommandBufferBeginInfo beginInfo = new() { SType = StructureType.CommandBufferBeginInfo };
@@ -396,7 +418,7 @@ public sealed class Renderer : IDisposable
             _vk.CmdDrawIndexed(cmd, (uint)terrainMesh.Indices.Length, 1, 0, 0, 0);
         }
 
-        if (_waterGraphicsResources is { IndexCount: > 0 } waterResources) {
+        if (_waterMesh is not null && _waterGraphicsResources is { IndexCount: > 0 } waterResources) {
             _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, waterResources.Pipeline);
             _vk.CmdPushConstants(cmd, waterResources.PipelineLayout, ShaderStageFlags.VertexBit, 0,
                 (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
@@ -451,6 +473,14 @@ public sealed class Renderer : IDisposable
 
     public unsafe void Dispose()
     {
+        try {
+            _parkLoadTask?.GetAwaiter().GetResult();
+        }
+        catch {
+        }
+        _parkLoadTask = null;
+        _pendingParkLoadResult = null;
+
         _inputController?.Dispose();
         _inputController = null;
 
@@ -486,6 +516,11 @@ public sealed class Renderer : IDisposable
 
         var simulation = _simulation;
         _simulation = null;
-        simulation?.Dispose();
+        try {
+            simulation?.Dispose();
+        }
+        catch (Exception ex) {
+            Console.Error.WriteLine($"Failed to shut down OpenRCT2: {ex.Message}");
+        }
     }
 }

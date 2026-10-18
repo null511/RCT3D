@@ -8,6 +8,9 @@ internal sealed class ViewerUiController
 {
     private string? _loadedParkPath;
     private string? _parkLoadError;
+    private string? _loadingParkPath;
+    private string _parkLoadStatus = string.Empty;
+    private bool _isParkLoading;
     private bool _showSkyModal;
     private bool _showParkLoadError;
     private float _timeOfDayHours = 12.0f;
@@ -18,22 +21,41 @@ internal sealed class ViewerUiController
     public float SunAngleDegrees => _sunAngleDegrees;
     public string? LoadedParkPath => _loadedParkPath;
     public bool HasParkLoadError => _parkLoadError is not null;
+    public bool IsParkLoading => _isParkLoading;
 
 
-    public void SetLoadedParkPath(string parkPath)
+    public void BeginParkLoad(string parkPath)
     {
-        _loadedParkPath = parkPath;
+        _isParkLoading = true;
+        _loadingParkPath = parkPath;
+        _parkLoadStatus = "Loading park file...";
+        _parkLoadError = null;
+        _showParkLoadError = false;
     }
 
-    public void BeginParkLoad()
+    public void SetParkLoadStatus(string status) => _parkLoadStatus = status;
+
+    public void CompleteParkLoad(string parkPath)
     {
-        _parkLoadError = null;
+        _loadedParkPath = parkPath;
+        _loadingParkPath = null;
+        _isParkLoading = false;
+        _parkLoadStatus = string.Empty;
     }
 
     public void ShowParkLoadError(string? message)
     {
+        _isParkLoading = false;
+        _loadingParkPath = null;
+        _parkLoadStatus = string.Empty;
         _parkLoadError = message;
         _showParkLoadError = true;
+    }
+
+    public void ClearParkAfterLoadFailure(string? message)
+    {
+        _loadedParkPath = null;
+        ShowParkLoadError(message);
     }
 
     public void ClearParkLoadError()
@@ -50,7 +72,7 @@ internal sealed class ViewerUiController
 
         if (ImGui.BeginMainMenuBar()) {
             if (ImGui.BeginMenu("File")) {
-                if (ImGui.MenuItem("Load"))
+                if (ImGui.MenuItem("Load", string.Empty, false, !_isParkLoading))
                     OpenParkPicker(loadPark);
                 if (ImGui.MenuItem("Exit"))
                     requestExit();
@@ -87,16 +109,40 @@ internal sealed class ViewerUiController
             ImGui.EndMainMenuBar();
         }
 
-        if (_showParkLoadError && ImGui.Begin("Park load error", ref _showParkLoadError, ImGuiWindowFlags.AlwaysAutoResize)) {
-            ImGui.TextWrapped(_parkLoadError ?? "The park could not be loaded.");
-            if (ImGui.Button("OK"))
-                _showParkLoadError = false;
+        if (_showParkLoadError) {
+            var errorWindowVisible = ImGui.Begin("Park load error", ref _showParkLoadError, ImGuiWindowFlags.AlwaysAutoResize);
+            if (errorWindowVisible) {
+                ImGui.TextWrapped(_parkLoadError ?? "The park could not be loaded.");
+                if (ImGui.Button("OK"))
+                    _showParkLoadError = false;
+            }
             ImGui.End();
         }
+
+        if (_isParkLoading)
+            DrawParkLoadingPanel();
+    }
+
+    private void DrawParkLoadingPanel()
+    {
+        var viewport = ImGui.GetMainViewport();
+        ImGui.SetNextWindowPos(viewport.GetCenter(), ImGuiCond.Always, new Vector2(0.5f, 0.5f));
+        ImGui.SetNextWindowBgAlpha(0.94f);
+        if (ImGui.Begin("Loading park", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoInputs)) {
+            ImGui.TextUnformatted("Loading park");
+            ImGui.Separator();
+            ImGui.TextWrapped(_parkLoadStatus);
+            if (_loadingParkPath is not null)
+                ImGui.TextDisabled(Path.GetFileName(_loadingParkPath));
+        }
+        ImGui.End();
     }
 
     private void OpenParkPicker(Action<string> loadPark)
     {
+        if (_isParkLoading)
+            return;
+
         var defaultPath = _loadedParkPath is null ? string.Empty : Path.GetDirectoryName(_loadedParkPath) ?? string.Empty;
         try {
             var result = Dialog.FileOpen("park", defaultPath);

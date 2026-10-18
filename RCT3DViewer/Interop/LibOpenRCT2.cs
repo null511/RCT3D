@@ -119,12 +119,15 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     {
         if (_disposed) return;
 
-        if (_context != IntPtr.Zero)
-            ThrowIfFailed(_shutdown(_context));
-
-        _context = IntPtr.Zero;
-        _disposed = true;
-        NativeLibrary.Free(_nativeHandle);
+        try {
+            if (_context != IntPtr.Zero)
+                ThrowIfFailed(_shutdown(_context));
+        }
+        finally {
+            _context = IntPtr.Zero;
+            _disposed = true;
+            NativeLibrary.Free(_nativeHandle);
+        }
     }
 }
 

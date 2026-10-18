@@ -192,8 +192,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
     public void UploadMesh(WaterMeshData mesh)
     {
         if (mesh.Vertices.Length == 0 || mesh.Indices.Length == 0) {
-            DestroyMeshBuffers();
-            IndexCount = 0;
+            ClearMesh();
             return;
         }
 
@@ -301,6 +300,12 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
         _indexBufferMemory = default;
     }
 
+    public void ClearMesh()
+    {
+        DestroyMeshBuffers();
+        IndexCount = 0;
+    }
+
     private void DestroyBuffer(Buffer buffer, DeviceMemory memory)
     {
         var vk = context.Api;
@@ -319,7 +324,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
 
         var vk = context.Api;
         var device = context.LogicalDevice;
-        DestroyMeshBuffers();
+        ClearMesh();
 
         if (Pipeline.Handle != 0)
             vk.DestroyPipeline(device, Pipeline, null);
