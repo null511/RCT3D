@@ -30,7 +30,35 @@ public sealed class TerrainMaterialLibrary
         return _layersByObjectIdHash.TryGetValue(objectIdHash, out var layer) ? layer : FallbackLayer;
     }
 
+    internal static TerrainMaterialLibrary FromModelMaterial(ImportedModelMaterial material)
+    {
+        var texture = material.BaseColorTexture;
+        var width = texture?.Width ?? 1;
+        var height = texture?.Height ?? 1;
+        var pixels = texture?.Pixels.ToArray() ?? new byte[] { 255, 255, 255, 255 };
+        var factor = material.BaseColorFactor;
+
+        for (var pixel = 0; pixel < pixels.Length; pixel += 4) {
+            pixels[pixel] = ScaleChannel(pixels[pixel], factor.X);
+            pixels[pixel + 1] = ScaleChannel(pixels[pixel + 1], factor.Y);
+            pixels[pixel + 2] = ScaleChannel(pixels[pixel + 2], factor.Z);
+            pixels[pixel + 3] = ScaleChannel(pixels[pixel + 3], factor.W);
+        }
+
+        return new TerrainMaterialLibrary(width, height, pixels, new Dictionary<uint, uint>(), 0);
+    }
+
+    private static byte ScaleChannel(byte channel, float factor)
+    {
+        return (byte)Math.Clamp((int)MathF.Round(channel * Math.Clamp(factor, 0.0f, 1.0f)), 0, 255);
+    }
+
     public static TerrainMaterialLibrary Load(string assetDirectory)
+    {
+        return Load(assetDirectory, null);
+    }
+
+    public static TerrainMaterialLibrary Load(string assetDirectory, string? additionalArrayProperty)
     {
         var manifestPath = Path.Combine(assetDirectory, "materials.json");
         using var manifestStream = File.OpenRead(manifestPath);
@@ -40,10 +68,12 @@ public sealed class TerrainMaterialLibrary
         if (string.IsNullOrWhiteSpace(fallbackObjectId))
             throw new InvalidDataException("Terrain material manifest fallback must specify an objectId.");
 
-        var materials = manifest.RootElement.GetProperty("materials").EnumerateArray().ToArray();
-        if (materials.Length == 0) throw new InvalidDataException("Terrain material manifest has no materials.");
+        var materials = manifest.RootElement.GetProperty("materials").EnumerateArray().ToList();
+        if (additionalArrayProperty is not null && manifest.RootElement.TryGetProperty(additionalArrayProperty, out var additionalMaterials))
+            materials.AddRange(additionalMaterials.EnumerateArray());
+        if (materials.Count == 0) throw new InvalidDataException("Terrain material manifest has no materials.");
 
-        var images = new List<(string ObjectId, byte[] Pixels, int Width, int Height)>(materials.Length);
+        var images = new List<(string ObjectId, byte[] Pixels, int Width, int Height)>(materials.Count);
         var objectIds = new HashSet<string>(StringComparer.Ordinal);
         int? width = null;
         int? height = null;

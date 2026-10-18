@@ -1,103 +1,116 @@
 import os
-import subprocess
-import sys
+import zipfile
+
 from PIL import Image
+from exporter import Exporter
 from square import isometric_to_square
 
 # ==========================================
 # ⚙️ CONFIGURATION - ADJUST PATHS HERE
 # ==========================================
-# Point to your OpenRCT2 executable or command alias
-OPENRCT2_BIN = "C:/Program Files/OpenRCT2/openrct2.exe" 
-
-# Absolute path to your base game asset file
-G1_DAT_PATH = "Z:/SteamLibrary/steamapps/common/Rollercoaster Tycoon 2/Data/g1.dat" 
-
+GAME_PATH = "Z:/SteamLibrary/steamapps/common/Rollercoaster Tycoon 2" 
 RAW_DIR = "./bin/raw"
-
-# Output directory for your final 3D-ready engine assets
 OUTPUT_DIR = "./bin/squared"
 
-# Index boundaries for core flat terrain surfaces (Grass, Dirt, Desert Sand, Checkered)
-START_SCAN_INDEX = 0
-END_SCAN_INDEX = 35000
-
-# ==========================================
 
 def run():
-    extract_all()
+    # Extract game sprites
+    print("Extracting sprites...")
+
+    if not os.path.exists(RAW_DIR):
+        os.makedirs(RAW_DIR)
+
+    # extract_g1()
+    extract_paths()
+
+    print("\nExtraction complete.")
+    print("\nProcessing sprites...")
+
+    # Convert isometric sprites to square textures
     square_terrain()
 
     print("\nProcessing complete!")
 
 
-def extract_all():
-    if not os.path.exists(RAW_DIR):
-        os.makedirs(RAW_DIR)
+def extract_g1():
+    GAME_G1_PATH = os.path.join(GAME_PATH, "Data", "g1.dat")
+    RAW_DIR_G1 = os.path.join(RAW_DIR, "g1")
 
-    print(f"Scanning g1.dat for 64x32 isometric floor tiles across indices {START_SCAN_INDEX} to {END_SCAN_INDEX}...")
+    start_index = 0
+    end_index = 35000
 
-    for idx in range(START_SCAN_INDEX, END_SCAN_INDEX + 1):
-        raw_png = os.path.join(RAW_DIR, f"sprite_{idx}.png")
+    print(f"\nExtracting sprites from {GAME_G1_PATH} across indices {start_index} to {end_index}...")
 
-        if os.path.exists(raw_png):
-            continue
+    if not os.path.exists(RAW_DIR_G1):
+        os.makedirs(RAW_DIR_G1)
 
-        # 1. Direct individual asset extraction via fixed OpenRCT2 syntax
-        # usage: openrct2 sprite export <spritefile> <idx> <output>
-        cmd = [OPENRCT2_BIN, "sprite", "export", G1_DAT_PATH, str(idx), raw_png]
-        
-        try:
-            # Capturing stderr allows us to inspect the failure reason instead of masking it
-            result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-            
-            # If the binary errored out, inspect why
-            if result.returncode != 0:
-                err_msg = result.stderr.strip()
-                
-                # Check if it failed safely because the index is just empty/unused in g1.dat
-                # (OpenRCT2 usually prints "Failed to export sprite" or similar for invalid indices)
-                if "failed" in err_msg.lower() or "invalid" in err_msg.lower() or not os.path.exists(raw_png):
-                    continue
-                else:
-                    # Throw any unrelated system errors, paths issues, or internal engine failures
-                    print(f"\n[!] OpenRCT2 process crashed at index #{idx} with code {result.returncode}", file=sys.stderr)
-                    print(f"Error details:\n{err_msg}", file=sys.stderr)
-                    sys.exit(result.returncode)
-        except FileNotFoundError:
-            print(f"\n[!] Critical Error: Could not find or execute the binary at '{OPENRCT2_BIN}'.", file=sys.stderr)
-            print("Please double check your OPENRCT2_BIN path setting configuration.", file=sys.stderr)
-            sys.exit(1)
-        
-    print("\nExtraction complete.")
+    for idx in range(start_index, end_index + 1):
+        raw_png = os.path.join(RAW_DIR_G1, f"sprite_{idx}.png")
+
+        if not os.path.exists(raw_png):
+            Exporter.export_index(GAME_G1_PATH, idx, raw_png)
+    
+
+def extract_paths():
+    extract_path("rct1.footpath_surface.dirt.parkobj", "Dirt")
+
+
+def extract_path(obj_name, raw_name):
+    # GAME_OBJ_PATH = os.path.join(GAME_PATH, "ObjData", obj_name)
+    GAME_OBJ_PATH = os.path.join("C:\\Program Files\\OpenRCT2\\data\\object\\rct1\\footpath_surface", obj_name)
+    RAW_DIR_PATH = os.path.join(RAW_DIR, "Paths", raw_name)
+
+    print(f"\nExtracting sprites from {obj_name}...")
+
+    if not os.path.exists(RAW_DIR_PATH):
+        os.makedirs(RAW_DIR_PATH)
+
+    with zipfile.ZipFile(GAME_OBJ_PATH, 'r') as archive:
+        archive.extract("images.dat", RAW_DIR_PATH)
+
+    tmp = os.path.join(RAW_DIR_PATH, "images.dat")
+    Exporter.unpack_all(tmp, RAW_DIR_PATH)
+    
+
+# def extract_range(game_path, raw_dir, start_index, end_index):
+#     print(f"\nExtracting sprites from {game_path} across indices {start_index} to {end_index}...")
+
+#     if not os.path.exists(raw_dir):
+#         os.makedirs(raw_dir)
+
+#     for idx in range(start_index, end_index + 1):
+#         raw_png = os.path.join(raw_dir, f"sprite_{idx}.png")
+
+#         if not os.path.exists(raw_png):
+#             Exporter.export_sprite(game_path, idx, raw_png)
+
+#     print("\nExtraction complete.")
 
 
 def square_terrain():
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
+    OUTPUT_DIR_TERRAIN = os.path.join(OUTPUT_DIR, "terrain")
+    if not os.path.exists(OUTPUT_DIR_TERRAIN):
+        os.makedirs(OUTPUT_DIR_TERRAIN)
 
     print(f"Scanning raw images for 64x63 isometric floor tiles...")
 
-    square(1987, "sand_brown")
-    square(2044, "sand_red")
-    square(2101, "sand")
-    square(2158, "ice")
-    square(2215, "grass_clumps")
-    square(2329, "martian")
-    square(2386, "chequerboard")
-    square(2500, "dirt")
-    square(2557, "rock")
-    square(2792, "grass")
+    square_terrain_tile(1987, "sand_brown")
+    square_terrain_tile(2044, "sand_red")
+    square_terrain_tile(2101, "sand")
+    square_terrain_tile(2158, "ice")
+    square_terrain_tile(2215, "grass_clumps")
+    square_terrain_tile(2329, "martian")
+    square_terrain_tile(2386, "chequerboard")
+    square_terrain_tile(2500, "dirt")
+    square_terrain_tile(2557, "rock")
+    square_terrain_tile(2792, "grass")
 
     print("\nAll flattened terrain tiles are saved.")
 
 
-def square(idx, name):
-    raw_png = os.path.join(RAW_DIR, f"sprite_{idx}.png")
-    final_png = os.path.join(OUTPUT_DIR, f"{name}.png")
-
-    if not os.path.exists(raw_png):
-        return
+def square_terrain_tile(idx, name):
+    raw_png = os.path.join(RAW_DIR, "g1", f"sprite_{idx}.png")
+    final_png = os.path.join(OUTPUT_DIR, "terrain", f"{name}.png")
 
     try:
         with Image.open(raw_png) as iso_img:

@@ -198,6 +198,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
 
         var vertexSize = checked((ulong)(Marshal.SizeOf<Vector3>() * mesh.Vertices.Length));
         var indexSize = checked((ulong)(sizeof(uint) * mesh.Indices.Length));
+
         Buffer vertexBuffer = default;
         DeviceMemory vertexMemory = default;
         Buffer indexBuffer = default;

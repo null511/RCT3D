@@ -29,6 +29,7 @@ public sealed class Renderer : IDisposable
     private bool _framebufferResized;
 
     private TerrainGraphicsResources? _terrainGraphicsResources;
+    private TerrainGraphicsResources? _pathGraphicsResources;
     private WaterGraphicsResources? _waterGraphicsResources;
     private PipelineLayout _pipelineLayout => _terrainGraphicsResources?.PipelineLayout ?? default;
     private Pipeline _graphicsPipeline => _terrainGraphicsResources?.Pipeline ?? default;
@@ -36,6 +37,10 @@ public sealed class Renderer : IDisposable
     private Buffer _vertexBuffer => _terrainGraphicsResources?.VertexBuffer ?? default;
     private Buffer _indexBuffer => _terrainGraphicsResources?.IndexBuffer ?? default;
     private TerrainMaterialLibrary? _terrainMaterials;
+    private PathMaterialLibrary? _pathMaterials;
+    private PathLampAssetLibrary? _pathLampAssets;
+    private PathLampMeshBuilder? _pathLampMeshBuilder;
+    private readonly List<(PathLampBatch Batch, ModelGraphicsResources Resources)> _pathLampGraphicsResources = new();
     private CommandPool _commandPool;
     private CommandBuffer[] _commandBuffers = Array.Empty<CommandBuffer>();
 
@@ -52,7 +57,9 @@ public sealed class Renderer : IDisposable
     private bool _exitRequested;
     private readonly FlightCamera _camera = new();
     private TerrainMeshBuilder? _terrainMeshBuilder;
+    private PathMeshBuilder? _pathMeshBuilder;
     private TerrainMeshData? _terrainMesh;
+    private PathMeshData? _pathMesh;
     private WaterMeshData? _waterMesh;
     private SimulationBridge? _simulation;
     private Task<ParkLoadResult>? _parkLoadTask;
@@ -105,7 +112,11 @@ public sealed class Renderer : IDisposable
 
             _simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path);
             _terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures", "Terrain"));
+            _pathMaterials = PathMaterialLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures", "Paths"));
+            _pathLampAssets = PathLampAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
             _terrainMeshBuilder = new TerrainMeshBuilder(_terrainMaterials);
+            _pathMeshBuilder = new PathMeshBuilder(_pathMaterials);
+            _pathLampMeshBuilder = new PathLampMeshBuilder(_pathLampAssets);
         }
         catch (Exception ex) {
             _simulation?.Dispose();
@@ -123,6 +134,8 @@ public sealed class Renderer : IDisposable
         _swapchainResources.CreateRenderPass();
         _terrainGraphicsResources = new TerrainGraphicsResources(_deviceContext, _renderPass, _terrainMaterials!);
         _terrainGraphicsResources.CreatePipeline();
+        _pathGraphicsResources = new TerrainGraphicsResources(_deviceContext, _renderPass, _pathMaterials!.TextureLibrary);
+        _pathGraphicsResources.CreatePipeline();
         _waterGraphicsResources = new WaterGraphicsResources(_deviceContext, _renderPass);
         _waterGraphicsResources.CreatePipeline();
         _swapchainResources.CreateFramebuffers();
@@ -131,6 +144,7 @@ public sealed class Renderer : IDisposable
 
         CreateCommandInfrastructure();
         _terrainGraphicsResources.CreateTextureResources(_commandPool);
+        _pathGraphicsResources.CreateTextureResources(_commandPool);
         CreateSyncPrimitives();
 
         _imguiRenderer = new ImGuiVulkanRenderer(_vk!, _physicalDevice, _logicalDevice, _graphicsQueue, _renderPass, _commandPool,
@@ -153,8 +167,14 @@ public sealed class Renderer : IDisposable
 
     private unsafe void CreateSyncPrimitives()
     {
-        SemaphoreCreateInfo semaphoreInfo = new() { SType = StructureType.SemaphoreCreateInfo };
-        FenceCreateInfo fenceInfo = new() { SType = StructureType.FenceCreateInfo, Flags = FenceCreateFlags.SignaledBit };
+        SemaphoreCreateInfo semaphoreInfo = new() {
+            SType = StructureType.SemaphoreCreateInfo,
+        };
+
+        FenceCreateInfo fenceInfo = new() {
+            SType = StructureType.FenceCreateInfo,
+            Flags = FenceCreateFlags.SignaledBit,
+        };
 
         var imageCount = _swapchainImages.Length;
         _imageAvailableSemaphores = new Semaphore[MaxFramesInFlight];
@@ -165,14 +185,15 @@ public sealed class Renderer : IDisposable
             _vk!.CreateSemaphore(_logicalDevice, in semaphoreInfo, null, out _imageAvailableSemaphores[i]);
 
         for (var i = 0; i < imageCount; i++)
-            _vk.CreateSemaphore(_logicalDevice, in semaphoreInfo, null, out _renderFinishedSemaphores[i]);
+            _vk!.CreateSemaphore(_logicalDevice, in semaphoreInfo, null, out _renderFinishedSemaphores[i]);
 
         for (uint i = 0; i < MaxFramesInFlight; i++) {
             _vk!.CreateFence(_logicalDevice, in fenceInfo, null, out _inFlightFences[i]);
         }
 
         _imagesInFlight = new Fence[imageCount];
-        for (var i = 0; i < _imagesInFlight.Length; i++) _imagesInFlight[i] = new Fence();
+        for (var i = 0; i < _imagesInFlight.Length; i++)
+            _imagesInFlight[i] = new Fence();
     }
 
     private unsafe void DestroySyncPrimitives()
@@ -252,25 +273,34 @@ public sealed class Renderer : IDisposable
     {
         try {
             var snapshot = await simulation.LoadParkAsync(parkPath, progress => Volatile.Write(ref _parkLoadProgress, progress));
-            Volatile.Write(ref _parkLoadProgress, "Generating terrain and water meshes...");
-            var meshData = await Task.Run(() => _terrainMeshBuilder!.Build(snapshot.SurfaceData,
-                snapshot.Width, snapshot.Height, TerrainSkirtFloor));
-            return new ParkLoadResult(parkPath, snapshot.Width, snapshot.Height, meshData.Terrain, meshData.Water);
+
+            Volatile.Write(ref _parkLoadProgress, "Generating terrain, water, path, and lamp meshes...");
+            var meshData = await Task.Run(() => (
+                Terrain: _terrainMeshBuilder!.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height, TerrainSkirtFloor),
+                Paths: _pathMeshBuilder!.Build(snapshot.PathData, snapshot.SurfaceData, snapshot.Width, snapshot.Height),
+                PathLamps: _pathLampMeshBuilder!.Build(snapshot.PathData, snapshot.Width, snapshot.Height)));
+
+            return new ParkLoadResult(
+                parkPath, snapshot.Width, snapshot.Height,
+                meshData.Terrain.Terrain, meshData.Terrain.Water, meshData.Paths, meshData.PathLamps);
         }
         catch (Exception ex) {
             throw new InvalidOperationException($"Failed to load '{parkPath}': {ex.Message}", ex);
         }
     }
 
-    private sealed record ParkLoadResult(string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water);
+    private sealed record ParkLoadResult(
+        string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water, PathMeshData Paths,
+        PathLampBatch[] PathLamps);
 
     private void UpdateParkLoad()
     {
         if (_parkLoadTask is { IsCompleted: true } completedTask) {
             _parkLoadTask = null;
+
             try {
                 _pendingParkLoadResult = completedTask.GetAwaiter().GetResult();
-                _ui.SetParkLoadStatus("Uploading terrain and water meshes...");
+                _ui.SetParkLoadStatus("Uploading terrain, water, path, and lamp meshes...");
                 return;
             }
             catch (Exception ex) {
@@ -285,8 +315,25 @@ public sealed class Renderer : IDisposable
 
                 _terrainGraphicsResources!.ClearMesh();
                 _terrainGraphicsResources.UploadMesh(result.Terrain);
+                _pathGraphicsResources!.ClearMesh();
+                _pathGraphicsResources.UploadMesh(result.Paths);
                 _waterGraphicsResources!.UploadMesh(result.Water);
+                DisposePathLampResources();
+                foreach (var batch in result.PathLamps) {
+                    var resources = new ModelGraphicsResources(_deviceContext!, _renderPass, batch.Material);
+                    try {
+                        resources.CreatePipeline();
+                        resources.CreateTextureResources(_commandPool);
+                        resources.UploadMesh(batch.MeshData);
+                        _pathLampGraphicsResources.Add((batch, resources));
+                    }
+                    catch {
+                        resources.Dispose();
+                        throw;
+                    }
+                }
                 _terrainMesh = result.Terrain;
+                _pathMesh = result.Paths;
                 _waterMesh = result.Water;
                 _camera.Position = new Vector3(result.Width * 1.5f, 120.0f, -result.Height * 1.5f);
                 _pendingParkLoadResult = null;
@@ -304,6 +351,7 @@ public sealed class Renderer : IDisposable
     private void ClearParkState(string failure)
     {
         _terrainMesh = null;
+        _pathMesh = null;
         _waterMesh = null;
         _pendingParkLoadResult = null;
         _parkLoadTask = null;
@@ -313,7 +361,9 @@ public sealed class Renderer : IDisposable
                 if (_vk.DeviceWaitIdle(_logicalDevice) != Result.Success)
                     throw new InvalidOperationException("Could not wait for the Vulkan device before clearing park meshes.");
 
+                DisposePathLampResources();
                 _terrainGraphicsResources?.ClearMesh();
+                _pathGraphicsResources?.ClearMesh();
                 _waterGraphicsResources?.ClearMesh();
             }
         }
@@ -349,15 +399,29 @@ public sealed class Renderer : IDisposable
         _imagesInFlight[imageIndex] = _inFlightFences[_currentFrame];
         var cmd = _commandBuffers[imageIndex];
         _imguiRenderer?.BeginFrame((int)_swapchainExtent.Width, (int)_swapchainExtent.Height, (float)deltaTime);
+
         UpdateParkLoad();
+
         _ui.BuildFrameUi(deltaTime, LoadPark, () => _exitRequested = true);
         _vk.ResetCommandBuffer(cmd, 0);
-        CommandBufferBeginInfo beginInfo = new() { SType = StructureType.CommandBufferBeginInfo };
+
+        CommandBufferBeginInfo beginInfo = new() {
+            SType = StructureType.CommandBufferBeginInfo,
+        };
+
         _vk.BeginCommandBuffer(cmd, in beginInfo);
 
-        ClearValue* clearValues = stackalloc ClearValue[2];
-        clearValues[0] = new ClearValue { Color = new ClearColorValue(0.4f, 0.6f, 0.9f, 1.0f) };
-        clearValues[1] = new ClearValue { DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 } };
+        var clearValues = stackalloc ClearValue[2];
+        clearValues[0] = new ClearValue {
+            Color = new ClearColorValue(0.4f, 0.6f, 0.9f, 1.0f),
+        };
+
+        clearValues[1] = new ClearValue {
+            DepthStencil = new ClearDepthStencilValue {
+                Depth = 1.0f,
+                Stencil = 0,
+            },
+        };
 
         RenderPassBeginInfo renderPassInfo = new() {
             SType = StructureType.RenderPassBeginInfo,
@@ -409,13 +473,30 @@ public sealed class Renderer : IDisposable
         _vk.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
 
         ulong offset = 0;
-        if (_terrainMesh is { } terrainMesh &&
-            terrainMesh.Vertices.Length > 0 && terrainMesh.Indices.Length > 0 &&
-            _vertexBuffer.Handle != 0 && _indexBuffer.Handle != 0) {
+        if (_terrainMesh is { Vertices.Length: > 0, Indices.Length: > 0 } terrainMesh && _vertexBuffer.Handle != 0 && _indexBuffer.Handle != 0) {
             var vBuf = _vertexBuffer;
             _vk.CmdBindVertexBuffers(cmd, 0, 1, in vBuf, in offset);
             _vk.CmdBindIndexBuffer(cmd, _indexBuffer, 0, IndexType.Uint32);
             _vk.CmdDrawIndexed(cmd, (uint)terrainMesh.Indices.Length, 1, 0, 0, 0);
+        }
+
+        if (_pathMesh is { Vertices.Length: > 0, Indices.Length: > 0 } pathMesh
+            && _pathGraphicsResources is { IndexCount: > 0 } pathResources) {
+            _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, pathResources.Pipeline);
+            var pathDescriptorSet = pathResources.DescriptorSet;
+            _vk.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, pathResources.PipelineLayout, 0, 1, in pathDescriptorSet, 0, null);
+            _vk.CmdPushConstants(cmd, pathResources.PipelineLayout,
+                ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0,
+                (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
+            var pathVertexBuffer = pathResources.VertexBuffer;
+            _vk.CmdBindVertexBuffers(cmd, 0, 1, in pathVertexBuffer, in offset);
+            _vk.CmdBindIndexBuffer(cmd, pathResources.IndexBuffer, 0, IndexType.Uint32);
+            _vk.CmdDrawIndexed(cmd, pathResources.IndexCount, 1, 0, 0, 0);
+        }
+
+        if (_terrainMesh is not null) {
+            foreach (var (_, resources) in _pathLampGraphicsResources)
+                resources.Draw(cmd, ubo);
         }
 
         if (_waterMesh is not null && _waterGraphicsResources is { IndexCount: > 0 } waterResources) {
@@ -476,8 +557,8 @@ public sealed class Renderer : IDisposable
         try {
             _parkLoadTask?.GetAwaiter().GetResult();
         }
-        catch {
-        }
+        catch {}
+
         _parkLoadTask = null;
         _pendingParkLoadResult = null;
 
@@ -502,6 +583,12 @@ public sealed class Renderer : IDisposable
         _terrainGraphicsResources = null;
         terrainResources?.Dispose();
 
+        var pathResources = _pathGraphicsResources;
+        _pathGraphicsResources = null;
+        pathResources?.Dispose();
+
+        DisposePathLampResources();
+
         var waterResources = _waterGraphicsResources;
         _waterGraphicsResources = null;
         waterResources?.Dispose();
@@ -516,11 +603,19 @@ public sealed class Renderer : IDisposable
 
         var simulation = _simulation;
         _simulation = null;
+
         try {
             simulation?.Dispose();
         }
         catch (Exception ex) {
             Console.Error.WriteLine($"Failed to shut down OpenRCT2: {ex.Message}");
         }
+    }
+
+    private void DisposePathLampResources()
+    {
+        foreach (var (_, resources) in _pathLampGraphicsResources)
+            resources.Dispose();
+        _pathLampGraphicsResources.Clear();
     }
 }

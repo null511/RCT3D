@@ -1,4 +1,5 @@
 using Silk.NET.Vulkan;
+using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace RCT3DViewer.Render;
@@ -22,6 +23,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
     public DescriptorSet DescriptorSet { get; private set; }
     public Buffer VertexBuffer => _vertexBuffer;
     public Buffer IndexBuffer => _indexBuffer;
+    public uint IndexCount { get; private set; }
 
 
     public void CreatePipeline()
@@ -56,48 +58,48 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
             vk.CreateShaderModule(device, in info, null, out fragModule);
         }
 
-        PipelineShaderStageCreateInfo vertStageInfo = new() {
+        var vertStageInfo = new PipelineShaderStageCreateInfo {
             SType = StructureType.PipelineShaderStageCreateInfo,
             Stage = ShaderStageFlags.VertexBit,
             Module = vertModule,
-            PName = (byte*)System.Runtime.InteropServices.Marshal.StringToHGlobalAnsi("main")
+            PName = (byte*)Marshal.StringToHGlobalAnsi("main")
         };
 
-        PipelineShaderStageCreateInfo fragStageInfo = new() {
+        var fragStageInfo = new PipelineShaderStageCreateInfo {
             SType = StructureType.PipelineShaderStageCreateInfo,
             Stage = ShaderStageFlags.FragmentBit,
             Module = fragModule,
-            PName = (byte*)System.Runtime.InteropServices.Marshal.StringToHGlobalAnsi("main")
+            PName = (byte*)Marshal.StringToHGlobalAnsi("main")
         };
 
         var shaderStages = new[] { vertStageInfo, fragStageInfo };
 
-        VertexInputBindingDescription bindingDescription = new() {
+        var bindingDescription = new VertexInputBindingDescription {
             Binding = 0,
-            Stride = (uint)System.Runtime.InteropServices.Marshal.SizeOf<TerrainVertex>(),
+            Stride = (uint)Marshal.SizeOf<TerrainVertex>(),
             InputRate = VertexInputRate.Vertex
         };
 
         var attributeDescriptions = new VertexInputAttributeDescription[] {
-            new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)System.Runtime.InteropServices.Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Position)) },
-            new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)System.Runtime.InteropServices.Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Normal)) },
-            new() { Binding = 0, Location = 2, Format = Format.R32G32Sfloat, Offset = (uint)System.Runtime.InteropServices.Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.TextureCoordinate)) },
-            new() { Binding = 0, Location = 3, Format = Format.R32Sfloat, Offset = (uint)System.Runtime.InteropServices.Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.MaterialId)) }
+            new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Position)) },
+            new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Normal)) },
+            new() { Binding = 0, Location = 2, Format = Format.R32G32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.TextureCoordinate)) },
+            new() { Binding = 0, Location = 3, Format = Format.R32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.MaterialId)) }
         };
 
-        PipelineVertexInputStateCreateInfo vertexInputInfo = new() {
+        var vertexInputInfo = new PipelineVertexInputStateCreateInfo {
             SType = StructureType.PipelineVertexInputStateCreateInfo,
             VertexBindingDescriptionCount = 1,
             PVertexBindingDescriptions = &bindingDescription,
             VertexAttributeDescriptionCount = (uint)attributeDescriptions.Length,
         };
 
-        PipelineInputAssemblyStateCreateInfo inputAssembly = new() {
+        var inputAssembly = new PipelineInputAssemblyStateCreateInfo {
             SType = StructureType.PipelineInputAssemblyStateCreateInfo,
             Topology = PrimitiveTopology.TriangleList,
         };
         
-        PipelineViewportStateCreateInfo viewportState = new() {
+        var viewportState = new PipelineViewportStateCreateInfo {
             SType = StructureType.PipelineViewportStateCreateInfo,
             ViewportCount = 1,
             ScissorCount = 1,
@@ -108,12 +110,12 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
             DynamicState.Scissor,
         };
 
-        PipelineDynamicStateCreateInfo dynamicState = new() {
+        var dynamicState = new PipelineDynamicStateCreateInfo {
             SType = StructureType.PipelineDynamicStateCreateInfo,
             DynamicStateCount = (uint)dynamicStates.Length
         };
 
-        PipelineRasterizationStateCreateInfo rasterizer = new() {
+        var rasterizer = new PipelineRasterizationStateCreateInfo {
             SType = StructureType.PipelineRasterizationStateCreateInfo,
             PolygonMode = PolygonMode.Fill,
             CullMode = CullModeFlags.None,
@@ -121,12 +123,12 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
             LineWidth = 1.0f,
         };
         
-        PipelineMultisampleStateCreateInfo multisampling = new() {
+        var multisampling = new PipelineMultisampleStateCreateInfo {
             SType = StructureType.PipelineMultisampleStateCreateInfo,
             RasterizationSamples = SampleCountFlags.Count1Bit,
         };
 
-        PipelineDepthStencilStateCreateInfo depthStencil = new() {
+        var depthStencil = new PipelineDepthStencilStateCreateInfo {
             SType = StructureType.PipelineDepthStencilStateCreateInfo,
             DepthTestEnable = true,
             DepthWriteEnable = true,
@@ -135,12 +137,12 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
             MaxDepthBounds = 1.0f
         };
 
-        PipelineColorBlendAttachmentState colorBlendAttachment = new() {
+        var colorBlendAttachment = new PipelineColorBlendAttachmentState {
             ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit,
             BlendEnable = false,
         };
         
-        PipelineColorBlendStateCreateInfo colorBlending = new() {
+        var colorBlending = new PipelineColorBlendStateCreateInfo {
             SType = StructureType.PipelineColorBlendStateCreateInfo,
             AttachmentCount = 1,
             PAttachments = &colorBlendAttachment,
@@ -152,7 +154,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         };
 
         fixed (DescriptorSetLayoutBinding* bindingsPointer = descriptorBindings) {
-            DescriptorSetLayoutCreateInfo descriptorLayoutInfo = new() {
+            var descriptorLayoutInfo = new DescriptorSetLayoutCreateInfo {
                 SType = StructureType.DescriptorSetLayoutCreateInfo,
                 BindingCount = (uint)descriptorBindings.Length,
                 PBindings = bindingsPointer
@@ -163,13 +165,13 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         }
 
         var descriptorLayout = _descriptorSetLayout;
-        PushConstantRange pushConstantRange = new() {
+        var pushConstantRange = new PushConstantRange {
             StageFlags = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
-            Size = (uint)System.Runtime.InteropServices.Marshal.SizeOf<UniformBufferObject>(),
+            Size = (uint)Marshal.SizeOf<UniformBufferObject>(),
             Offset = 0,
         };
 
-        PipelineLayoutCreateInfo pipelineLayoutInfo = new() {
+        var pipelineLayoutInfo = new PipelineLayoutCreateInfo {
             SType = StructureType.PipelineLayoutCreateInfo,
             SetLayoutCount = 1,
             PSetLayouts = &descriptorLayout,
@@ -180,7 +182,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         vk.CreatePipelineLayout(device, in pipelineLayoutInfo, null, out var pipelineLayout);
         PipelineLayout = pipelineLayout;
 
-        GraphicsPipelineCreateInfo pipelineInfo = new() {
+        var pipelineInfo = new GraphicsPipelineCreateInfo {
             SType = StructureType.GraphicsPipelineCreateInfo,
             StageCount = 2,
             Layout = PipelineLayout,
@@ -213,8 +215,9 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
 
         vk.DestroyShaderModule(device, vertModule, null);
         vk.DestroyShaderModule(device, fragModule, null);
-        System.Runtime.InteropServices.Marshal.FreeHGlobal((IntPtr)vertStageInfo.PName);
-        System.Runtime.InteropServices.Marshal.FreeHGlobal((IntPtr)fragStageInfo.PName);
+
+        Marshal.FreeHGlobal((IntPtr)vertStageInfo.PName);
+        Marshal.FreeHGlobal((IntPtr)fragStageInfo.PName);
     }
 
     public void CreateTextureResources(CommandPool commandPool)
@@ -234,7 +237,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
             if (vk.MapMemory(device, stagingMemory, 0, textureBytes, 0, &mapped) != Result.Success)
                 throw new Exception("Failed to map terrain texture staging memory.");
 
-            System.Runtime.InteropServices.Marshal.Copy(materials.Pixels, 0, (IntPtr)mapped, materials.Pixels.Length);
+            Marshal.Copy(materials.Pixels, 0, (IntPtr)mapped, materials.Pixels.Length);
             vk.UnmapMemory(device, stagingMemory);
 
             ImageCreateInfo imageInfo = new() {
@@ -283,7 +286,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
             vk.FreeMemory(device, stagingMemory, null);
         }
 
-        ImageViewCreateInfo viewInfo = new() {
+        var viewInfo = new ImageViewCreateInfo {
             SType = StructureType.ImageViewCreateInfo,
             Image = _textureImage,
             ViewType = ImageViewType.Type2DArray,
@@ -294,7 +297,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         if (vk.CreateImageView(device, in viewInfo, null, out _textureView) != Result.Success)
             throw new Exception("Failed to create terrain texture array view.");
 
-        SamplerCreateInfo samplerInfo = new() {
+        var samplerInfo = new SamplerCreateInfo {
             SType = StructureType.SamplerCreateInfo,
             MagFilter = Filter.Linear,
             MinFilter = Filter.Linear,
@@ -317,7 +320,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         };
 
         fixed (DescriptorPoolSize* poolSizesPointer = poolSizes) {
-            DescriptorPoolCreateInfo poolInfo = new() {
+            var poolInfo = new DescriptorPoolCreateInfo {
                 SType = StructureType.DescriptorPoolCreateInfo,
                 MaxSets = 1,
                 PoolSizeCount = (uint)poolSizes.Length,
@@ -329,7 +332,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         }
 
         var setLayout = _descriptorSetLayout;
-        DescriptorSetAllocateInfo setInfo = new() {
+        var setInfo = new DescriptorSetAllocateInfo {
             SType = StructureType.DescriptorSetAllocateInfo,
             DescriptorPool = _descriptorPool,
             DescriptorSetCount = 1,
@@ -341,12 +344,12 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
 
         DescriptorSet = descriptorSet;
 
-        DescriptorImageInfo imageDescriptor = new() {
+        var imageDescriptor = new DescriptorImageInfo {
             ImageView = _textureView,
             ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
         };
 
-        DescriptorImageInfo samplerDescriptor = new() {
+        var samplerDescriptor = new DescriptorImageInfo {
             Sampler = _textureSampler,
         };
 
@@ -364,32 +367,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
 
     public void UploadMesh(TerrainMeshData mesh)
     {
-        if (mesh.Vertices.Length == 0 || mesh.Indices.Length == 0) {
-            ClearMesh();
-            return;
-        }
-
-        var vk = context.Api;
-        var device = context.LogicalDevice;
-        var vertexBufferSize = (ulong)(System.Runtime.InteropServices.Marshal.SizeOf<TerrainVertex>() * mesh.Vertices.Length);
-        AllocateBuffer(vertexBufferSize, BufferUsageFlags.VertexBufferBit,
-            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vertexBuffer, out _vertexBufferMemory);
-
-        void* vertexData;
-        vk.MapMemory(device, _vertexBufferMemory, 0, vertexBufferSize, 0, &vertexData);
-        var vertexSpan = new Span<TerrainVertex>(vertexData, mesh.Vertices.Length);
-        mesh.Vertices.AsSpan().CopyTo(vertexSpan);
-        vk.UnmapMemory(device, _vertexBufferMemory);
-
-        var indexBufferSize = (ulong)(sizeof(uint) * mesh.Indices.Length);
-        AllocateBuffer(indexBufferSize, BufferUsageFlags.IndexBufferBit,
-            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _indexBuffer, out _indexBufferMemory);
-
-        void* indexData;
-        vk.MapMemory(device, _indexBufferMemory, 0, indexBufferSize, 0, &indexData);
-        var indexSpan = new Span<uint>(indexData, mesh.Indices.Length);
-        mesh.Indices.AsSpan().CopyTo(indexSpan);
-        vk.UnmapMemory(device, _indexBufferMemory);
+        UploadMesh(mesh.Vertices, mesh.Indices);
 
         if (mesh.Vertices.Length > 0) {
             var vertex = mesh.Vertices[0];
@@ -399,6 +377,42 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         Console.WriteLine($"[Mesh] Terrain skirt sections={mesh.SkirtSections}, triangles={mesh.SkirtTriangles}, flat edges skipped={mesh.FlatEdgesSkipped}");
     }
 
+    public void UploadMesh(PathMeshData mesh)
+    {
+        UploadMesh(mesh.Vertices, mesh.Indices);
+    }
+
+    private void UploadMesh(TerrainVertex[] vertices, uint[] indices)
+    {
+        if (vertices.Length == 0 || indices.Length == 0) {
+            ClearMesh();
+            return;
+        }
+
+        var vk = context.Api;
+        var device = context.LogicalDevice;
+        var vertexBufferSize = (ulong)(Marshal.SizeOf<TerrainVertex>() * vertices.Length);
+        AllocateBuffer(vertexBufferSize, BufferUsageFlags.VertexBufferBit,
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vertexBuffer, out _vertexBufferMemory);
+
+        void* vertexData;
+        vk.MapMemory(device, _vertexBufferMemory, 0, vertexBufferSize, 0, &vertexData);
+        var vertexSpan = new Span<TerrainVertex>(vertexData, vertices.Length);
+        vertices.AsSpan().CopyTo(vertexSpan);
+        vk.UnmapMemory(device, _vertexBufferMemory);
+
+        var indexBufferSize = (ulong)(sizeof(uint) * indices.Length);
+        AllocateBuffer(indexBufferSize, BufferUsageFlags.IndexBufferBit,
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _indexBuffer, out _indexBufferMemory);
+
+        void* indexData;
+        vk.MapMemory(device, _indexBufferMemory, 0, indexBufferSize, 0, &indexData);
+        var indexSpan = new Span<uint>(indexData, indices.Length);
+        indices.AsSpan().CopyTo(indexSpan);
+        vk.UnmapMemory(device, _indexBufferMemory);
+        IndexCount = (uint)indices.Length;
+    }
+
     public void ClearMesh()
     {
         var vk = context.Api;
@@ -406,10 +420,13 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
 
         if (_vertexBuffer.Handle != 0)
             vk.DestroyBuffer(device, _vertexBuffer, null);
+
         if (_vertexBufferMemory.Handle != 0)
             vk.FreeMemory(device, _vertexBufferMemory, null);
+
         if (_indexBuffer.Handle != 0)
             vk.DestroyBuffer(device, _indexBuffer, null);
+
         if (_indexBufferMemory.Handle != 0)
             vk.FreeMemory(device, _indexBufferMemory, null);
 
@@ -417,27 +434,32 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         _vertexBufferMemory = default;
         _indexBuffer = default;
         _indexBufferMemory = default;
+        IndexCount = 0;
     }
 
     private void UploadTerrainTexture(Buffer stagingBuffer, BufferImageCopy[] regions)
     {
         var vk = context.Api;
         var device = context.LogicalDevice;
-        CommandBufferAllocateInfo allocationInfo = new() {
+        var allocationInfo = new CommandBufferAllocateInfo {
             SType = StructureType.CommandBufferAllocateInfo,
             CommandPool = _commandPool,
             Level = CommandBufferLevel.Primary,
-            CommandBufferCount = 1
+            CommandBufferCount = 1,
         };
 
         if (vk.AllocateCommandBuffers(device, in allocationInfo, out var commandBuffer) != Result.Success)
             throw new Exception("Failed to allocate a one-time command buffer.");
 
         try {
-            CommandBufferBeginInfo beginInfo = new() { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
+            var beginInfo = new CommandBufferBeginInfo {
+                SType = StructureType.CommandBufferBeginInfo,
+                Flags = CommandBufferUsageFlags.OneTimeSubmitBit,
+            };
+
             vk.BeginCommandBuffer(commandBuffer, in beginInfo);
 
-            ImageMemoryBarrier toTransfer = new() {
+            var toTransfer = new ImageMemoryBarrier {
                 SType = StructureType.ImageMemoryBarrier,
                 OldLayout = ImageLayout.Undefined,
                 NewLayout = ImageLayout.TransferDstOptimal,
@@ -446,7 +468,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
                 Image = _textureImage,
                 SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)materials.LayerCount),
                 SrcAccessMask = AccessFlags.None,
-                DstAccessMask = AccessFlags.TransferWriteBit
+                DstAccessMask = AccessFlags.TransferWriteBit,
             };
 
             vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TopOfPipeBit, PipelineStageFlags.TransferBit, 0, 0, null, 0, null, 1, &toTransfer);
@@ -455,7 +477,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
                 vk.CmdCopyBufferToImage(commandBuffer, stagingBuffer, _textureImage,
                     ImageLayout.TransferDstOptimal, (uint)regions.Length, regionsPointer);
 
-            ImageMemoryBarrier toShader = new() {
+            var toShader = new ImageMemoryBarrier {
                 SType = StructureType.ImageMemoryBarrier,
                 OldLayout = ImageLayout.TransferDstOptimal,
                 NewLayout = ImageLayout.ShaderReadOnlyOptimal,
@@ -464,13 +486,18 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
                 Image = _textureImage,
                 SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)materials.LayerCount),
                 SrcAccessMask = AccessFlags.TransferWriteBit,
-                DstAccessMask = AccessFlags.ShaderReadBit
+                DstAccessMask = AccessFlags.ShaderReadBit,
             };
 
             vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit, 0, 0, null, 0, null, 1, &toShader);
 
             vk.EndCommandBuffer(commandBuffer);
-            SubmitInfo submitInfo = new() { SType = StructureType.SubmitInfo, CommandBufferCount = 1, PCommandBuffers = &commandBuffer };
+            var submitInfo = new SubmitInfo {
+                SType = StructureType.SubmitInfo,
+                CommandBufferCount = 1,
+                PCommandBuffers = &commandBuffer,
+            };
+
             if (vk.QueueSubmit(context.GraphicsQueue, 1, in submitInfo, default) != Result.Success || vk.QueueWaitIdle(context.GraphicsQueue) != Result.Success)
                 throw new Exception("Failed to submit terrain texture upload commands.");
         }

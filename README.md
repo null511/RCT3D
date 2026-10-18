@@ -61,7 +61,7 @@ dotnet build RCT3DViewer.slnx
 dotnet run --project RCT3DViewer/RCT3DViewer.csproj
 ```
 
-The build compiles the Slang shaders and copies the OpenRCT2 adapter, runtime data, and terrain textures to the application output directory. If the adapter binary is missing, build the OpenRCT2 submodule's `rct3dviewer` adapter target using that submodule's build instructions, or set `OpenRCT2AdapterDll` to the built DLL path when building:
+The build compiles the Slang shaders and copies the OpenRCT2 adapter, runtime data, and terrain textures to the application output directory. It specifically uses `OpenRCT2/bin-adapter/libopenrct2.dll`; it does not fall back to `OpenRCT2/bin/libopenrct2.dll`, which may be a regular or older OpenRCT2 build without the viewer's ABI 6 exports. Build the OpenRCT2 `libopenrct2` target with `src/rct3dviewer/Rct3DViewerAdapter.cpp` included, and place its ABI 6 DLL at that path before building the app. Alternatively, set `OpenRCT2AdapterDll` to the ABI 6 adapter DLL path:
 
 ```powershell
 dotnet build RCT3DViewer.slnx -p:OpenRCT2AdapterDll="D:\path\to\libopenrct2.dll"

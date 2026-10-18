@@ -19,8 +19,8 @@ internal sealed class ViewerUiController
 
     public float TimeOfDayHours => _timeOfDayHours;
     public float SunAngleDegrees => _sunAngleDegrees;
-    public string? LoadedParkPath => _loadedParkPath;
-    public bool HasParkLoadError => _parkLoadError is not null;
+    //public string? LoadedParkPath => _loadedParkPath;
+    //public bool HasParkLoadError => _parkLoadError is not null;
     public bool IsParkLoading => _isParkLoading;
 
 
@@ -58,11 +58,11 @@ internal sealed class ViewerUiController
         ShowParkLoadError(message);
     }
 
-    public void ClearParkLoadError()
-    {
-        _parkLoadError = null;
-        _showParkLoadError = false;
-    }
+    //public void ClearParkLoadError()
+    //{
+    //    _parkLoadError = null;
+    //    _showParkLoadError = false;
+    //}
 
     public void BuildFrameUi(double deltaTime, Action<string> loadPark, Action requestExit)
     {

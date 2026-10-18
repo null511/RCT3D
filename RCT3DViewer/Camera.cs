@@ -7,10 +7,10 @@ namespace RCT3DViewer
     {
         // Start above and slightly behind the terrain, looking toward terrain center.
         public Vector3 Position = new Vector3(192.0f, 120.0f, -120.0f);
-        public Vector3 Front = Vector3.Normalize(new Vector3(0.0f, -0.45f, 1.0f));
+        public Vector3 Front = Vector3.Normalize(new Vector3(0.0f, -0.5f, MathF.Sqrt(3.0f) * 0.5f));
         public Vector3 Up = Vector3.UnitY;
 
-        private float _yaw = -90.0f;
+        private float _yaw = 90.0f;
         private float _pitch = -30.0f;
         private float _speed = 40.0f;
         private float _sensitivity = 0.1f;
@@ -19,7 +19,8 @@ namespace RCT3DViewer
 
         public Matrix4x4 GetViewMatrix()
         {
-            return Matrix4x4.CreateLookAt(Position, Position + Vector3.Normalize(Front), Up);
+            var view = Matrix4x4.CreateLookAt(Position, Position + Vector3.Normalize(Front), Up);
+            return view * Matrix4x4.CreateScale(-1.0f, 1.0f, 1.0f);
         }
 
         public Matrix4x4 GetProjectionMatrix(float aspectRatio)
@@ -38,7 +39,7 @@ namespace RCT3DViewer
         public void HandleKeyboard(IKeyboard keyboard, float deltaTime)
         {
             float moveVelocity = _speed * deltaTime;
-            Vector3 right = Vector3.Normalize(Vector3.Cross(Front, Up));
+            Vector3 right = Vector3.Normalize(Vector3.Cross(Up, Front));
 
             if (keyboard.IsKeyPressed(Key.ShiftLeft)) moveVelocity *= 3.0f;
 
@@ -63,7 +64,7 @@ namespace RCT3DViewer
             float yOffset = (_lastMousePosition.Y - mousePosition.Y) * _sensitivity; // Inverted
             _lastMousePosition = mousePosition;
 
-            _yaw += xOffset;
+            _yaw -= xOffset;
             _pitch = Math.Clamp(_pitch + yOffset, -89.0f, 89.0f);
 
             Vector3 direction;

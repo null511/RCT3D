@@ -6,7 +6,7 @@ namespace RCT3DViewer.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 5;
+    private const uint ExpectedAbiVersion = 7;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -24,6 +24,12 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private delegate int CopySurfaceDataDelegate(IntPtr context, RCTTileSurfaceData* output, ulong capacity);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int GetPathCountDelegate(IntPtr context, out ulong count);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int CopyPathDataDelegate(IntPtr context, RCTTilePathData* output, ulong capacity);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate IntPtr GetLastErrorDelegate();
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -33,8 +39,11 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private readonly LoadParkDelegate _loadPark;
     private readonly GetMapDimensionsDelegate _getMapDimensions;
     private readonly CopySurfaceDataDelegate _copySurfaceData;
+    private readonly GetPathCountDelegate _getPathCount;
+    private readonly CopyPathDataDelegate _copyPathData;
     private readonly GetLastErrorDelegate _getLastError;
     private readonly ShutdownDelegate _shutdown;
+    private readonly string _libraryPath;
     private IntPtr _context;
     private bool _disposed;
 
@@ -44,21 +53,24 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 
     public LibOpenRCT2(string libraryPath, string openRCT2Path, string rct2Path)
     {
-        if (!NativeLoader.TryLoadNativeLibrary(libraryPath, out _nativeHandle, out var error))
+        _libraryPath = Path.GetFullPath(libraryPath);
+        if (!NativeLoader.TryLoadNativeLibrary(_libraryPath, out _nativeHandle, out var error))
             throw new InvalidOperationException(error);
 
         try {
             var getAbiVersion = Bind<GetAbiVersionDelegate>("rct3d_openrct2_get_abi_version");
+            var version = getAbiVersion();
+            if (version != ExpectedAbiVersion)
+                throw new InvalidOperationException($"Unsupported OpenRCT2 adapter ABI version {version}; expected {ExpectedAbiVersion}. Loaded library: '{_libraryPath}'.");
+
             var initialize = Bind<InitializeDelegate>("rct3d_openrct2_initialize");
             _loadPark = Bind<LoadParkDelegate>("rct3d_openrct2_load_park");
             _getMapDimensions = Bind<GetMapDimensionsDelegate>("rct3d_openrct2_get_map_dimensions");
             _copySurfaceData = Bind<CopySurfaceDataDelegate>("rct3d_openrct2_copy_surface_data");
+            _getPathCount = Bind<GetPathCountDelegate>("rct3d_openrct2_get_path_count");
+            _copyPathData = Bind<CopyPathDataDelegate>("rct3d_openrct2_copy_path_data");
             _getLastError = Bind<GetLastErrorDelegate>("rct3d_openrct2_get_last_error");
             _shutdown = Bind<ShutdownDelegate>("rct3d_openrct2_shutdown");
-
-            var version = getAbiVersion();
-            if (version != ExpectedAbiVersion)
-                throw new InvalidOperationException($"Unsupported OpenRCT2 adapter ABI version {version}; expected {ExpectedAbiVersion}.");
 
             var openRCT2PathUtf8 = Encoding.UTF8.GetBytes(openRCT2Path + '\0');
             var rct2PathUtf8 = Encoding.UTF8.GetBytes(rct2Path + '\0');
@@ -98,10 +110,22 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             ThrowIfFailed(_copySurfaceData(_context, pointer, (ulong)output.Length));
     }
 
+    public ulong GetPathCount()
+    {
+        ThrowIfFailed(_getPathCount(_context, out var count));
+        return count;
+    }
+
+    public void CopyPathData(Span<RCTTilePathData> output)
+    {
+        fixed (RCTTilePathData* pointer = output)
+            ThrowIfFailed(_copyPathData(_context, pointer, (ulong)output.Length));
+    }
+
     private T Bind<T>(string name) where T : Delegate
     {
         if (!NativeLibrary.TryGetExport(_nativeHandle, name, out var address))
-            throw new EntryPointNotFoundException($"The loaded {LibName} does not export {name}.");
+            throw new EntryPointNotFoundException($"The loaded {LibName} at '{_libraryPath}' does not export {name}; rebuild or select the ABI {ExpectedAbiVersion} adapter.");
 
         return Marshal.GetDelegateForFunctionPointer<T>(address);
     }
@@ -142,4 +166,26 @@ public struct RCTTileSurfaceData
     public byte SouthCornerHeight;
     public byte WestCornerHeight;
     public ushort WaterHeight;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct RCTTilePathData
+{
+    public int TileX;
+    public int TileY;
+    public uint SurfaceIdHash;
+    public uint RailingsIdHash;
+    public byte BaseZ;
+    public byte SlopeDirection;
+    public byte Edges;
+    public byte Corners;
+    public byte Flags;
+    public byte RailingsSupportType;
+    public uint AdditionIdHash;
+    public byte AdditionFlags;
+
+    public bool IsSloped => (Flags & 1) != 0;
+    public bool IsQueue => (Flags & 2) != 0;
+    public bool IsLampAddition => (AdditionFlags & 1) != 0;
+    public bool AdditionIsBroken => (AdditionFlags & 2) != 0;
 }
