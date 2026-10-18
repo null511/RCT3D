@@ -2,6 +2,7 @@ using RCT3DViewer.Simulation;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
+using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
@@ -65,6 +66,7 @@ public sealed class Renderer : IDisposable
     private Task<ParkLoadResult>? _parkLoadTask;
     private ParkLoadResult? _pendingParkLoadResult;
     private string _parkLoadProgress = string.Empty;
+    private double _activeFrameTimeMilliseconds;
     public string? LibraryPath { get; set; }
     public string? OpenRCT2Path { get; set; }
     public string? Rct2Path { get; set; }
@@ -379,9 +381,15 @@ public sealed class Renderer : IDisposable
         if (_window!.FramebufferSize.X == 0 || _window.FramebufferSize.Y == 0) return;
         if (_framebufferResized && !RecreateSwapchain()) return;
 
+        var frameStart = Stopwatch.GetTimestamp();
+        long synchronizationTicks = 0;
         uint imageIndex = 0;
+        var synchronizationStart = Stopwatch.GetTimestamp();
         _vk!.WaitForFences(_logicalDevice, 1, in _inFlightFences[_currentFrame], true, ulong.MaxValue);
+        synchronizationTicks += Stopwatch.GetTimestamp() - synchronizationStart;
+        synchronizationStart = Stopwatch.GetTimestamp();
         var acquireResult = _deviceContext!.SwapchainExtension!.AcquireNextImage(_logicalDevice, _swapchain, ulong.MaxValue, _imageAvailableSemaphores[_currentFrame], default, ref imageIndex);
+        synchronizationTicks += Stopwatch.GetTimestamp() - synchronizationStart;
         if (acquireResult == Result.ErrorOutOfDateKhr) {
             RecreateSwapchain();
             return;
@@ -393,7 +401,9 @@ public sealed class Renderer : IDisposable
         var recreateAfterPresent = acquireResult == Result.SuboptimalKhr;
 
         if (_imagesInFlight[imageIndex].Handle != 0) {
+            synchronizationStart = Stopwatch.GetTimestamp();
             _vk.WaitForFences(_logicalDevice, 1, in _imagesInFlight[imageIndex], true, ulong.MaxValue);
+            synchronizationTicks += Stopwatch.GetTimestamp() - synchronizationStart;
         }
 
         _imagesInFlight[imageIndex] = _inFlightFences[_currentFrame];
@@ -402,7 +412,7 @@ public sealed class Renderer : IDisposable
 
         UpdateParkLoad();
 
-        _ui.BuildFrameUi(deltaTime, LoadPark, () => _exitRequested = true);
+        _ui.BuildFrameUi(deltaTime, _activeFrameTimeMilliseconds, LoadPark, () => _exitRequested = true);
         _vk.ResetCommandBuffer(cmd, 0);
 
         CommandBufferBeginInfo beginInfo = new() {
@@ -541,9 +551,15 @@ public sealed class Renderer : IDisposable
             PImageIndices = &imageIndex
         };
 
+        synchronizationStart = Stopwatch.GetTimestamp();
         var presentResult = _deviceContext!.SwapchainExtension!.QueuePresent(_graphicsQueue, in presentInfo);
+        synchronizationTicks += Stopwatch.GetTimestamp() - synchronizationStart;
         if (presentResult != Result.Success && presentResult != Result.SuboptimalKhr && presentResult != Result.ErrorOutOfDateKhr)
             throw new Exception($"Failed to present a swapchain image: {presentResult}.");
+
+        _activeFrameTimeMilliseconds = Math.Max(
+            0.0,
+            Stopwatch.GetElapsedTime(frameStart).TotalMilliseconds - synchronizationTicks * 1000.0 / Stopwatch.Frequency);
 
         _currentFrame = (uint)((_currentFrame + 1) % MaxFramesInFlight);
         if (recreateAfterPresent || _framebufferResized || presentResult == Result.SuboptimalKhr || presentResult == Result.ErrorOutOfDateKhr)

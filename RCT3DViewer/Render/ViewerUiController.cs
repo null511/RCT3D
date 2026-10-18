@@ -16,6 +16,7 @@ internal sealed class ViewerUiController
     private float _timeOfDayHours = 12.0f;
     private float _sunAngleDegrees = 45.0f;
     private float _displayedFps;
+    private double _displayedFrameTimeMilliseconds;
 
     public float TimeOfDayHours => _timeOfDayHours;
     public float SunAngleDegrees => _sunAngleDegrees;
@@ -64,11 +65,15 @@ internal sealed class ViewerUiController
     //    _showParkLoadError = false;
     //}
 
-    public void BuildFrameUi(double deltaTime, Action<string> loadPark, Action requestExit)
+    public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, Action<string> loadPark, Action requestExit)
     {
         var instantFps = deltaTime > 0.0 ? (float)(1.0 / deltaTime) : 0.0f;
         var smoothing = 1.0f - MathF.Exp(-Math.Max((float)deltaTime, 0.0f) * 5.0f);
         _displayedFps = _displayedFps <= 0.0f ? instantFps : float.Lerp(_displayedFps, instantFps, smoothing);
+        if (activeFrameTimeMilliseconds > 0.0)
+            _displayedFrameTimeMilliseconds = _displayedFrameTimeMilliseconds <= 0.0
+                ? activeFrameTimeMilliseconds
+                : _displayedFrameTimeMilliseconds + (activeFrameTimeMilliseconds - _displayedFrameTimeMilliseconds) * smoothing;
 
         if (ImGui.BeginMainMenuBar()) {
             if (ImGui.BeginMenu("File")) {
@@ -103,7 +108,7 @@ internal sealed class ViewerUiController
                 ImGui.EndPopup();
             }
 
-            var fpsText = $"FPS: {_displayedFps:0}";
+            var fpsText = $"FPS: {_displayedFps:0} | Frame: {_displayedFrameTimeMilliseconds:0.00} ms";
             ImGui.SetCursorPosX(Math.Max(ImGui.GetCursorPosX(), ImGui.GetWindowWidth() - ImGui.CalcTextSize(fpsText).X - ImGui.GetStyle().WindowPadding.X));
             ImGui.TextUnformatted(fpsText);
             ImGui.EndMainMenuBar();

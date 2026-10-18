@@ -21,7 +21,7 @@ def run():
         os.makedirs(RAW_DIR)
 
     # extract_g1()
-    extract_paths()
+    # extract_paths()
 
     print("\nExtraction complete.")
     print("\nProcessing sprites...")
@@ -103,7 +103,15 @@ def square_terrain():
     square_terrain_tile(2386, "chequerboard")
     square_terrain_tile(2500, "dirt")
     square_terrain_tile(2557, "rock")
-    square_terrain_tile(2792, "grass")
+    square_terrain_tile(2716, "grass_0")
+    square_terrain_tile(2754, "grass_1a")
+    square_terrain_tile(2792, "grass_1b")
+    square_terrain_tile(2830, "grass_1c")
+    square_terrain_tile(2868, "grass_1d")
+    square_terrain_tile(2906, "grass_2a")
+    square_terrain_tile(2944, "grass_2b")
+    square_terrain_tile(2982, "grass_2c")
+    square_terrain_tile(3020, "grass_2d")
 
     print("\nAll flattened terrain tiles are saved.")
 

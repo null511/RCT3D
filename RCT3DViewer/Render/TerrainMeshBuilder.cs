@@ -53,7 +53,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
             // Keep both triangles counter-clockwise from above (positive Y normal).
             var normal1 = Vector3.Normalize(Vector3.Cross(cEast - cNorth, cWest - cNorth));
             var normal2 = Vector3.Normalize(Vector3.Cross(cSouth - cEast, cWest - cEast));
-            var materialId = materials.GetLayer(surface.TerrainSurfaceIdHash);
+            var materialId = GetMaterialLayer(surface, x, y);
             var baseIdx = (uint)_vertices.Count;
 
             _vertices.Add(new TerrainVertex(cNorth, normal1, new Vector2(x + 1, y + 1), materialId));
@@ -77,7 +77,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                 var neighborWest = neighborBase + eastNeighbor.WestCornerHeight * cornerHeightScale;
 
                 AddSkirtEdge(cEast, east, cNorth, north, neighborSouth, neighborWest,
-                    materialId, materials.GetLayer(eastNeighbor.TerrainSurfaceIdHash), eastEdgeNormal);
+                    materialId, GetMaterialLayer(eastNeighbor, x + 1, y), eastEdgeNormal);
             }
             else {
                 AddSkirtEdge(cEast, east, cNorth, north, skirtFloor, skirtFloor,
@@ -93,7 +93,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                 var neighborEast = neighborBase + northNeighbor.EastCornerHeight * cornerHeightScale;
 
                 AddSkirtEdge(cWest, west, cNorth, north, neighborSouth, neighborEast,
-                    materialId, materials.GetLayer(northNeighbor.TerrainSurfaceIdHash), northEdgeNormal);
+                    materialId, GetMaterialLayer(northNeighbor, x, y + 1), northEdgeNormal);
             }
             else {
                 AddSkirtEdge(cWest, west, cNorth, north, skirtFloor, skirtFloor,
@@ -117,6 +117,16 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
             new WaterMeshData(
                 _waterVertices.ToArray(),
                 _waterIndices.ToArray()));
+    }
+
+    private uint GetMaterialLayer(RCTTileSurfaceData surface, int x, int y)
+    {
+        return materials.GetTerrainLayer(
+            surface.TerrainSurfaceIdHash,
+            surface.GrassState,
+            surface.CanGrowGrass != 0,
+            x,
+            y);
     }
 
     private void AddWaterTile(int x, int y, float waterHeight, float tileSize)

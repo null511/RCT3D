@@ -6,7 +6,7 @@ namespace RCT3DViewer.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 7;
+    private const uint ExpectedAbiVersion = 8;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -62,6 +62,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             var version = getAbiVersion();
             if (version != ExpectedAbiVersion)
                 throw new InvalidOperationException($"Unsupported OpenRCT2 adapter ABI version {version}; expected {ExpectedAbiVersion}. Loaded library: '{_libraryPath}'.");
+            if (Marshal.SizeOf<RCTTileSurfaceData>() != 16)
+                throw new InvalidOperationException("RCTTileSurfaceData must be 16 bytes to match the OpenRCT2 adapter ABI.");
 
             var initialize = Bind<InitializeDelegate>("rct3d_openrct2_initialize");
             _loadPark = Bind<LoadParkDelegate>("rct3d_openrct2_load_park");
@@ -166,6 +168,10 @@ public struct RCTTileSurfaceData
     public byte SouthCornerHeight;
     public byte WestCornerHeight;
     public ushort WaterHeight;
+    public byte GrassState;
+    public byte CanGrowGrass;
+    public byte Reserved0;
+    public byte Reserved1;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
