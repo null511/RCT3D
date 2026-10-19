@@ -27,4 +27,11 @@ internal sealed class ConcretePathGeometryBuilder(PathMaterialLibrary materials)
         if (top > baseTop + HeightEpsilon)
             AddBox(new Vector3(x, baseTop, z), SupportHalfWidth, top, material, geometry);
     }
+
+    protected override void AddElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry)
+    {
+        var material = materials.GetLayer(TerrainMaterialLibrary.HashObjectId("rct2.footpath_railings.wood"), false);
+
+        BuildElevatedPlatformSlab(path, geometry, material);
+    }
 }

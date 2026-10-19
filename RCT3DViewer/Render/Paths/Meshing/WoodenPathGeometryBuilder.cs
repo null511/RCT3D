@@ -31,17 +31,22 @@ internal sealed class WoodenPathGeometryBuilder(PathMaterialLibrary materials) :
         var firstEnd = isNorthSouth ? firstStart + new Vector2(0, TileSize) : firstStart + new Vector2(TileSize, 0);
         var secondEnd = isNorthSouth ? secondStart + new Vector2(0, TileSize) : secondStart + new Vector2(TileSize, 0);
 
-        AddWoodenSupportStation(path, surface, material, geometry, supportStations, startStation, isNorthSouth,
-            firstEdge, firstStart, secondEdge, secondStart);
+        AddWoodenSupportStation(path, surface, material, geometry, supportStations, startStation, isNorthSouth, firstEdge, firstStart, secondEdge, secondStart);
 
-        AddWoodenSupportStation(path, surface, material, geometry, supportStations, endStation, isNorthSouth,
-            firstEdge, firstEnd, secondEdge, secondEnd);
+        AddWoodenSupportStation(path, surface, material, geometry, supportStations, endStation, isNorthSouth, firstEdge, firstEnd, secondEdge, secondEnd);
 
         if ((path.Edges & (1 << firstEdge)) == 0)
             AddWoodenSupportBay(path, surface, material, geometry, firstStart, firstEnd);
 
         if ((path.Edges & (1 << secondEdge)) == 0)
             AddWoodenSupportBay(path, surface, material, geometry, secondStart, secondEnd);
+    }
+
+    protected override void AddElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry)
+    {
+        var material = materials.GetLayer(TerrainMaterialLibrary.HashObjectId("rct2.footpath_railings.wood"), false);
+
+        BuildElevatedPlatformSlab(path, geometry, material);
     }
 
     protected override void AddRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, uint material, PathMeshGeometry geometry)
@@ -57,12 +62,10 @@ internal sealed class WoodenPathGeometryBuilder(PathMaterialLibrary materials) :
         var firstSections = GetSupportColumnSections(path, surface, firstPosition);
         var secondSections = GetSupportColumnSections(path, surface, secondPosition);
 
-        if ((path.Edges & (1 << firstEdge)) == 0 && firstSections.Count > 0
-                                                 && supportStations.TryAddPost(station.X, station.Y, isNorthSouth, firstEdge, path.RailingsIdHash))
+        if ((path.Edges & (1 << firstEdge)) == 0 && firstSections.Count > 0 && supportStations.TryAddPost(station.X, station.Y, isNorthSouth, firstEdge, path.RailingsIdHash))
             AddSupportColumn(firstPosition, firstSections, material, geometry);
 
-        if ((path.Edges & (1 << secondEdge)) == 0 && secondSections.Count > 0
-                                                  && supportStations.TryAddPost(station.X, station.Y, isNorthSouth, secondEdge, path.RailingsIdHash))
+        if ((path.Edges & (1 << secondEdge)) == 0 && secondSections.Count > 0 && supportStations.TryAddPost(station.X, station.Y, isNorthSouth, secondEdge, path.RailingsIdHash))
             AddSupportColumn(secondPosition, secondSections, material, geometry);
 
         if ((path.Edges & (1 << firstEdge)) != 0 || (path.Edges & (1 << secondEdge)) != 0

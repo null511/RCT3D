@@ -1,4 +1,5 @@
-using RCT3DViewer.Render.Paths;
+using RCT3DViewer.Render.Paths.Accessories;
+using RCT3DViewer.Render.Paths.Meshing;
 using RCT3DViewer.Simulation;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
@@ -33,6 +34,7 @@ public sealed class Renderer : IDisposable
     private TerrainGraphicsResources? _terrainGraphicsResources;
     private TerrainGraphicsResources? _pathGraphicsResources;
     private WaterGraphicsResources? _waterGraphicsResources;
+    private ModelGraphicsResources[] _vehicleCubeGraphicsResources = Array.Empty<ModelGraphicsResources>();
     private PipelineLayout _pipelineLayout => _terrainGraphicsResources?.PipelineLayout ?? default;
     private Pipeline _graphicsPipeline => _terrainGraphicsResources?.Pipeline ?? default;
     private DescriptorSet _terrainDescriptorSet => _terrainGraphicsResources?.DescriptorSet ?? default;
@@ -63,6 +65,8 @@ public sealed class Renderer : IDisposable
     private TerrainMeshData? _terrainMesh;
     private PathMeshData? _pathMesh;
     private WaterMeshData? _waterMesh;
+    private int _loadedMapWidth;
+    private int _loadedMapHeight;
     private SimulationBridge? _simulation;
     private Task<ParkLoadResult>? _parkLoadTask;
     private ParkLoadResult? _pendingParkLoadResult;
@@ -148,6 +152,21 @@ public sealed class Renderer : IDisposable
         CreateCommandInfrastructure();
         _terrainGraphicsResources.CreateTextureResources(_commandPool);
         _pathGraphicsResources.CreateTextureResources(_commandPool);
+        var vehicleCube = VehicleCubeRenderer.CreateMesh();
+        _vehicleCubeGraphicsResources = new ModelGraphicsResources[MaxFramesInFlight];
+        for (var i = 0; i < _vehicleCubeGraphicsResources.Length; i++) {
+            var resources = new ModelGraphicsResources(_deviceContext!, _renderPass, vehicleCube.Material, unlit: true);
+            try {
+                resources.CreatePipeline();
+                resources.CreateTextureResources(_commandPool);
+                resources.UploadMesh(vehicleCube);
+                _vehicleCubeGraphicsResources[i] = resources;
+            }
+            catch {
+                resources.Dispose();
+                throw;
+            }
+        }
         CreateSyncPrimitives();
 
         _imguiRenderer = new ImGuiVulkanRenderer(_vk!, _physicalDevice, _logicalDevice, _graphicsQueue, _renderPass, _commandPool,
@@ -339,6 +358,8 @@ public sealed class Renderer : IDisposable
                 _terrainMesh = result.Terrain;
                 _pathMesh = result.Paths;
                 _waterMesh = result.Water;
+                _loadedMapWidth = result.Width;
+                _loadedMapHeight = result.Height;
                 _camera.Position = new Vector3(result.Width * 1.5f, 120.0f, -result.Height * 1.5f);
                 _pendingParkLoadResult = null;
                 _ui.CompleteParkLoad(result.ParkPath);
@@ -357,6 +378,8 @@ public sealed class Renderer : IDisposable
         _terrainMesh = null;
         _pathMesh = null;
         _waterMesh = null;
+        _loadedMapWidth = 0;
+        _loadedMapHeight = 0;
         _pendingParkLoadResult = null;
         _parkLoadTask = null;
 
@@ -369,6 +392,7 @@ public sealed class Renderer : IDisposable
                 _terrainGraphicsResources?.ClearMesh();
                 _pathGraphicsResources?.ClearMesh();
                 _waterGraphicsResources?.ClearMesh();
+                ClearVehicleCubeInstances();
             }
         }
         catch (Exception clearException) {
@@ -376,6 +400,24 @@ public sealed class Renderer : IDisposable
         }
 
         _ui.ClearParkAfterLoadFailure(failure);
+    }
+
+    private void UpdateVehicleCubeInstances()
+    {
+        if (_vehicleCubeGraphicsResources.Length == 0)
+            return;
+
+        var snapshots = _parkLoadTask is null && _pendingParkLoadResult is null
+            ? _simulation?.VehicleSnapshots
+            : null;
+        var instances = VehicleCubeRenderer.BuildInstances(snapshots, _loadedMapWidth, _loadedMapHeight);
+        _vehicleCubeGraphicsResources[(int)_currentFrame].UploadInstances(instances);
+    }
+
+    private void ClearVehicleCubeInstances()
+    {
+        foreach (var resources in _vehicleCubeGraphicsResources)
+            resources.UploadInstances(Array.Empty<ModelRegionBatch>());
     }
 
     private unsafe void OnRenderFrame(double deltaTime)
@@ -413,6 +455,7 @@ public sealed class Renderer : IDisposable
         _imguiRenderer?.BeginFrame((int)_swapchainExtent.Width, (int)_swapchainExtent.Height, (float)deltaTime);
 
         UpdateParkLoad();
+        UpdateVehicleCubeInstances();
 
         _ui.BuildFrameUi(deltaTime, _activeFrameTimeMilliseconds, LoadPark, () => _exitRequested = true);
         _vk.ResetCommandBuffer(cmd, 0);
@@ -493,6 +536,14 @@ public sealed class Renderer : IDisposable
             foreach (var region in terrainMesh.Regions) {
                 if (viewFrustum.Intersects(region.Bounds))
                     _vk.CmdDrawIndexed(cmd, region.IndexCount, 1, region.FirstIndex, 0, 0);
+            }
+        }
+
+        if (_vehicleCubeGraphicsResources.Length > 0) {
+            var vehicleResources = _vehicleCubeGraphicsResources[(int)_currentFrame];
+            foreach (var region in vehicleResources.RegionBatches) {
+                if (viewFrustum.Intersects(region.Bounds))
+                    vehicleResources.DrawInstanced(cmd, ubo, region);
             }
         }
 
@@ -627,6 +678,10 @@ public sealed class Renderer : IDisposable
         pathResources?.Dispose();
 
         DisposePathLampResources();
+
+        foreach (var resources in _vehicleCubeGraphicsResources)
+            resources.Dispose();
+        _vehicleCubeGraphicsResources = Array.Empty<ModelGraphicsResources>();
 
         var waterResources = _waterGraphicsResources;
         _waterGraphicsResources = null;

@@ -44,13 +44,8 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         }
     }
 
-    //protected abstract void AddRailings(RCTTilePathData path, PathMeshGeometry geometry);
-
     private void AddRailings(RCTTilePathData path, PathMeshGeometry geometry)
     {
-        //AddStandardRailings(path, geometry, 3);
-        //var postCount = 3;
-
         var west = path.TileX * TileSize;
         var east = (path.TileX + 1) * TileSize;
         var south = path.TileY * TileSize;
@@ -121,7 +116,9 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         geometry.AddTriangle(southEast, new Vector2(1, 0), southWest, new Vector2(0, 0), northWest, new Vector2(0, 1), material);
     }
 
-    private void AddElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry)
+    protected abstract void AddElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry);
+
+    protected void BuildElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry, uint material)
     {
         var west = path.TileX * TileSize;
         var east = (path.TileX + 1) * TileSize;
@@ -144,7 +141,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var center = (topSouthWest + topSouthEast + topNorthEast + topNorthWest
             + bottomSouthWest + bottomSouthEast + bottomNorthEast + bottomNorthWest) / 8.0f;
 
-        var material = materials.GetLayer(path.SurfaceIdHash, path.IsQueue);
+        //var material = materials.GetLayer(path.SurfaceIdHash, path.IsQueue);
 
         geometry.AddPrismFace(topSouthWest, topSouthEast, topNorthEast, topNorthWest, center, material);
         geometry.AddPrismFace(bottomSouthWest, bottomNorthWest, bottomNorthEast, bottomSouthEast, center, material);

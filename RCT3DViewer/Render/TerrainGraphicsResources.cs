@@ -1,4 +1,5 @@
-using RCT3DViewer.Render.Paths;
+using RCT3DViewer.Render.Paths.Accessories;
+using RCT3DViewer.Render.Paths.Meshing;
 using Silk.NET.Vulkan;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -6,7 +7,12 @@ using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace RCT3DViewer.Render;
 
-internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, TerrainMaterialLibrary materials, bool useInstances = false) : IDisposable
+internal sealed unsafe class TerrainGraphicsResources(
+    VulkanDeviceContext context,
+    RenderPass renderPass,
+    TerrainMaterialLibrary materials,
+    bool useInstances = false,
+    string shaderNameOverride = "") : IDisposable
 {
     private CommandPool _commandPool;
     private DescriptorSetLayout _descriptorSetLayout;
@@ -21,6 +27,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
     private DeviceMemory _indexBufferMemory;
     private Buffer _instanceBuffer;
     private DeviceMemory _instanceBufferMemory;
+    private ulong _instanceBufferCapacity;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline Pipeline { get; private set; }
@@ -35,7 +42,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
     {
         var vk = context.Api;
         var device = context.LogicalDevice;
-        var shaderName = useInstances ? "model" : "terrain";
+        var shaderName = string.IsNullOrEmpty(shaderNameOverride) ? useInstances ? "model" : "terrain" : shaderNameOverride;
         var vertPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", $"{shaderName}.vert.spv");
         var fragPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", $"{shaderName}.frag.spv");
 
@@ -417,15 +424,18 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         if (!useInstances)
             throw new InvalidOperationException("Instance data can only be uploaded to an instanced model pipeline.");
 
-        ClearInstanceBuffer();
         if (instances.Length == 0)
             return;
 
         var device = context.LogicalDevice;
         var size = checked((ulong)Marshal.SizeOf<ModelInstance>() * (ulong)instances.Length);
-        AllocateBuffer(size, BufferUsageFlags.VertexBufferBit,
-            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
-            out _instanceBuffer, out _instanceBufferMemory);
+        if (size > _instanceBufferCapacity) {
+            ClearInstanceBuffer();
+            AllocateBuffer(size, BufferUsageFlags.VertexBufferBit,
+                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
+                out _instanceBuffer, out _instanceBufferMemory);
+            _instanceBufferCapacity = size;
+        }
 
         try {
             void* instanceData;
@@ -510,6 +520,7 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
 
         _instanceBuffer = default;
         _instanceBufferMemory = default;
+        _instanceBufferCapacity = 0;
     }
 
     private void UploadTerrainTexture(Buffer stagingBuffer, BufferImageCopy[] regions)

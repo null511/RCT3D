@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace RCT3DViewer.Render.Paths;
+namespace RCT3DViewer.Render.Paths.Meshing;
 
 internal sealed class PathMeshGeometry
 {

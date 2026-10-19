@@ -53,24 +53,25 @@ public sealed class PathMaterialLibrary
 
         if (string.IsNullOrWhiteSpace(queueFallbackObjectId))
             throw new InvalidDataException("Path material manifest queueFallback must specify an objectId.");
+
         if (string.IsNullOrWhiteSpace(railingFallbackObjectId))
             throw new InvalidDataException("Path material manifest railingFallback must specify an objectId.");
 
         var hasQueueMaterial = manifest.RootElement.GetProperty("materials").EnumerateArray()
-            .Any(material => string.Equals(
-                material.GetProperty("objectId").GetString(), queueFallbackObjectId, StringComparison.Ordinal));
+            .Any(material => string.Equals(material.GetProperty("objectId").GetString(), queueFallbackObjectId, StringComparison.Ordinal));
+
         if (!hasQueueMaterial)
             throw new InvalidDataException($"Path queue fallback object '{queueFallbackObjectId}' is not defined in materials.");
 
         var railingEntries = manifest.RootElement.GetProperty("railings").EnumerateArray().ToArray();
-        if (!railingEntries.Any(railing => string.Equals(
-                railing.GetProperty("objectId").GetString(), railingFallbackObjectId, StringComparison.Ordinal)))
+        if (!railingEntries.Any(railing => string.Equals(railing.GetProperty("objectId").GetString(), railingFallbackObjectId, StringComparison.Ordinal)))
             throw new InvalidDataException($"Path railing fallback object '{railingFallbackObjectId}' is not defined in railings.");
 
         var materials = TerrainMaterialLibrary.Load(assetDirectory, "railings");
         var queueFallbackLayer = materials.GetLayer(TerrainMaterialLibrary.HashObjectId(queueFallbackObjectId));
         var railingFallbackLayer = materials.GetLayer(TerrainMaterialLibrary.HashObjectId(railingFallbackObjectId));
         var railingLayers = new Dictionary<uint, uint>();
+
         foreach (var railing in railingEntries) {
             var objectId = railing.GetProperty("objectId").GetString();
             if (string.IsNullOrWhiteSpace(objectId))
@@ -85,6 +86,7 @@ public sealed class PathMaterialLibrary
             TerrainMaterialLibrary.HashObjectId("openrct2.footpath_railings.invisible"),
             TerrainMaterialLibrary.HashObjectId("rct2tt.footpath_railings.circuitboard_invisible"),
         };
+
         return new PathMaterialLibrary(materials, queueFallbackLayer, railingFallbackLayer, invisibleRailingIdHashes, railingLayers);
     }
 }

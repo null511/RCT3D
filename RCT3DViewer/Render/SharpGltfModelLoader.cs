@@ -1,4 +1,4 @@
-using SharpGLTF.Schema2;
+﻿using SharpGLTF.Schema2;
 using StbImageSharp;
 using System.Numerics;
 
@@ -9,12 +9,15 @@ internal sealed class SharpGltfModelLoader
     public ImportedModelData Load(string path, ModelImportSettings? settings = null)
     {
         var fullPath = Path.GetFullPath(path);
+
         if (!File.Exists(fullPath))
             throw new FileNotFoundException($"glTF model not found: '{fullPath}'.", fullPath);
 
         settings ??= new ModelImportSettings();
+
         if (!float.IsFinite(settings.Scale) || settings.Scale <= 0.0f)
             throw new ArgumentOutOfRangeException(nameof(settings), "Model import scale must be finite and greater than zero.");
+
         if (settings.TargetHeight is { } targetHeight && (!float.IsFinite(targetHeight) || targetHeight <= 0.0f))
             throw new ArgumentOutOfRangeException(nameof(settings), "Target model height must be finite and greater than zero.");
 
@@ -112,9 +115,9 @@ internal sealed class SharpGltfModelLoader
                 var indices = rawIndices is null
                     ? Enumerable.Range(0, sourcePositions.Count).Select(index => (uint)index).ToArray()
                     : rawIndices.Select(index => {
-                        if (index < 0 || index >= sourcePositions.Count)
-                            throw new InvalidDataException($"Mesh primitive '{nodeMesh.Name}' has an index outside its vertex range.");
-                        return (uint)index;
+                        if (index < sourcePositions.Count) return index;
+
+                        throw new InvalidDataException($"Mesh primitive '{nodeMesh.Name}' has an index outside its vertex range.");
                     }).ToArray();
 
                 if (indices.Length == 0 || indices.Length % 3 != 0)
@@ -128,17 +131,20 @@ internal sealed class SharpGltfModelLoader
                 var vertices = new ImportedModelVertex[sourcePositions.Count];
                 for (var index = 0; index < vertices.Length; index++) {
                     var position = Vector3.Transform(sourcePositions[index], worldMatrix) * scale;
+
                     var normal = sourceNormals is null
                         ? Vector3.Zero
                         : NormalizeOrZero(Vector3.TransformNormal(sourceNormals[index], normalMatrix));
+
                     var uv = sourceUvs is null ? Vector2.Zero : sourceUvs[index];
                     if (!IsFinite(position) || sourceNormals is not null && !IsFinite(normal) || !IsFinite(uv))
                         throw new InvalidDataException($"Mesh primitive '{nodeMesh.Name}' contains non-finite vertex data.");
+
                     vertices[index] = new ImportedModelVertex(position, normal, uv);
                 }
 
                 if (sourceNormals is null)
-                    GenerateNormals(vertices, indices, nodeMesh.Name);
+                    GenerateNormals(vertices, indices, nodeMesh.Name ?? "mesh");
 
                 var material = CreateMaterial(primitive.Material, textureCache);
                 meshes.Add(new ImportedModelMesh(nodeMesh.Name ?? "mesh", vertices, indices, material));
@@ -157,6 +163,7 @@ internal sealed class SharpGltfModelLoader
         var baseColor = material.FindChannel("BaseColor");
         var emissive = material.FindChannel("Emissive");
         var emissiveFactor = emissive?.Parameter ?? Vector4.Zero;
+
         return new ImportedModelMaterial(
             baseColor?.Parameter ?? Vector4.One,
             new Vector3(emissiveFactor.X, emissiveFactor.Y, emissiveFactor.Z),

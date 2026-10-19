@@ -6,7 +6,7 @@ namespace RCT3DViewer.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 9;
+    private const uint ExpectedAbiVersion = 11;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -30,6 +30,15 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private delegate int CopyPathDataDelegate(IntPtr context, RCTTilePathData* output, ulong capacity);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int AdvanceSimulationDelegate(IntPtr context);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int GetVehicleCountDelegate(IntPtr context, out ulong count);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int CopyVehicleDataDelegate(IntPtr context, RCTVehicleData* output, ulong capacity);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate IntPtr GetLastErrorDelegate();
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -41,6 +50,9 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private readonly CopySurfaceDataDelegate _copySurfaceData;
     private readonly GetPathCountDelegate _getPathCount;
     private readonly CopyPathDataDelegate _copyPathData;
+    private readonly AdvanceSimulationDelegate _advanceSimulation;
+    private readonly GetVehicleCountDelegate _getVehicleCount;
+    private readonly CopyVehicleDataDelegate _copyVehicleData;
     private readonly GetLastErrorDelegate _getLastError;
     private readonly ShutdownDelegate _shutdown;
     private readonly string _libraryPath;
@@ -66,6 +78,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
                 throw new InvalidOperationException("RCTTileSurfaceData must be 16 bytes to match the OpenRCT2 adapter ABI.");
             if (Marshal.SizeOf<RCTTilePathData>() != 28)
                 throw new InvalidOperationException("RCTTilePathData must be 28 bytes to match the OpenRCT2 adapter ABI.");
+            if (Marshal.SizeOf<RCTVehicleData>() != 28)
+                throw new InvalidOperationException("RCTVehicleData must be 28 bytes to match the OpenRCT2 adapter ABI.");
 
             var initialize = Bind<InitializeDelegate>("rct3d_openrct2_initialize");
             _loadPark = Bind<LoadParkDelegate>("rct3d_openrct2_load_park");
@@ -73,6 +87,9 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             _copySurfaceData = Bind<CopySurfaceDataDelegate>("rct3d_openrct2_copy_surface_data");
             _getPathCount = Bind<GetPathCountDelegate>("rct3d_openrct2_get_path_count");
             _copyPathData = Bind<CopyPathDataDelegate>("rct3d_openrct2_copy_path_data");
+            _advanceSimulation = Bind<AdvanceSimulationDelegate>("rct3d_openrct2_advance_simulation");
+            _getVehicleCount = Bind<GetVehicleCountDelegate>("rct3d_openrct2_get_vehicle_count");
+            _copyVehicleData = Bind<CopyVehicleDataDelegate>("rct3d_openrct2_copy_vehicle_data");
             _getLastError = Bind<GetLastErrorDelegate>("rct3d_openrct2_get_last_error");
             _shutdown = Bind<ShutdownDelegate>("rct3d_openrct2_shutdown");
 
@@ -124,6 +141,20 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     {
         fixed (RCTTilePathData* pointer = output)
             ThrowIfFailed(_copyPathData(_context, pointer, (ulong)output.Length));
+    }
+
+    public void AdvanceSimulation() => ThrowIfFailed(_advanceSimulation(_context));
+
+    public ulong GetVehicleCount()
+    {
+        ThrowIfFailed(_getVehicleCount(_context, out var count));
+        return count;
+    }
+
+    public void CopyVehicleData(Span<RCTVehicleData> output)
+    {
+        fixed (RCTVehicleData* pointer = output)
+            ThrowIfFailed(_copyVehicleData(_context, pointer, (ulong)output.Length));
     }
 
     private T Bind<T>(string name) where T : Delegate
@@ -203,4 +234,19 @@ public struct RCTTilePathData
     public bool IsQueue => (Flags & 2) != 0;
     public bool IsLampAddition => (AdditionFlags & 1) != 0;
     public bool AdditionIsBroken => (AdditionFlags & 2) != 0;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct RCTVehicleData
+{
+    public ushort EntityId;
+    public int X;
+    public int Y;
+    public int Z;
+    public byte Orientation;
+    public byte Pitch;
+    public byte Roll;
+    public byte Reserved;
+    public float PitchRadians;
+    public float RollRadians;
 }

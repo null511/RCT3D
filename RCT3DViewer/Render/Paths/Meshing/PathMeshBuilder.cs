@@ -1,6 +1,6 @@
 using RCT3DViewer.Interop;
 
-namespace RCT3DViewer.Render.Paths;
+namespace RCT3DViewer.Render.Paths.Meshing;
 
 internal sealed class PathMeshBuilder
 {

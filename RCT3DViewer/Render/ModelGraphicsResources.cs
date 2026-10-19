@@ -1,4 +1,5 @@
-using RCT3DViewer.Render.Paths;
+using RCT3DViewer.Render.Paths.Accessories;
+using RCT3DViewer.Render.Paths.Meshing;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
@@ -18,10 +19,15 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
     public uint IndexCount => _graphicsResources.IndexCount;
     public ModelRegionBatch[] RegionBatches { get; private set; } = Array.Empty<ModelRegionBatch>();
 
-    public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, ImportedModelMaterial material)
+    public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, ImportedModelMaterial material, bool unlit = false)
     {
         _context = context;
-        _graphicsResources = new TerrainGraphicsResources(context, renderPass, TerrainMaterialLibrary.FromModelMaterial(material), useInstances: true);
+        _graphicsResources = new TerrainGraphicsResources(
+            context,
+            renderPass,
+            TerrainMaterialLibrary.FromModelMaterial(material),
+            useInstances: true,
+            shaderNameOverride: unlit ? "vehicleCube" : "model");
     }
 
     public void CreatePipeline() => _graphicsResources.CreatePipeline();
