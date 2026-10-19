@@ -17,9 +17,11 @@ internal sealed class ViewerUiController
     private float _sunAngleDegrees = 45.0f;
     private float _displayedFps;
     private double _displayedFrameTimeMilliseconds;
+    private bool _wireframeEnabled;
 
     public float TimeOfDayHours => _timeOfDayHours;
     public float SunAngleDegrees => _sunAngleDegrees;
+    public bool WireframeEnabled => _wireframeEnabled;
     //public string? LoadedParkPath => _loadedParkPath;
     //public bool HasParkLoadError => _parkLoadError is not null;
     public bool IsParkLoading => _isParkLoading;
@@ -65,7 +67,7 @@ internal sealed class ViewerUiController
     //    _showParkLoadError = false;
     //}
 
-    public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, Action<string> loadPark, Action requestExit)
+    public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, Action<string> loadPark, Action requestExit, bool wireframeAvailable = true)
     {
         var instantFps = deltaTime > 0.0 ? (float)(1.0 / deltaTime) : 0.0f;
         var smoothing = 1.0f - MathF.Exp(-Math.Max((float)deltaTime, 0.0f) * 5.0f);
@@ -81,6 +83,11 @@ internal sealed class ViewerUiController
                     OpenParkPicker(loadPark);
                 if (ImGui.MenuItem("Exit"))
                     requestExit();
+                ImGui.EndMenu();
+            }
+
+            if (ImGui.BeginMenu("View")) {
+                ImGui.MenuItem("Wireframe", string.Empty, ref _wireframeEnabled, wireframeAvailable);
                 ImGui.EndMenu();
             }
 

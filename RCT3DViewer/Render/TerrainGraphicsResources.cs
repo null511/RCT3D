@@ -12,7 +12,8 @@ internal sealed unsafe class TerrainGraphicsResources(
     RenderPass renderPass,
     TerrainMaterialLibrary materials,
     bool useInstances = false,
-    string shaderNameOverride = "") : IDisposable
+    string shaderNameOverride = "",
+    bool createWireframePipeline = false) : IDisposable
 {
     private CommandPool _commandPool;
     private DescriptorSetLayout _descriptorSetLayout;
@@ -31,6 +32,7 @@ internal sealed unsafe class TerrainGraphicsResources(
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline Pipeline { get; private set; }
+    public Pipeline WireframePipeline { get; private set; }
     public DescriptorSet DescriptorSet { get; private set; }
     public Buffer VertexBuffer => _vertexBuffer;
     public Buffer IndexBuffer => _indexBuffer;
@@ -248,6 +250,16 @@ internal sealed unsafe class TerrainGraphicsResources(
                 throw new Exception($"Failed to create graphics pipeline. VkResult={result}, pipelineHandle={pipeline.Handle}");
 
             Pipeline = pipeline;
+
+            if (createWireframePipeline && context.SupportsWireframe) {
+                rasterizer.PolygonMode = PolygonMode.Line;
+                result = vk.CreateGraphicsPipelines(device, default, 1, in pipelineInfo, null, out var wireframePipeline);
+
+                if (result != Result.Success || wireframePipeline.Handle == 0UL)
+                    throw new Exception($"Failed to create wireframe graphics pipeline. VkResult={result}, pipelineHandle={wireframePipeline.Handle}");
+
+                WireframePipeline = wireframePipeline;
+            }
         }
 
         vk.DestroyShaderModule(device, vertModule, null);
@@ -651,6 +663,9 @@ internal sealed unsafe class TerrainGraphicsResources(
         if (Pipeline.Handle != 0)
             vk.DestroyPipeline(device, Pipeline, null);
 
+        if (WireframePipeline.Handle != 0)
+            vk.DestroyPipeline(device, WireframePipeline, null);
+
         if (PipelineLayout.Handle != 0)
             vk.DestroyPipelineLayout(device, PipelineLayout, null);
 
@@ -660,6 +675,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             vk.DestroyDescriptorSetLayout(device, _descriptorSetLayout, null);
 
         Pipeline = default;
+        WireframePipeline = default;
         PipelineLayout = default;
         _descriptorSetLayout = default;
     }

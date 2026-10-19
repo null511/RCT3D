@@ -19,6 +19,7 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
     public Queue GraphicsQueue { get; private set; }
     public uint GraphicsQueueFamilyIndex { get; private set; }
     public KhrSwapchain? SwapchainExtension { get; private set; }
+    public bool SupportsWireframe { get; private set; }
 
 
     private VulkanDeviceContext(Vk vk)
@@ -159,9 +160,11 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
         try {
             var swapchainExtension = (byte*)swapchainExtensionPointer;
             Api.GetPhysicalDeviceFeatures(PhysicalDevice, out PhysicalDeviceFeatures supportedFeatures);
+            SupportsWireframe = supportedFeatures.FillModeNonSolid;
 
             PhysicalDeviceFeatures deviceFeatures = new() {
                 SamplerAnisotropy = supportedFeatures.SamplerAnisotropy,
+                FillModeNonSolid = supportedFeatures.FillModeNonSolid,
             };
 
             DeviceCreateInfo deviceCreateInfo = new() {

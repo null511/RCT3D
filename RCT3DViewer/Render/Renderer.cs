@@ -139,9 +139,9 @@ public sealed class Renderer : IDisposable
         _swapchainResources.CreateImageViews();
         _swapchainResources.CreateDepthResources();
         _swapchainResources.CreateRenderPass();
-        _terrainGraphicsResources = new TerrainGraphicsResources(_deviceContext, _renderPass, _terrainMaterials!);
+        _terrainGraphicsResources = new TerrainGraphicsResources(_deviceContext, _renderPass, _terrainMaterials!, createWireframePipeline: true);
         _terrainGraphicsResources.CreatePipeline();
-        _pathGraphicsResources = new TerrainGraphicsResources(_deviceContext, _renderPass, _pathMaterials!.TextureLibrary);
+        _pathGraphicsResources = new TerrainGraphicsResources(_deviceContext, _renderPass, _pathMaterials!.TextureLibrary, createWireframePipeline: true);
         _pathGraphicsResources.CreatePipeline();
         _waterGraphicsResources = new WaterGraphicsResources(_deviceContext, _renderPass);
         _waterGraphicsResources.CreatePipeline();
@@ -457,7 +457,7 @@ public sealed class Renderer : IDisposable
         UpdateParkLoad();
         UpdateVehicleCubeInstances();
 
-        _ui.BuildFrameUi(deltaTime, _activeFrameTimeMilliseconds, LoadPark, () => _exitRequested = true);
+        _ui.BuildFrameUi(deltaTime, _activeFrameTimeMilliseconds, LoadPark, () => _exitRequested = true, _deviceContext!.SupportsWireframe);
         _vk.ResetCommandBuffer(cmd, 0);
 
         CommandBufferBeginInfo beginInfo = new() {
@@ -488,7 +488,8 @@ public sealed class Renderer : IDisposable
         };
 
         _vk.CmdBeginRenderPass(cmd, in renderPassInfo, SubpassContents.Inline);
-        _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, _graphicsPipeline);
+        var terrainPipeline = _ui.WireframeEnabled ? _terrainGraphicsResources!.WireframePipeline : _graphicsPipeline;
+        _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, terrainPipeline);
 
         Viewport viewport = new() {
             X = 0.0f,
@@ -549,7 +550,8 @@ public sealed class Renderer : IDisposable
 
         if (_pathMesh is { Vertices.Length: > 0, Indices.Length: > 0 } pathMesh
             && _pathGraphicsResources is { IndexCount: > 0 } pathResources) {
-            _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, pathResources.Pipeline);
+            var pathPipeline = _ui.WireframeEnabled ? pathResources.WireframePipeline : pathResources.Pipeline;
+            _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, pathPipeline);
             var pathDescriptorSet = pathResources.DescriptorSet;
             _vk.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, pathResources.PipelineLayout, 0, 1, in pathDescriptorSet, 0, null);
             _vk.CmdPushConstants(cmd, pathResources.PipelineLayout,
