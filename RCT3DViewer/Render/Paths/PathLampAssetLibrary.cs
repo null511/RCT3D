@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace RCT3DViewer.Render;
+namespace RCT3DViewer.Render.Paths;
 
 internal sealed class PathLampAssetLibrary
 {
@@ -21,7 +21,7 @@ internal sealed class PathLampAssetLibrary
     public static PathLampAssetLibrary Load(string assetDirectory)
     {
         var rootDirectory = Path.GetFullPath(assetDirectory) + Path.DirectorySeparatorChar;
-        var manifestPath = Path.Combine(assetDirectory, "path_lamps.json");
+        var manifestPath = Path.Combine(assetDirectory, "Path", "lamp1.json");
         using var manifestStream = File.OpenRead(manifestPath);
         using var manifest = JsonDocument.Parse(manifestStream);
         var root = manifest.RootElement;

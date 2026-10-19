@@ -6,7 +6,7 @@ namespace RCT3DViewer.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 8;
+    private const uint ExpectedAbiVersion = 9;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -64,6 +64,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
                 throw new InvalidOperationException($"Unsupported OpenRCT2 adapter ABI version {version}; expected {ExpectedAbiVersion}. Loaded library: '{_libraryPath}'.");
             if (Marshal.SizeOf<RCTTileSurfaceData>() != 16)
                 throw new InvalidOperationException("RCTTileSurfaceData must be 16 bytes to match the OpenRCT2 adapter ABI.");
+            if (Marshal.SizeOf<RCTTilePathData>() != 28)
+                throw new InvalidOperationException("RCTTilePathData must be 28 bytes to match the OpenRCT2 adapter ABI.");
 
             var initialize = Bind<InitializeDelegate>("rct3d_openrct2_initialize");
             _loadPark = Bind<LoadParkDelegate>("rct3d_openrct2_load_park");
@@ -174,6 +176,12 @@ public struct RCTTileSurfaceData
     public byte Reserved1;
 }
 
+public enum RCTPathSupportOrientation : byte
+{
+    NorthEastSouthWest = 0,
+    NorthWestSouthEast = 1,
+}
+
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct RCTTilePathData
 {
@@ -187,6 +195,7 @@ public struct RCTTilePathData
     public byte Corners;
     public byte Flags;
     public byte RailingsSupportType;
+    public RCTPathSupportOrientation SupportOrientation;
     public uint AdditionIdHash;
     public byte AdditionFlags;
 

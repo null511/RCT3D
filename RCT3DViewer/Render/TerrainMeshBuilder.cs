@@ -9,6 +9,8 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
     private readonly List<uint> _indices = new();
     private readonly List<Vector3> _waterVertices = new();
     private readonly List<uint> _waterIndices = new();
+    private readonly List<RenderRegionIndexRange> _regions = new();
+    private readonly List<RenderRegionIndexRange> _waterRegions = new();
 
     private int _skirtSections;
     private int _skirtTriangles;
@@ -21,6 +23,8 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         _indices.Clear();
         _waterVertices.Clear();
         _waterIndices.Clear();
+        _regions.Clear();
+        _waterRegions.Clear();
 
         _skirtSections = 0;
         _skirtTriangles = 0;
@@ -29,82 +33,94 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         const float baseHeightScale = 0.75f;
         const float cornerHeightScale = 1.5f;
 
-        for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++) {
-            var surface = surfaces[y * width + x];
+        foreach (var region in RenderRegionLayout.Enumerate(width, height)) {
+            var tileBounds = RenderRegionLayout.GetTileBounds(region, width, height);
+            var firstVertex = _vertices.Count;
+            var firstIndex = _indices.Count;
+            var firstWaterVertex = _waterVertices.Count;
+            var firstWaterIndex = _waterIndices.Count;
 
-            if (surface.WaterHeight > 0) {
-                AddWaterTile(x, y, surface.WaterHeight * (baseHeightScale / 8.0f), tileSize);
+            for (var y = tileBounds.TileY; y < tileBounds.TileY + tileBounds.Height; y++)
+            for (var x = tileBounds.TileX; x < tileBounds.TileX + tileBounds.Width; x++) {
+                var surface = surfaces[y * width + x];
+
+                if (surface.WaterHeight > 0)
+                    AddWaterTile(x, y, surface.WaterHeight * (baseHeightScale / 8.0f), tileSize);
+
+                var baseHeight = surface.BaseZ * baseHeightScale;
+                var north = baseHeight + surface.NorthCornerHeight * cornerHeightScale;
+                var east = baseHeight + surface.EastCornerHeight * cornerHeightScale;
+                var south = baseHeight + surface.SouthCornerHeight * cornerHeightScale;
+                var west = baseHeight + surface.WestCornerHeight * cornerHeightScale;
+
+                // OpenRCT2's corner flags map North/East/South/West to the tile's
+                // northeast/southeast/southwest/northwest vertices, respectively.
+                var cNorth = new Vector3((x + 1) * tileSize, north, (y + 1) * tileSize);
+                var cEast = new Vector3((x + 1) * tileSize, east, y * tileSize);
+                var cSouth = new Vector3(x * tileSize, south, y * tileSize);
+                var cWest = new Vector3(x * tileSize, west, (y + 1) * tileSize);
+
+                // Keep both triangles counter-clockwise from above (positive Y normal).
+                var normal1 = Vector3.Normalize(Vector3.Cross(cEast - cNorth, cWest - cNorth));
+                var normal2 = Vector3.Normalize(Vector3.Cross(cSouth - cEast, cWest - cEast));
+                var materialId = GetMaterialLayer(surface, x, y);
+                var baseIdx = (uint)_vertices.Count;
+
+                _vertices.Add(new TerrainVertex(cNorth, normal1, new Vector2(x + 1, y + 1), materialId));
+                _vertices.Add(new TerrainVertex(cEast, normal1, new Vector2(x + 1, y), materialId));
+                _vertices.Add(new TerrainVertex(cWest, normal1, new Vector2(x, y + 1), materialId));
+                _vertices.Add(new TerrainVertex(cSouth, normal2, new Vector2(x, y), materialId));
+
+                _indices.Add(baseIdx);
+                _indices.Add(baseIdx + 1);
+                _indices.Add(baseIdx + 2);
+                _indices.Add(baseIdx + 1);
+                _indices.Add(baseIdx + 3);
+                _indices.Add(baseIdx + 2);
+
+                var eastEdgeNormal = Vector3.UnitX;
+
+                if (x + 1 < width) {
+                    var eastNeighbor = surfaces[y * width + x + 1];
+                    var neighborBase = eastNeighbor.BaseZ * baseHeightScale;
+                    var neighborSouth = neighborBase + eastNeighbor.SouthCornerHeight * cornerHeightScale;
+                    var neighborWest = neighborBase + eastNeighbor.WestCornerHeight * cornerHeightScale;
+
+                    AddSkirtEdge(cEast, east, cNorth, north, neighborSouth, neighborWest,
+                        materialId, GetMaterialLayer(eastNeighbor, x + 1, y), eastEdgeNormal);
+                }
+                else {
+                    AddSkirtEdge(cEast, east, cNorth, north, skirtFloor, skirtFloor,
+                        materialId, materialId, eastEdgeNormal);
+                }
+
+                var northEdgeNormal = Vector3.UnitZ;
+
+                if (y + 1 < height) {
+                    var northNeighbor = surfaces[(y + 1) * width + x];
+                    var neighborBase = northNeighbor.BaseZ * baseHeightScale;
+                    var neighborSouth = neighborBase + northNeighbor.SouthCornerHeight * cornerHeightScale;
+                    var neighborEast = neighborBase + northNeighbor.EastCornerHeight * cornerHeightScale;
+
+                    AddSkirtEdge(cWest, west, cNorth, north, neighborSouth, neighborEast,
+                        materialId, GetMaterialLayer(northNeighbor, x, y + 1), northEdgeNormal);
+                }
+                else {
+                    AddSkirtEdge(cWest, west, cNorth, north, skirtFloor, skirtFloor,
+                        materialId, materialId, northEdgeNormal);
+                }
+
+                if (x == 0)
+                    AddSkirtEdge(cSouth, south, cWest, west, skirtFloor, skirtFloor, materialId, materialId, -Vector3.UnitX);
+
+                if (y == 0)
+                    AddSkirtEdge(cSouth, south, cEast, east, skirtFloor, skirtFloor, materialId, materialId, -Vector3.UnitZ);
             }
 
-            var baseHeight = surface.BaseZ * baseHeightScale;
-            var north = baseHeight + surface.NorthCornerHeight * cornerHeightScale;
-            var east = baseHeight + surface.EastCornerHeight * cornerHeightScale;
-            var south = baseHeight + surface.SouthCornerHeight * cornerHeightScale;
-            var west = baseHeight + surface.WestCornerHeight * cornerHeightScale;
-
-            // OpenRCT2's corner flags map North/East/South/West to the tile's
-            // northeast/southeast/southwest/northwest vertices, respectively.
-            var cNorth = new Vector3((x + 1) * tileSize, north, (y + 1) * tileSize);
-            var cEast = new Vector3((x + 1) * tileSize, east, y * tileSize);
-            var cSouth = new Vector3(x * tileSize, south, y * tileSize);
-            var cWest = new Vector3(x * tileSize, west, (y + 1) * tileSize);
-
-            // Keep both triangles counter-clockwise from above (positive Y normal).
-            var normal1 = Vector3.Normalize(Vector3.Cross(cEast - cNorth, cWest - cNorth));
-            var normal2 = Vector3.Normalize(Vector3.Cross(cSouth - cEast, cWest - cEast));
-            var materialId = GetMaterialLayer(surface, x, y);
-            var baseIdx = (uint)_vertices.Count;
-
-            _vertices.Add(new TerrainVertex(cNorth, normal1, new Vector2(x + 1, y + 1), materialId));
-            _vertices.Add(new TerrainVertex(cEast, normal1, new Vector2(x + 1, y), materialId));
-            _vertices.Add(new TerrainVertex(cWest, normal1, new Vector2(x, y + 1), materialId));
-            _vertices.Add(new TerrainVertex(cSouth, normal2, new Vector2(x, y), materialId));
-
-            _indices.Add(baseIdx);
-            _indices.Add(baseIdx + 1);
-            _indices.Add(baseIdx + 2);
-            _indices.Add(baseIdx + 1);
-            _indices.Add(baseIdx + 3);
-            _indices.Add(baseIdx + 2);
-
-            var eastEdgeNormal = Vector3.UnitX;
-
-            if (x + 1 < width) {
-                var eastNeighbor = surfaces[y * width + x + 1];
-                var neighborBase = eastNeighbor.BaseZ * baseHeightScale;
-                var neighborSouth = neighborBase + eastNeighbor.SouthCornerHeight * cornerHeightScale;
-                var neighborWest = neighborBase + eastNeighbor.WestCornerHeight * cornerHeightScale;
-
-                AddSkirtEdge(cEast, east, cNorth, north, neighborSouth, neighborWest,
-                    materialId, GetMaterialLayer(eastNeighbor, x + 1, y), eastEdgeNormal);
-            }
-            else {
-                AddSkirtEdge(cEast, east, cNorth, north, skirtFloor, skirtFloor,
-                    materialId, materialId, eastEdgeNormal);
-            }
-
-            var northEdgeNormal = Vector3.UnitZ;
-
-            if (y + 1 < height) {
-                var northNeighbor = surfaces[(y + 1) * width + x];
-                var neighborBase = northNeighbor.BaseZ * baseHeightScale;
-                var neighborSouth = neighborBase + northNeighbor.SouthCornerHeight * cornerHeightScale;
-                var neighborEast = neighborBase + northNeighbor.EastCornerHeight * cornerHeightScale;
-
-                AddSkirtEdge(cWest, west, cNorth, north, neighborSouth, neighborEast,
-                    materialId, GetMaterialLayer(northNeighbor, x, y + 1), northEdgeNormal);
-            }
-            else {
-                AddSkirtEdge(cWest, west, cNorth, north, skirtFloor, skirtFloor,
-                    materialId, materialId, northEdgeNormal);
-            }
-
-            if (x == 0)
-                AddSkirtEdge(cSouth, south, cWest, west, skirtFloor, skirtFloor, materialId, materialId, -Vector3.UnitX);
-
-            if (y == 0)
-                AddSkirtEdge(cSouth, south, cEast, east, skirtFloor, skirtFloor, materialId, materialId, -Vector3.UnitZ);
+            if (_indices.Count > firstIndex)
+                _regions.Add(RenderRegionMeshRanges.Create(region, _vertices, _indices, firstVertex, firstIndex));
+            if (_waterIndices.Count > firstWaterIndex)
+                _waterRegions.Add(RenderRegionMeshRanges.Create(region, _waterVertices, _waterIndices, firstWaterVertex, firstWaterIndex));
         }
 
         return new TerrainMeshBuildData(
@@ -113,10 +129,12 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                 _indices.ToArray(),
                 _skirtSections,
                 _skirtTriangles,
-                _flatEdgesSkipped),
+                _flatEdgesSkipped,
+                _regions.ToArray()),
             new WaterMeshData(
                 _waterVertices.ToArray(),
-                _waterIndices.ToArray()));
+                _waterIndices.ToArray(),
+                _waterRegions.ToArray()));
     }
 
     private uint GetMaterialLayer(RCTTileSurfaceData surface, int x, int y)
@@ -236,8 +254,9 @@ internal sealed record TerrainMeshData(
     uint[] Indices,
     int SkirtSections,
     int SkirtTriangles,
-    int FlatEdgesSkipped);
+    int FlatEdgesSkipped,
+    RenderRegionIndexRange[] Regions);
 
 internal sealed record TerrainMeshBuildData(TerrainMeshData Terrain, WaterMeshData Water);
 
-internal sealed record WaterMeshData(Vector3[] Vertices, uint[] Indices);
+internal sealed record WaterMeshData(Vector3[] Vertices, uint[] Indices, RenderRegionIndexRange[] Regions);

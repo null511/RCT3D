@@ -1,10 +1,27 @@
 <Solution>
+  <Configurations>
+    <BuildType Name="Debug" />
+    <BuildType Name="Release" />
+    <BuildType Name="ReleaseLTCG" />
+    <Platform Name="Any CPU" />
+    <Platform Name="arm64" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
   <Folder Name="/Solution Items/" />
   <Project Path="AssetExtractor/AssetExtractor.pyproj" Type="888888a0-9f3d-457c-b088-3a5042f75d52" Id="90da371b-608c-41b5-ae5d-656d8d32f35b">
+    <BuildType Solution="ReleaseLTCG|*" Project="Release" />
+    <Platform Project="AnyCPU" />
     <Build Project="false" />
+  </Project>
+  <Project Path="OpenRCT2/src/openrct2/libopenrct2.vcxproj" Id="d24d94f6-2a74-480c-b512-629c306ce92f">
+    <Build Solution="Debug|Any CPU" Project="false" />
   </Project>
   <Project Path="RCT3DViewer/RCT3DViewer.csproj">
     <BuildDependency Project="ShaderCompiler/ShaderCompiler.csproj" />
+    <BuildType Solution="ReleaseLTCG|*" Project="Release" />
   </Project>
-  <Project Path="ShaderCompiler/ShaderCompiler.csproj" />
+  <Project Path="ShaderCompiler/ShaderCompiler.csproj">
+    <BuildType Solution="ReleaseLTCG|*" Project="Release" />
+  </Project>
 </Solution>

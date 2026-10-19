@@ -1,6 +1,6 @@
 {
   "defaultLamp": {
-    "model": "street_lamp.glb",
+    "model": "Path/lamp1.glb",
     "targetHeight": 2.15625
   },
   "lamps": []

@@ -1,3 +1,4 @@
+using RCT3DViewer.Render.Paths;
 using RCT3DViewer.Simulation;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
@@ -326,7 +327,8 @@ public sealed class Renderer : IDisposable
                     try {
                         resources.CreatePipeline();
                         resources.CreateTextureResources(_commandPool);
-                        resources.UploadMesh(batch.MeshData);
+                        resources.UploadMesh(batch.Mesh);
+                        resources.UploadInstances(batch.Regions);
                         _pathLampGraphicsResources.Add((batch, resources));
                     }
                     catch {
@@ -467,6 +469,7 @@ public sealed class Renderer : IDisposable
         var aspect = (float)_swapchainExtent.Width / _swapchainExtent.Height;
         // Row-vector convention in shader: clip = position * viewProjection
         var viewProjection = _camera.GetViewMatrix() * _camera.GetProjectionMatrix(aspect);
+        var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
         var timeAngle = (_ui.TimeOfDayHours - 6.0f) * (MathF.PI / 12.0f);
         var sunElevation = MathF.Sin(timeAngle);
         var horizontalLength = MathF.Cos(timeAngle);
@@ -487,7 +490,10 @@ public sealed class Renderer : IDisposable
             var vBuf = _vertexBuffer;
             _vk.CmdBindVertexBuffers(cmd, 0, 1, in vBuf, in offset);
             _vk.CmdBindIndexBuffer(cmd, _indexBuffer, 0, IndexType.Uint32);
-            _vk.CmdDrawIndexed(cmd, (uint)terrainMesh.Indices.Length, 1, 0, 0, 0);
+            foreach (var region in terrainMesh.Regions) {
+                if (viewFrustum.Intersects(region.Bounds))
+                    _vk.CmdDrawIndexed(cmd, region.IndexCount, 1, region.FirstIndex, 0, 0);
+            }
         }
 
         if (_pathMesh is { Vertices.Length: > 0, Indices.Length: > 0 } pathMesh
@@ -501,22 +507,39 @@ public sealed class Renderer : IDisposable
             var pathVertexBuffer = pathResources.VertexBuffer;
             _vk.CmdBindVertexBuffers(cmd, 0, 1, in pathVertexBuffer, in offset);
             _vk.CmdBindIndexBuffer(cmd, pathResources.IndexBuffer, 0, IndexType.Uint32);
-            _vk.CmdDrawIndexed(cmd, pathResources.IndexCount, 1, 0, 0, 0);
+            foreach (var region in pathMesh.Regions) {
+                if (viewFrustum.Intersects(region.Bounds))
+                    _vk.CmdDrawIndexed(cmd, region.IndexCount, 1, region.FirstIndex, 0, 0);
+            }
         }
 
         if (_terrainMesh is not null) {
             foreach (var (_, resources) in _pathLampGraphicsResources)
-                resources.Draw(cmd, ubo);
+            foreach (var region in resources.RegionBatches) {
+                if (viewFrustum.Intersects(region.Bounds))
+                    resources.DrawInstanced(cmd, ubo, region);
+            }
         }
 
-        if (_waterMesh is not null && _waterGraphicsResources is { IndexCount: > 0 } waterResources) {
+        if (_waterMesh is { Indices.Length: > 0 } waterMesh && _waterGraphicsResources is { IndexCount: > 0 } waterResources) {
+            var visibleWaterRegions = new List<RenderRegionIndexRange>();
+            foreach (var region in waterMesh.Regions) {
+                if (viewFrustum.Intersects(region.Bounds))
+                    visibleWaterRegions.Add(region);
+            }
+
+            visibleWaterRegions.Sort((left, right) =>
+                Vector3.DistanceSquared(_camera.Position, right.Bounds.Center)
+                    .CompareTo(Vector3.DistanceSquared(_camera.Position, left.Bounds.Center)));
+
             _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, waterResources.Pipeline);
             _vk.CmdPushConstants(cmd, waterResources.PipelineLayout, ShaderStageFlags.VertexBit, 0,
                 (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
             var waterVertexBuffer = waterResources.VertexBuffer;
             _vk.CmdBindVertexBuffers(cmd, 0, 1, in waterVertexBuffer, in offset);
             _vk.CmdBindIndexBuffer(cmd, waterResources.IndexBuffer, 0, IndexType.Uint32);
-            _vk.CmdDrawIndexed(cmd, waterResources.IndexCount, 1, 0, 0, 0);
+            foreach (var region in visibleWaterRegions)
+                _vk.CmdDrawIndexed(cmd, region.IndexCount, 1, region.FirstIndex, 0, 0);
         }
 
         _imguiRenderer?.Render(cmd, imageIndex);
@@ -634,4 +657,5 @@ public sealed class Renderer : IDisposable
             resources.Dispose();
         _pathLampGraphicsResources.Clear();
     }
+
 }

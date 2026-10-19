@@ -1,3 +1,4 @@
+using RCT3DViewer.Render.Paths;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
@@ -13,12 +14,14 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
     public DescriptorSet DescriptorSet => _graphicsResources.DescriptorSet;
     public Buffer VertexBuffer => _graphicsResources.VertexBuffer;
     public Buffer IndexBuffer => _graphicsResources.IndexBuffer;
+    public Buffer InstanceBuffer => _graphicsResources.InstanceBuffer;
     public uint IndexCount => _graphicsResources.IndexCount;
+    public ModelRegionBatch[] RegionBatches { get; private set; } = Array.Empty<ModelRegionBatch>();
 
     public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, ImportedModelMaterial material)
     {
         _context = context;
-        _graphicsResources = new TerrainGraphicsResources(context, renderPass, TerrainMaterialLibrary.FromModelMaterial(material));
+        _graphicsResources = new TerrainGraphicsResources(context, renderPass, TerrainMaterialLibrary.FromModelMaterial(material), useInstances: true);
     }
 
     public void CreatePipeline() => _graphicsResources.CreatePipeline();
@@ -38,9 +41,29 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
 
     public void UploadMesh(PathMeshData mesh) => _graphicsResources.UploadMesh(mesh);
 
-    public void Draw(CommandBuffer commandBuffer, UniformBufferObject uniforms)
+    public void UploadInstances(ModelRegionBatch[] regions)
     {
-        if (IndexCount == 0)
+        var totalInstances = 0;
+        foreach (var region in regions)
+            totalInstances = checked(totalInstances + region.Instances.Length);
+
+        var instances = new ModelInstance[totalInstances];
+        var uploadedRegions = new ModelRegionBatch[regions.Length];
+        var firstInstance = 0;
+        for (var i = 0; i < regions.Length; i++) {
+            var region = regions[i];
+            region.Instances.CopyTo(instances, firstInstance);
+            uploadedRegions[i] = region with { FirstInstance = checked((uint)firstInstance) };
+            firstInstance += region.Instances.Length;
+        }
+
+        _graphicsResources.UploadInstances(instances);
+        RegionBatches = uploadedRegions;
+    }
+
+    public void DrawInstanced(CommandBuffer commandBuffer, UniformBufferObject uniforms, ModelRegionBatch region)
+    {
+        if (IndexCount == 0 || region.InstanceCount == 0)
             return;
 
         var vk = _context.Api;
@@ -51,11 +74,15 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
         vk.CmdPushConstants(commandBuffer, PipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
             0, (uint)sizeof(UniformBufferObject), constants);
 
-        ulong offset = 0;
-        var vertexBuffer = VertexBuffer;
-        vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in vertexBuffer, in offset);
+        var vertexBuffers = stackalloc Buffer[2];
+        vertexBuffers[0] = VertexBuffer;
+        vertexBuffers[1] = InstanceBuffer;
+        var offsets = stackalloc ulong[2];
+        offsets[0] = 0;
+        offsets[1] = 0;
+        vk.CmdBindVertexBuffers(commandBuffer, 0, 2, vertexBuffers, offsets);
         vk.CmdBindIndexBuffer(commandBuffer, IndexBuffer, 0, IndexType.Uint32);
-        vk.CmdDrawIndexed(commandBuffer, IndexCount, 1, 0, 0, 0);
+        vk.CmdDrawIndexed(commandBuffer, IndexCount, region.InstanceCount, 0, 0, region.FirstInstance);
     }
 
     public void ClearMesh() => _graphicsResources.ClearMesh();

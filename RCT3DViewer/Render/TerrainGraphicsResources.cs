@@ -1,10 +1,12 @@
+using RCT3DViewer.Render.Paths;
 using Silk.NET.Vulkan;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace RCT3DViewer.Render;
 
-internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, TerrainMaterialLibrary materials) : IDisposable
+internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, TerrainMaterialLibrary materials, bool useInstances = false) : IDisposable
 {
     private CommandPool _commandPool;
     private DescriptorSetLayout _descriptorSetLayout;
@@ -17,12 +19,15 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
     private DeviceMemory _vertexBufferMemory;
     private Buffer _indexBuffer;
     private DeviceMemory _indexBufferMemory;
+    private Buffer _instanceBuffer;
+    private DeviceMemory _instanceBufferMemory;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline Pipeline { get; private set; }
     public DescriptorSet DescriptorSet { get; private set; }
     public Buffer VertexBuffer => _vertexBuffer;
     public Buffer IndexBuffer => _indexBuffer;
+    public Buffer InstanceBuffer => _instanceBuffer;
     public uint IndexCount { get; private set; }
 
 
@@ -30,8 +35,9 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
     {
         var vk = context.Api;
         var device = context.LogicalDevice;
-        var vertPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", "terrain.vert.spv");
-        var fragPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", "terrain.frag.spv");
+        var shaderName = useInstances ? "model" : "terrain";
+        var vertPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", $"{shaderName}.vert.spv");
+        var fragPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", $"{shaderName}.frag.spv");
 
         byte[] vertShaderCode;
         byte[] fragShaderCode;
@@ -74,24 +80,44 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
 
         var shaderStages = new[] { vertStageInfo, fragStageInfo };
 
-        var bindingDescription = new VertexInputBindingDescription {
+        var bindingDescriptions = new List<VertexInputBindingDescription> {
+            new() {
             Binding = 0,
             Stride = (uint)Marshal.SizeOf<TerrainVertex>(),
             InputRate = VertexInputRate.Vertex
+            }
         };
 
-        var attributeDescriptions = new VertexInputAttributeDescription[] {
+        var attributeDescriptions = new List<VertexInputAttributeDescription> {
             new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Position)) },
             new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Normal)) },
             new() { Binding = 0, Location = 2, Format = Format.R32G32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.TextureCoordinate)) },
             new() { Binding = 0, Location = 3, Format = Format.R32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.MaterialId)) }
         };
 
+        if (useInstances) {
+            var instanceStride = (uint)Marshal.SizeOf<ModelInstance>();
+            var matrixOffset = checked((uint)Marshal.OffsetOf<ModelInstance>(nameof(ModelInstance.Transform)).ToInt64());
+            bindingDescriptions.Add(new VertexInputBindingDescription {
+                Binding = 1,
+                Stride = instanceStride,
+                InputRate = VertexInputRate.Instance
+            });
+
+            for (uint row = 0; row < 4; row++) {
+                attributeDescriptions.Add(new VertexInputAttributeDescription {
+                    Binding = 1,
+                    Location = 4 + row,
+                    Format = Format.R32G32B32A32Sfloat,
+                    Offset = matrixOffset + row * (uint)Marshal.SizeOf<Vector4>()
+                });
+            }
+        }
+
         var vertexInputInfo = new PipelineVertexInputStateCreateInfo {
             SType = StructureType.PipelineVertexInputStateCreateInfo,
-            VertexBindingDescriptionCount = 1,
-            PVertexBindingDescriptions = &bindingDescription,
-            VertexAttributeDescriptionCount = (uint)attributeDescriptions.Length,
+            VertexBindingDescriptionCount = (uint)bindingDescriptions.Count,
+            VertexAttributeDescriptionCount = (uint)attributeDescriptions.Count,
         };
 
         var inputAssembly = new PipelineInputAssemblyStateCreateInfo {
@@ -198,9 +224,13 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
             PDynamicState = &dynamicState
         };
 
+        var bindingDescriptionArray = bindingDescriptions.ToArray();
+        var attributeDescriptionArray = attributeDescriptions.ToArray();
         fixed (PipelineShaderStageCreateInfo* stagePointer = shaderStages)
-        fixed (VertexInputAttributeDescription* attributePointer = attributeDescriptions)
+        fixed (VertexInputBindingDescription* bindingPointer = bindingDescriptionArray)
+        fixed (VertexInputAttributeDescription* attributePointer = attributeDescriptionArray)
         fixed (DynamicState* dynamicStatesPointer = dynamicStates) {
+            vertexInputInfo.PVertexBindingDescriptions = bindingPointer;
             vertexInputInfo.PVertexAttributeDescriptions = attributePointer;
             dynamicState.PDynamicStates = dynamicStatesPointer;
             pipelineInfo.PStages = stagePointer;
@@ -382,6 +412,35 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         UploadMesh(mesh.Vertices, mesh.Indices);
     }
 
+    public void UploadInstances(ModelInstance[] instances)
+    {
+        if (!useInstances)
+            throw new InvalidOperationException("Instance data can only be uploaded to an instanced model pipeline.");
+
+        ClearInstanceBuffer();
+        if (instances.Length == 0)
+            return;
+
+        var device = context.LogicalDevice;
+        var size = checked((ulong)Marshal.SizeOf<ModelInstance>() * (ulong)instances.Length);
+        AllocateBuffer(size, BufferUsageFlags.VertexBufferBit,
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
+            out _instanceBuffer, out _instanceBufferMemory);
+
+        try {
+            void* instanceData;
+            if (context.Api.MapMemory(device, _instanceBufferMemory, 0, size, 0, &instanceData) != Result.Success)
+                throw new InvalidOperationException("Failed to map model instance buffer memory.");
+
+            instances.AsSpan().CopyTo(new Span<ModelInstance>(instanceData, instances.Length));
+            context.Api.UnmapMemory(device, _instanceBufferMemory);
+        }
+        catch {
+            ClearInstanceBuffer();
+            throw;
+        }
+    }
+
     private void UploadMesh(TerrainVertex[] vertices, uint[] indices)
     {
         if (vertices.Length == 0 || indices.Length == 0) {
@@ -435,6 +494,22 @@ internal sealed unsafe class TerrainGraphicsResources(VulkanDeviceContext contex
         _indexBuffer = default;
         _indexBufferMemory = default;
         IndexCount = 0;
+        ClearInstanceBuffer();
+    }
+
+    private void ClearInstanceBuffer()
+    {
+        var vk = context.Api;
+        var device = context.LogicalDevice;
+
+        if (_instanceBuffer.Handle != 0)
+            vk.DestroyBuffer(device, _instanceBuffer, null);
+
+        if (_instanceBufferMemory.Handle != 0)
+            vk.FreeMemory(device, _instanceBufferMemory, null);
+
+        _instanceBuffer = default;
+        _instanceBufferMemory = default;
     }
 
     private void UploadTerrainTexture(Buffer stagingBuffer, BufferImageCopy[] regions)
