@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace RCT3DViewer.Render.Paths;
+namespace RCT3DViewer.Render.Paths.Meshing;
 
 public sealed class PathMaterialLibrary
 {

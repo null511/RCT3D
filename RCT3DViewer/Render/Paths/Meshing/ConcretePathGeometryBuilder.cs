@@ -1,7 +1,7 @@
 using RCT3DViewer.Interop;
 using System.Numerics;
 
-namespace RCT3DViewer.Render.Paths;
+namespace RCT3DViewer.Render.Paths.Meshing;
 
 internal sealed class ConcretePathGeometryBuilder(PathMaterialLibrary materials) : PathTypeGeometryBuilder(materials)
 {

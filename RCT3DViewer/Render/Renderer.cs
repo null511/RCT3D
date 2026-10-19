@@ -1,4 +1,4 @@
-using RCT3DViewer.Render.Paths.Accessories;
+using RCT3DViewer.Render.Paths;
 using RCT3DViewer.Render.Paths.Meshing;
 using RCT3DViewer.Simulation;
 using Silk.NET.Maths;
@@ -42,9 +42,9 @@ public sealed class Renderer : IDisposable
     private Buffer _indexBuffer => _terrainGraphicsResources?.IndexBuffer ?? default;
     private TerrainMaterialLibrary? _terrainMaterials;
     private PathMaterialLibrary? _pathMaterials;
-    private PathLampAssetLibrary? _pathLampAssets;
-    private PathLampMeshBuilder? _pathLampMeshBuilder;
-    private readonly List<(PathLampBatch Batch, ModelGraphicsResources Resources)> _pathLampGraphicsResources = new();
+    private PathAccessoryAssetLibrary? _pathAccessoryAssets;
+    private PathAccessoryMeshBuilder? _pathAccessoryMeshBuilder;
+    private readonly List<(PathAccessoryBatch Batch, ModelGraphicsResources Resources)> _pathAccessoryGraphicsResources = new();
     private CommandPool _commandPool;
     private CommandBuffer[] _commandBuffers = Array.Empty<CommandBuffer>();
 
@@ -120,10 +120,10 @@ public sealed class Renderer : IDisposable
             _simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path);
             _terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures", "Terrain"));
             _pathMaterials = PathMaterialLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures", "Paths"));
-            _pathLampAssets = PathLampAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
+            _pathAccessoryAssets = PathAccessoryAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
             _terrainMeshBuilder = new TerrainMeshBuilder(_terrainMaterials);
             _pathMeshBuilder = new PathMeshBuilder(_pathMaterials);
-            _pathLampMeshBuilder = new PathLampMeshBuilder(_pathLampAssets);
+            _pathAccessoryMeshBuilder = new PathAccessoryMeshBuilder(_pathAccessoryAssets);
         }
         catch (Exception ex) {
             _simulation?.Dispose();
@@ -296,15 +296,15 @@ public sealed class Renderer : IDisposable
         try {
             var snapshot = await simulation.LoadParkAsync(parkPath, progress => Volatile.Write(ref _parkLoadProgress, progress));
 
-            Volatile.Write(ref _parkLoadProgress, "Generating terrain, water, path, and lamp meshes...");
+            Volatile.Write(ref _parkLoadProgress, "Generating terrain, water, path, and accessory meshes...");
             var meshData = await Task.Run(() => (
                 Terrain: _terrainMeshBuilder!.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height, TerrainSkirtFloor),
                 Paths: _pathMeshBuilder!.Build(snapshot.PathData, snapshot.SurfaceData, snapshot.Width, snapshot.Height),
-                PathLamps: _pathLampMeshBuilder!.Build(snapshot.PathData, snapshot.Width, snapshot.Height)));
+                PathAccessories: _pathAccessoryMeshBuilder!.Build(snapshot.PathData, snapshot.Width, snapshot.Height)));
 
             return new ParkLoadResult(
                 parkPath, snapshot.Width, snapshot.Height,
-                meshData.Terrain.Terrain, meshData.Terrain.Water, meshData.Paths, meshData.PathLamps);
+                meshData.Terrain.Terrain, meshData.Terrain.Water, meshData.Paths, meshData.PathAccessories);
         }
         catch (Exception ex) {
             throw new InvalidOperationException($"Failed to load '{parkPath}': {ex.Message}", ex);
@@ -313,7 +313,7 @@ public sealed class Renderer : IDisposable
 
     private sealed record ParkLoadResult(
         string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water, PathMeshData Paths,
-        PathLampBatch[] PathLamps);
+        PathAccessoryBatch[] PathAccessories);
 
     private void UpdateParkLoad()
     {
@@ -322,7 +322,7 @@ public sealed class Renderer : IDisposable
 
             try {
                 _pendingParkLoadResult = completedTask.GetAwaiter().GetResult();
-                _ui.SetParkLoadStatus("Uploading terrain, water, path, and lamp meshes...");
+                _ui.SetParkLoadStatus("Uploading terrain, water, path, and accessory meshes...");
                 return;
             }
             catch (Exception ex) {
@@ -340,15 +340,15 @@ public sealed class Renderer : IDisposable
                 _pathGraphicsResources!.ClearMesh();
                 _pathGraphicsResources.UploadMesh(result.Paths);
                 _waterGraphicsResources!.UploadMesh(result.Water);
-                DisposePathLampResources();
-                foreach (var batch in result.PathLamps) {
+                DisposePathAccessoryResources();
+                foreach (var batch in result.PathAccessories) {
                     var resources = new ModelGraphicsResources(_deviceContext!, _renderPass, batch.Material);
                     try {
                         resources.CreatePipeline();
                         resources.CreateTextureResources(_commandPool);
                         resources.UploadMesh(batch.Mesh);
                         resources.UploadInstances(batch.Regions);
-                        _pathLampGraphicsResources.Add((batch, resources));
+                        _pathAccessoryGraphicsResources.Add((batch, resources));
                     }
                     catch {
                         resources.Dispose();
@@ -388,7 +388,7 @@ public sealed class Renderer : IDisposable
                 if (_vk.DeviceWaitIdle(_logicalDevice) != Result.Success)
                     throw new InvalidOperationException("Could not wait for the Vulkan device before clearing park meshes.");
 
-                DisposePathLampResources();
+                DisposePathAccessoryResources();
                 _terrainGraphicsResources?.ClearMesh();
                 _pathGraphicsResources?.ClearMesh();
                 _waterGraphicsResources?.ClearMesh();
@@ -565,7 +565,7 @@ public sealed class Renderer : IDisposable
         }
 
         if (_terrainMesh is not null) {
-            foreach (var (_, resources) in _pathLampGraphicsResources)
+            foreach (var (_, resources) in _pathAccessoryGraphicsResources)
             foreach (var region in resources.RegionBatches) {
                 if (viewFrustum.Intersects(region.Bounds))
                     resources.DrawInstanced(cmd, ubo, region);
@@ -677,7 +677,7 @@ public sealed class Renderer : IDisposable
         _pathGraphicsResources = null;
         pathResources?.Dispose();
 
-        DisposePathLampResources();
+        DisposePathAccessoryResources();
 
         foreach (var resources in _vehicleCubeGraphicsResources)
             resources.Dispose();
@@ -706,11 +706,11 @@ public sealed class Renderer : IDisposable
         }
     }
 
-    private void DisposePathLampResources()
+    private void DisposePathAccessoryResources()
     {
-        foreach (var (_, resources) in _pathLampGraphicsResources)
+        foreach (var (_, resources) in _pathAccessoryGraphicsResources)
             resources.Dispose();
-        _pathLampGraphicsResources.Clear();
+        _pathAccessoryGraphicsResources.Clear();
     }
 
 }

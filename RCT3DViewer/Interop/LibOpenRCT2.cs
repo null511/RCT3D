@@ -234,6 +234,7 @@ public struct RCTTilePathData
     public bool IsQueue => (Flags & 2) != 0;
     public bool IsLampAddition => (AdditionFlags & 1) != 0;
     public bool AdditionIsBroken => (AdditionFlags & 2) != 0;
+    public bool IsBenchAddition => (AdditionFlags & 4) != 0;
 }
 
 [StructLayout(LayoutKind.Sequential)]

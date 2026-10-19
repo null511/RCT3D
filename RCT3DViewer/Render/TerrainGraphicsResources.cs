@@ -1,4 +1,4 @@
-using RCT3DViewer.Render.Paths.Accessories;
+using RCT3DViewer.Render.Paths;
 using RCT3DViewer.Render.Paths.Meshing;
 using Silk.NET.Vulkan;
 using System.Numerics;
@@ -460,7 +460,7 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var vk = context.Api;
         var device = context.LogicalDevice;
-        var vertexBufferSize = (ulong)(Marshal.SizeOf<TerrainVertex>() * vertices.Length);
+        var vertexBufferSize = checked((ulong)Marshal.SizeOf<TerrainVertex>() * (ulong)vertices.Length);
         AllocateBuffer(vertexBufferSize, BufferUsageFlags.VertexBufferBit,
             MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vertexBuffer, out _vertexBufferMemory);
 
@@ -470,7 +470,7 @@ internal sealed unsafe class TerrainGraphicsResources(
         vertices.AsSpan().CopyTo(vertexSpan);
         vk.UnmapMemory(device, _vertexBufferMemory);
 
-        var indexBufferSize = (ulong)(sizeof(uint) * indices.Length);
+        var indexBufferSize = checked((ulong)sizeof(uint) * (ulong)indices.Length);
         AllocateBuffer(indexBufferSize, BufferUsageFlags.IndexBufferBit,
             MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _indexBuffer, out _indexBufferMemory);
 
@@ -479,7 +479,7 @@ internal sealed unsafe class TerrainGraphicsResources(
         var indexSpan = new Span<uint>(indexData, indices.Length);
         indices.AsSpan().CopyTo(indexSpan);
         vk.UnmapMemory(device, _indexBufferMemory);
-        IndexCount = (uint)indices.Length;
+        IndexCount = checked((uint)indices.Length);
     }
 
     public void ClearMesh()

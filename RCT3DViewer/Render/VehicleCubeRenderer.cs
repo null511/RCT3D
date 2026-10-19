@@ -1,4 +1,4 @@
-using RCT3DViewer.Render.Paths.Accessories;
+using RCT3DViewer.Render.Paths;
 using RCT3DViewer.Simulation;
 using System.Diagnostics;
 using System.Numerics;

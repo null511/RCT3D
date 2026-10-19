@@ -11,8 +11,8 @@
 - For RCT3DViewer, the long-term rendering target is high-quality meshes with PBR textures and likely tessellation. Plan for hierarchical quadtree spatial chunks and finer sections to support frustum culling and future LOD rather than assuming only coarse flat-terrain chunks.
 - Configure rendering path surface bias to default slightly above terrain to avoid z-fighting; expose render configuration consistently with existing renderer/environment-variable patterns.
 - Implement frustum-culling in RCT3DViewer using a single 8×8-tile region-size constant; pack terrain/path/water geometry into category-level GPU buffers and retain per-region AABBs/index ranges for visible-range draws. Extract one CPU frustum per frame using the row-vector view-projection and Vulkan 0..w clip-depth convention. Sort visible water regions back-to-front; batch repeated path accessories (currently path lamps) by region/model/material with shared model meshes and instanced transforms. Keep region data suitable for a future quadtree and larger objects; do not consider the quadtree or future ride/support/shop geometry implemented yet.
-- For rendering refactors, do not treat a successful build as proof of the intended runtime change; verify which geometry/rendering path the viewer actually uses and whether model assets remain involved.
-
+- For terrain-normal smoothing, constrain interpolation to the configured boundary width; do not average the two tile-triangle normals at diagonal vertices in a way that spreads interpolation across the whole center quad. Use geometry/interpolation boundaries so only the intended band is blended.
+  
 ## Structural Guidelines
 - For wooden path supports, place horizontal side crossmembers between vertical support sections rather than at each section's midpoint; half-frequency means at every other section boundary, using normal beam thickness.
 

@@ -42,7 +42,10 @@ float4 fragmentMain(VertexStageOutput input) : SV_Target
     float4 color = terrainTextures.Sample(terrainSampler, float3(input.texCoord, input.materialId));
 
     float3 sunDir = normalize(globalUniforms.sunDirection.xyz);
-    color.rgb *= max(dot(normalize(input.normal), sunDir), 0.0) * globalUniforms.lighting.y + globalUniforms.lighting.x;
+    float3 geoNormal = normalize(input.normal);
+    color.rgb *= max(dot(geoNormal, sunDir), 0.0) * globalUniforms.lighting.y + globalUniforms.lighting.x;
+
+    //return float4(geoNormal * 0.5 + 0.5, 1.0);
 
     return color;
 }

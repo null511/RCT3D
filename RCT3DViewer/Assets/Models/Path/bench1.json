@@ -1,7 +1,7 @@
 {
   "defaultBench": {
     "model": "Path/bench1.glb",
-    "targetHeight": 2.15625
+    "scale": 0.5
   },
   "benches": []
 }

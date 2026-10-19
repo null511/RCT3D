@@ -5,6 +5,11 @@ namespace RCT3DViewer.Render;
 
 internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 {
+    private const float TileSize = 3.0f;
+    private const float BaseHeightScale = 0.75f;
+    private const float CornerHeightScale = 1.5f;
+    private const float NormalInterpolationBoundaryFraction = 1.0f / 8.0f;
+
     private readonly List<TerrainVertex> _vertices = new();
     private readonly List<uint> _indices = new();
     private readonly List<Vector3> _waterVertices = new();
@@ -29,10 +34,6 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         _skirtSections = 0;
         _skirtTriangles = 0;
         _flatEdgesSkipped = 0;
-        const float tileSize = 3.0f;
-        const float baseHeightScale = 0.75f;
-        const float cornerHeightScale = 1.5f;
-
         foreach (var region in RenderRegionLayout.Enumerate(width, height)) {
             var tileBounds = RenderRegionLayout.GetTileBounds(region, width, height);
             var firstVertex = _vertices.Count;
@@ -45,46 +46,25 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                 var surface = surfaces[y * width + x];
 
                 if (surface.WaterHeight > 0)
-                    AddWaterTile(x, y, surface.WaterHeight * (baseHeightScale / 8.0f), tileSize);
+                    AddWaterTile(x, y, surface.WaterHeight * (BaseHeightScale / 8.0f), TileSize);
 
-                var baseHeight = surface.BaseZ * baseHeightScale;
-                var north = baseHeight + surface.NorthCornerHeight * cornerHeightScale;
-                var east = baseHeight + surface.EastCornerHeight * cornerHeightScale;
-                var south = baseHeight + surface.SouthCornerHeight * cornerHeightScale;
-                var west = baseHeight + surface.WestCornerHeight * cornerHeightScale;
+                GetCornerHeights(surface, out var north, out var east, out var south, out var west);
 
                 // OpenRCT2's corner flags map North/East/South/West to the tile's
                 // northeast/southeast/southwest/northwest vertices, respectively.
-                var cNorth = new Vector3((x + 1) * tileSize, north, (y + 1) * tileSize);
-                var cEast = new Vector3((x + 1) * tileSize, east, y * tileSize);
-                var cSouth = new Vector3(x * tileSize, south, y * tileSize);
-                var cWest = new Vector3(x * tileSize, west, (y + 1) * tileSize);
+                var cNorth = new Vector3((x + 1) * TileSize, north, (y + 1) * TileSize);
+                var cEast = new Vector3((x + 1) * TileSize, east, y * TileSize);
+                var cSouth = new Vector3(x * TileSize, south, y * TileSize);
+                var cWest = new Vector3(x * TileSize, west, (y + 1) * TileSize);
 
-                // Keep both triangles counter-clockwise from above (positive Y normal).
-                var normal1 = Vector3.Normalize(Vector3.Cross(cEast - cNorth, cWest - cNorth));
-                var normal2 = Vector3.Normalize(Vector3.Cross(cSouth - cEast, cWest - cEast));
                 var materialId = GetMaterialLayer(surface, x, y);
-                var baseIdx = (uint)_vertices.Count;
-
-                _vertices.Add(new TerrainVertex(cNorth, normal1, new Vector2(x + 1, y + 1), materialId));
-                _vertices.Add(new TerrainVertex(cEast, normal1, new Vector2(x + 1, y), materialId));
-                _vertices.Add(new TerrainVertex(cWest, normal1, new Vector2(x, y + 1), materialId));
-                _vertices.Add(new TerrainVertex(cSouth, normal2, new Vector2(x, y), materialId));
-
-                _indices.Add(baseIdx);
-                _indices.Add(baseIdx + 1);
-                _indices.Add(baseIdx + 2);
-                _indices.Add(baseIdx + 1);
-                _indices.Add(baseIdx + 3);
-                _indices.Add(baseIdx + 2);
+                AddTerrainTile(x, y, width, height, surfaces, north, east, south, west, materialId);
 
                 var eastEdgeNormal = Vector3.UnitX;
 
                 if (x + 1 < width) {
                     var eastNeighbor = surfaces[y * width + x + 1];
-                    var neighborBase = eastNeighbor.BaseZ * baseHeightScale;
-                    var neighborSouth = neighborBase + eastNeighbor.SouthCornerHeight * cornerHeightScale;
-                    var neighborWest = neighborBase + eastNeighbor.WestCornerHeight * cornerHeightScale;
+                    GetCornerHeights(eastNeighbor, out _, out _, out var neighborSouth, out var neighborWest);
 
                     AddSkirtEdge(cEast, east, cNorth, north, neighborSouth, neighborWest,
                         materialId, GetMaterialLayer(eastNeighbor, x + 1, y), eastEdgeNormal);
@@ -98,9 +78,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 
                 if (y + 1 < height) {
                     var northNeighbor = surfaces[(y + 1) * width + x];
-                    var neighborBase = northNeighbor.BaseZ * baseHeightScale;
-                    var neighborSouth = neighborBase + northNeighbor.SouthCornerHeight * cornerHeightScale;
-                    var neighborEast = neighborBase + northNeighbor.EastCornerHeight * cornerHeightScale;
+                    GetCornerHeights(northNeighbor, out _, out var neighborEast, out var neighborSouth, out _);
 
                     AddSkirtEdge(cWest, west, cNorth, north, neighborSouth, neighborEast,
                         materialId, GetMaterialLayer(northNeighbor, x, y + 1), northEdgeNormal);
@@ -145,6 +123,297 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
             surface.CanGrowGrass != 0,
             x,
             y);
+    }
+
+    private void AddTerrainTile(
+        int x, int y, int width, int height, ReadOnlySpan<RCTTileSurfaceData> surfaces,
+        float north, float east, float south, float west, uint materialId)
+    {
+        var boundaryFraction = NormalInterpolationBoundaryFraction;
+        Span<float> coordinates = stackalloc float[] { 0.0f, boundaryFraction, 1.0f - boundaryFraction, 1.0f };
+        var firstTriangleNormal = GetBaseTriangleNormal(north, east, south, west, true);
+        var secondTriangleNormal = GetBaseTriangleNormal(north, east, south, west, false);
+        var diagonalNormal = Vector3.Normalize(firstTriangleNormal + secondTriangleNormal);
+        var diagonalOffset = MathF.Sqrt(2.0f) * boundaryFraction;
+
+        for (var row = 0; row < 3; row++)
+        for (var column = 0; column < 3; column++) {
+            var left = coordinates[column];
+            var right = coordinates[column + 1];
+            var bottom = coordinates[row];
+            var top = coordinates[row + 1];
+            var northEast = CreateTerrainPoint(x, y, right, top, north, east, south, west);
+            var southEast = CreateTerrainPoint(x, y, right, bottom, north, east, south, west);
+            var northWest = CreateTerrainPoint(x, y, left, top, north, east, south, west);
+            var southWest = CreateTerrainPoint(x, y, left, bottom, north, east, south, west);
+
+            var firstTriangleIsUpper = northEast.U + northEast.V + southEast.U + southEast.V
+                + northWest.U + northWest.V >= 3.0f;
+            AddSubdividedTriangle(northEast, southEast, northWest, firstTriangleIsUpper,
+                diagonalOffset, firstTriangleNormal, secondTriangleNormal, diagonalNormal,
+                x, y, width, height, surfaces, north, east, south, west, materialId);
+
+            var secondTriangleIsUpper = southEast.U + southEast.V + southWest.U + southWest.V
+                + northWest.U + northWest.V >= 3.0f;
+            AddSubdividedTriangle(southEast, southWest, northWest, secondTriangleIsUpper,
+                diagonalOffset, firstTriangleNormal, secondTriangleNormal, diagonalNormal,
+                x, y, width, height, surfaces, north, east, south, west, materialId);
+        }
+    }
+
+    private void AddSubdividedTriangle(
+        TerrainPoint a, TerrainPoint b, TerrainPoint c, bool isUpperFacet, float diagonalOffset,
+        Vector3 firstTriangleNormal, Vector3 secondTriangleNormal, Vector3 diagonalNormal,
+        int x, int y, int width, int height, ReadOnlySpan<RCTTileSurfaceData> surfaces,
+        float north, float east, float south, float west, uint materialId)
+    {
+        Span<TerrainPoint> source = stackalloc TerrainPoint[3] { a, b, c };
+        Span<TerrainPoint> bandPolygon = stackalloc TerrainPoint[4];
+        Span<TerrainPoint> outerPolygon = stackalloc TerrainPoint[4];
+        var bandThreshold = isUpperFacet ? 1.0f + diagonalOffset : 1.0f - diagonalOffset;
+        var bandKeepsLowerValues = isUpperFacet;
+        var bandCount = ClipTriangle(source, bandPolygon, bandThreshold, bandKeepsLowerValues);
+        var outerCount = ClipTriangle(source, outerPolygon, bandThreshold, !bandKeepsLowerValues);
+        var baseNormal = isUpperFacet ? firstTriangleNormal : secondTriangleNormal;
+
+        AddTerrainPolygon(bandPolygon[..bandCount], baseNormal, diagonalNormal,
+            x, y, width, height, surfaces, north, east, south, west, materialId);
+        AddTerrainPolygon(outerPolygon[..outerCount], baseNormal, diagonalNormal,
+            x, y, width, height, surfaces, north, east, south, west, materialId);
+    }
+
+    private static int ClipTriangle(ReadOnlySpan<TerrainPoint> triangle, Span<TerrainPoint> output, float threshold, bool keepLowerValues)
+    {
+        var outputCount = 0;
+        for (var index = 0; index < triangle.Length; index++) {
+            var current = triangle[index];
+            var next = triangle[(index + 1) % triangle.Length];
+            var currentValue = current.U + current.V;
+            var nextValue = next.U + next.V;
+            var currentInside = keepLowerValues ? currentValue <= threshold : currentValue >= threshold;
+            var nextInside = keepLowerValues ? nextValue <= threshold : nextValue >= threshold;
+
+            if (currentInside)
+                output[outputCount++] = current;
+
+            if (currentInside != nextInside) {
+                var amount = (threshold - currentValue) / (nextValue - currentValue);
+                output[outputCount++] = TerrainPoint.Lerp(current, next, amount);
+            }
+        }
+
+        return outputCount;
+    }
+
+    private void AddTerrainPolygon(
+        ReadOnlySpan<TerrainPoint> polygon, Vector3 baseNormal, Vector3 diagonalNormal,
+        int x, int y, int width, int height, ReadOnlySpan<RCTTileSurfaceData> surfaces,
+        float north, float east, float south, float west, uint materialId)
+    {
+        for (var index = 1; index + 1 < polygon.Length; index++)
+            AddTerrainTriangle(polygon[0], polygon[index], polygon[index + 1], baseNormal, diagonalNormal,
+                x, y, width, height, surfaces, north, east, south, west, materialId);
+    }
+
+    private void AddTerrainTriangle(
+        TerrainPoint a, TerrainPoint b, TerrainPoint c, Vector3 baseNormal, Vector3 diagonalNormal,
+        int x, int y, int width, int height, ReadOnlySpan<RCTTileSurfaceData> surfaces,
+        float north, float east, float south, float west, uint materialId)
+    {
+        var normalA = GetInterpolatedNormal(baseNormal, diagonalNormal, x, y, width, height, surfaces,
+            north, east, south, west, a.U, a.V);
+        var normalB = GetInterpolatedNormal(baseNormal, diagonalNormal, x, y, width, height, surfaces,
+            north, east, south, west, b.U, b.V);
+        var normalC = GetInterpolatedNormal(baseNormal, diagonalNormal, x, y, width, height, surfaces,
+            north, east, south, west, c.U, c.V);
+        var baseIndex = checked((uint)_vertices.Count);
+        _vertices.Add(new TerrainVertex(a.Position, normalA, a.TextureCoordinate, materialId));
+        _vertices.Add(new TerrainVertex(b.Position, normalB, b.TextureCoordinate, materialId));
+        _vertices.Add(new TerrainVertex(c.Position, normalC, c.TextureCoordinate, materialId));
+        _indices.Add(baseIndex);
+        _indices.Add(baseIndex + 1);
+        _indices.Add(baseIndex + 2);
+    }
+
+    private TerrainPoint CreateTerrainPoint(
+        int x, int y, float u, float v, float north, float east, float south, float west)
+    {
+        var height = u + v >= 1.0f
+            ? (north - west) * u + (north - east) * v + east - north + west
+            : south + (east - south) * u + (west - south) * v;
+        return new TerrainPoint(
+            new Vector3((x + u) * TileSize, height, (y + v) * TileSize),
+            new Vector2(x + u, y + v), u, v);
+    }
+
+    private readonly record struct TerrainPoint(Vector3 Position, Vector2 TextureCoordinate, float U, float V)
+    {
+        public static TerrainPoint Lerp(TerrainPoint start, TerrainPoint end, float amount) => new(
+            Vector3.Lerp(start.Position, end.Position, amount),
+            Vector2.Lerp(start.TextureCoordinate, end.TextureCoordinate, amount),
+            float.Lerp(start.U, end.U, amount),
+            float.Lerp(start.V, end.V, amount));
+    }
+
+    private Vector3 GetInterpolatedNormal(
+        Vector3 baseNormal, Vector3 diagonalNormal, int x, int y, int width, int height, ReadOnlySpan<RCTTileSurfaceData> surfaces,
+        float north, float east, float south, float west, float u, float v)
+    {
+        var boundary = NormalInterpolationBoundaryFraction;
+        if ((u == 0.0f || u == 1.0f) && (v == 0.0f || v == 1.0f))
+            return GetConnectedCornerNormal(x, y, u, v, width, height, surfaces);
+
+        var normal = GetDiagonalAdjustedNormal(baseNormal, diagonalNormal, u, v);
+
+        if (u < boundary && x > 0) {
+            var neighbor = surfaces[y * width + x - 1];
+            GetCornerHeights(neighbor, out var neighborNorth, out var neighborEast, out var neighborSouth, out var neighborWest);
+            if (south == neighborEast && west == neighborNorth) {
+                normal += GetDiagonalAdjustedFacetNormal(
+                    neighborNorth, neighborEast, neighborSouth, neighborWest, true, 1.0f, v)
+                    * ((boundary - u) / boundary);
+            }
+        }
+
+        if (u > 1.0f - boundary && x + 1 < width) {
+            var neighbor = surfaces[y * width + x + 1];
+            GetCornerHeights(neighbor, out var neighborNorth, out var neighborEast, out var neighborSouth, out var neighborWest);
+            if (east == neighborSouth && north == neighborWest) {
+                normal += GetDiagonalAdjustedFacetNormal(
+                    neighborNorth, neighborEast, neighborSouth, neighborWest, false, 0.0f, v)
+                    * ((boundary - (1.0f - u)) / boundary);
+            }
+        }
+
+        if (v > 1.0f - boundary && y + 1 < height) {
+            var neighbor = surfaces[(y + 1) * width + x];
+            GetCornerHeights(neighbor, out var neighborNorth, out var neighborEast, out var neighborSouth, out var neighborWest);
+            if (west == neighborSouth && north == neighborEast) {
+                normal += GetDiagonalAdjustedFacetNormal(
+                    neighborNorth, neighborEast, neighborSouth, neighborWest, false, u, 0.0f)
+                    * ((boundary - (1.0f - v)) / boundary);
+            }
+        }
+
+        if (v < boundary && y > 0) {
+            var neighbor = surfaces[(y - 1) * width + x];
+            GetCornerHeights(neighbor, out var neighborNorth, out var neighborEast, out var neighborSouth, out var neighborWest);
+            if (south == neighborWest && east == neighborNorth) {
+                normal += GetDiagonalAdjustedFacetNormal(
+                    neighborNorth, neighborEast, neighborSouth, neighborWest, true, u, 1.0f)
+                    * ((boundary - v) / boundary);
+            }
+        }
+
+        return Vector3.Normalize(normal);
+    }
+
+    private static Vector3 GetDiagonalAdjustedFacetNormal(
+        float north, float east, float south, float west, bool firstFacet, float u, float v)
+    {
+        var firstNormal = GetBaseTriangleNormal(north, east, south, west, true);
+        var secondNormal = GetBaseTriangleNormal(north, east, south, west, false);
+        var diagonalNormal = Vector3.Normalize(firstNormal + secondNormal);
+        var facetNormal = firstFacet ? firstNormal : secondNormal;
+        return GetDiagonalAdjustedNormal(facetNormal, diagonalNormal, u, v);
+    }
+
+    private static Vector3 GetDiagonalAdjustedNormal(Vector3 facetNormal, Vector3 diagonalNormal, float u, float v)
+    {
+        var distanceFromDiagonal = MathF.Abs(u + v - 1.0f) * TileSize / MathF.Sqrt(2.0f);
+        var boundaryWidth = TileSize * NormalInterpolationBoundaryFraction;
+        var blend = Math.Clamp(1.0f - distanceFromDiagonal / boundaryWidth, 0.0f, 1.0f);
+        return blend > 0.0f
+            ? Vector3.Normalize(Vector3.Lerp(facetNormal, diagonalNormal, blend))
+            : facetNormal;
+    }
+
+    private Vector3 GetConnectedCornerNormal(
+        int x, int y, float u, float v, int width, int height, ReadOnlySpan<RCTTileSurfaceData> surfaces)
+    {
+        var cornerX = x + (u == 1.0f ? 1 : 0);
+        var cornerY = y + (v == 1.0f ? 1 : 0);
+        Span<int> tileXs = stackalloc int[] { cornerX - 1, cornerX, cornerX - 1, cornerX };
+        Span<int> tileYs = stackalloc int[] { cornerY - 1, cornerY - 1, cornerY, cornerY };
+        Span<bool> visited = stackalloc bool[4];
+        Span<int> queue = stackalloc int[4];
+        visited.Clear();
+        var currentIndex = -1;
+
+        for (var index = 0; index < 4; index++)
+            if (tileXs[index] == x && tileYs[index] == y)
+                currentIndex = index;
+
+        var queueStart = 0;
+        var queueEnd = 1;
+        queue[0] = currentIndex;
+        visited[currentIndex] = true;
+        var normal = Vector3.Zero;
+
+        while (queueStart < queueEnd) {
+            var index = queue[queueStart++];
+            var tileX = tileXs[index];
+            var tileY = tileYs[index];
+            var surface = surfaces[tileY * width + tileX];
+            GetCornerHeights(surface, out var north, out var east, out var south, out var west);
+            var localU = cornerX - tileX;
+            var localV = cornerY - tileY;
+            normal += GetDiagonalAdjustedFacetNormal(
+                north, east, south, west, localU + localV >= 1.0f, localU, localV);
+
+            for (var neighborIndex = 0; neighborIndex < 4; neighborIndex++) {
+                if (visited[neighborIndex]
+                    || tileXs[neighborIndex] < 0 || tileXs[neighborIndex] >= width
+                    || tileYs[neighborIndex] < 0 || tileYs[neighborIndex] >= height)
+                    continue;
+
+                var distance = Math.Abs(tileXs[neighborIndex] - tileX) + Math.Abs(tileYs[neighborIndex] - tileY);
+                if (distance == 1 && AreTilesContinuous(
+                    tileX, tileY, tileXs[neighborIndex], tileYs[neighborIndex], width, surfaces)) {
+                    visited[neighborIndex] = true;
+                    queue[queueEnd++] = neighborIndex;
+                }
+            }
+        }
+
+        return Vector3.Normalize(normal);
+    }
+
+    private static bool AreTilesContinuous(
+        int x, int y, int neighborX, int neighborY, int width, ReadOnlySpan<RCTTileSurfaceData> surfaces)
+    {
+        var surface = surfaces[y * width + x];
+        var neighbor = surfaces[neighborY * width + neighborX];
+        GetCornerHeights(surface, out var north, out var east, out var south, out var west);
+        GetCornerHeights(neighbor, out var neighborNorth, out var neighborEast, out var neighborSouth, out var neighborWest);
+
+        if (neighborX == x + 1)
+            return east == neighborSouth && north == neighborWest;
+        if (neighborX == x - 1)
+            return south == neighborEast && west == neighborNorth;
+        if (neighborY == y + 1)
+            return west == neighborSouth && north == neighborEast;
+        return south == neighborWest && east == neighborNorth;
+    }
+
+    private static void GetCornerHeights(RCTTileSurfaceData surface, out float north, out float east, out float south, out float west)
+    {
+        var baseHeight = surface.BaseZ * BaseHeightScale;
+        north = baseHeight + surface.NorthCornerHeight * CornerHeightScale;
+        east = baseHeight + surface.EastCornerHeight * CornerHeightScale;
+        south = baseHeight + surface.SouthCornerHeight * CornerHeightScale;
+        west = baseHeight + surface.WestCornerHeight * CornerHeightScale;
+    }
+
+    private static Vector3 GetBaseTriangleNormal(float north, float east, float south, float west, bool firstTriangle)
+    {
+        var cNorth = new Vector3(TileSize, north, TileSize);
+        var cEast = new Vector3(TileSize, east, 0.0f);
+        var cSouth = new Vector3(0.0f, south, 0.0f);
+        var cWest = new Vector3(0.0f, west, TileSize);
+        return firstTriangle
+            ? Vector3.Normalize(Vector3.Cross(cEast - cNorth, cWest - cNorth))
+            : Vector3.Normalize(Vector3.Cross(cSouth - cEast, cWest - cEast));
     }
 
     private void AddWaterTile(int x, int y, float waterHeight, float tileSize)
