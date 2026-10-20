@@ -6,7 +6,7 @@ namespace RCT3DViewer.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 11;
+    private const uint ExpectedAbiVersion = 12;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -33,6 +33,9 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private delegate int AdvanceSimulationDelegate(IntPtr context);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int GetTimeOfDayHoursDelegate(IntPtr context, float* hours);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int GetVehicleCountDelegate(IntPtr context, out ulong count);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -51,6 +54,7 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private readonly GetPathCountDelegate _getPathCount;
     private readonly CopyPathDataDelegate _copyPathData;
     private readonly AdvanceSimulationDelegate _advanceSimulation;
+    private readonly GetTimeOfDayHoursDelegate _getTimeOfDayHours;
     private readonly GetVehicleCountDelegate _getVehicleCount;
     private readonly CopyVehicleDataDelegate _copyVehicleData;
     private readonly GetLastErrorDelegate _getLastError;
@@ -72,12 +76,16 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
         try {
             var getAbiVersion = Bind<GetAbiVersionDelegate>("rct3d_openrct2_get_abi_version");
             var version = getAbiVersion();
+
             if (version != ExpectedAbiVersion)
                 throw new InvalidOperationException($"Unsupported OpenRCT2 adapter ABI version {version}; expected {ExpectedAbiVersion}. Loaded library: '{_libraryPath}'.");
+            
             if (Marshal.SizeOf<RCTTileSurfaceData>() != 16)
                 throw new InvalidOperationException("RCTTileSurfaceData must be 16 bytes to match the OpenRCT2 adapter ABI.");
+            
             if (Marshal.SizeOf<RCTTilePathData>() != 28)
                 throw new InvalidOperationException("RCTTilePathData must be 28 bytes to match the OpenRCT2 adapter ABI.");
+            
             if (Marshal.SizeOf<RCTVehicleData>() != 28)
                 throw new InvalidOperationException("RCTVehicleData must be 28 bytes to match the OpenRCT2 adapter ABI.");
 
@@ -88,6 +96,7 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             _getPathCount = Bind<GetPathCountDelegate>("rct3d_openrct2_get_path_count");
             _copyPathData = Bind<CopyPathDataDelegate>("rct3d_openrct2_copy_path_data");
             _advanceSimulation = Bind<AdvanceSimulationDelegate>("rct3d_openrct2_advance_simulation");
+            _getTimeOfDayHours = Bind<GetTimeOfDayHoursDelegate>("rct3d_openrct2_get_time_of_day_hours");
             _getVehicleCount = Bind<GetVehicleCountDelegate>("rct3d_openrct2_get_vehicle_count");
             _copyVehicleData = Bind<CopyVehicleDataDelegate>("rct3d_openrct2_copy_vehicle_data");
             _getLastError = Bind<GetLastErrorDelegate>("rct3d_openrct2_get_last_error");
@@ -144,6 +153,13 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     }
 
     public void AdvanceSimulation() => ThrowIfFailed(_advanceSimulation(_context));
+
+    public float GetTimeOfDayHours()
+    {
+        float hours = 0.0f;
+        ThrowIfFailed(_getTimeOfDayHours(_context, &hours));
+        return hours;
+    }
 
     public ulong GetVehicleCount()
     {

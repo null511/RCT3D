@@ -15,17 +15,20 @@ namespace RCT3DViewer.Render;
 
 public sealed class Renderer : IDisposable
 {
-    private IWindow? _window;
-    private VulkanDeviceContext? _deviceContext;
-    private Vk? _vk => _deviceContext?.Api;
-    private PhysicalDevice _physicalDevice => _deviceContext?.PhysicalDevice ?? default;
-    private Device _logicalDevice => _deviceContext?.LogicalDevice ?? default;
-    private Queue _graphicsQueue => _deviceContext?.GraphicsQueue ?? default;
-    private uint _graphicsQueueFamilyIndex => _deviceContext?.GraphicsQueueFamilyIndex ?? 0;
+    private IWindow? window;
+    private VulkanDeviceContext? deviceContext;
+
+    private Vk? _vk => deviceContext?.Api;
+    private PhysicalDevice _physicalDevice => deviceContext?.PhysicalDevice ?? default;
+    private Device _logicalDevice => deviceContext?.LogicalDevice ?? default;
+    private Queue _graphicsQueue => deviceContext?.GraphicsQueue ?? default;
+    private uint _graphicsQueueFamilyIndex => deviceContext?.GraphicsQueueFamilyIndex ?? 0;
+
     private SwapchainResources? _swapchainResources;
     private DeferredRenderTargets? _deferredTargets;
     private DeferredPassResources? _deferredPassResources;
     private UniformBufferResources? _uniformBufferResources;
+
     private SwapchainKHR _swapchain => _swapchainResources?.Swapchain ?? default;
     private Image[] _swapchainImages => _swapchainResources?.Images ?? Array.Empty<Image>();
     //private ImageView[] _swapchainImageViews => _swapchainResources?.ImageViews ?? Array.Empty<ImageView>();
@@ -39,6 +42,7 @@ public sealed class Renderer : IDisposable
     private TerrainGraphicsResources? _pathGraphicsResources;
     private WaterGraphicsResources? _waterGraphicsResources;
     private ModelGraphicsResources[] _vehicleCubeGraphicsResources = Array.Empty<ModelGraphicsResources>();
+
     private PipelineLayout _pipelineLayout => _terrainGraphicsResources?.PipelineLayout ?? default;
     private Pipeline _graphicsPipeline => _terrainGraphicsResources?.Pipeline ?? default;
     private DescriptorSet _terrainDescriptorSet => _terrainGraphicsResources?.DescriptorSet ?? default;
@@ -98,15 +102,15 @@ public sealed class Renderer : IDisposable
         options.Size = new Vector2D<int>(1280, 720);
         options.Title = "RCT Cross-Platform 3D Real-Time Viewer";
 
-        _window = Window.Create(options);
-        _window.FramebufferResize += _ => _framebufferResized = true;
-        _window.Load += Initialize;
-        _window.Render += OnRenderFrame;
-        _window.Update += OnUpdateFrame;
-        _window.Closing += OnEngineShutdown;
+        window = Window.Create(options);
+        window.FramebufferResize += _ => _framebufferResized = true;
+        window.Load += Initialize;
+        window.Render += OnRenderFrame;
+        window.Update += OnUpdateFrame;
+        window.Closing += OnEngineShutdown;
 
         try {
-            _window.Run();
+            window.Run();
         }
         finally {
             Dispose();
@@ -146,23 +150,24 @@ public sealed class Renderer : IDisposable
         }
 
         Console.WriteLine("Initializing Graphics Subsystems via Silk.NET Vulkan...");
-        _deviceContext = VulkanDeviceContext.Create(_window!);
-        _swapchainResources = new SwapchainResources(_deviceContext, _window!);
+        deviceContext = VulkanDeviceContext.Create(window!);
+        _swapchainResources = new SwapchainResources(deviceContext, window!);
 
         _swapchainResources.CreateSwapchain();
         _swapchainResources.CreateImageViews();
         _swapchainResources.CreateDepthResources();
         _swapchainResources.CreateRenderPass();
-        _deferredTargets = new DeferredRenderTargets(_deviceContext, _swapchainExtent);
-        _uniformBufferResources = new UniformBufferResources(_deviceContext, MaxFramesInFlight);
-        _deferredPassResources = new DeferredPassResources(_deviceContext, _renderPass, _deferredTargets, _uniformBufferResources);
-        _terrainGraphicsResources = new TerrainGraphicsResources(_deviceContext, _deferredTargets.GBufferRenderPass, _uniformBufferResources.DescriptorSetLayout, _terrainMaterials!,
+
+        _deferredTargets = new DeferredRenderTargets(deviceContext, _swapchainExtent);
+        _uniformBufferResources = new UniformBufferResources(deviceContext, MaxFramesInFlight);
+        _deferredPassResources = new DeferredPassResources(deviceContext, _renderPass, _deferredTargets, _uniformBufferResources);
+        _terrainGraphicsResources = new TerrainGraphicsResources(deviceContext, _deferredTargets.GBufferRenderPass, _uniformBufferResources.DescriptorSetLayout, _terrainMaterials!,
             shaderNameOverride: Path.Combine("defer", "deferredTerrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         _terrainGraphicsResources.CreatePipeline();
-        _pathGraphicsResources = new TerrainGraphicsResources(_deviceContext, _deferredTargets.GBufferRenderPass, _uniformBufferResources.DescriptorSetLayout, _pathMaterials!.TextureLibrary,
+        _pathGraphicsResources = new TerrainGraphicsResources(deviceContext, _deferredTargets.GBufferRenderPass, _uniformBufferResources.DescriptorSetLayout, _pathMaterials!.TextureLibrary,
             shaderNameOverride: Path.Combine("defer", "deferredTerrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         _pathGraphicsResources.CreatePipeline();
-        _waterGraphicsResources = new WaterGraphicsResources(_deviceContext, _deferredTargets.WaterRenderPass, _uniformBufferResources.DescriptorSetLayout);
+        _waterGraphicsResources = new WaterGraphicsResources(deviceContext, _deferredTargets.WaterRenderPass, _uniformBufferResources.DescriptorSetLayout);
         _waterGraphicsResources.CreatePipeline();
         _swapchainResources.CreateFramebuffers();
 
@@ -174,7 +179,7 @@ public sealed class Renderer : IDisposable
         var vehicleCube = VehicleCubeRenderer.CreateMesh();
         _vehicleCubeGraphicsResources = new ModelGraphicsResources[MaxFramesInFlight];
         for (var i = 0; i < _vehicleCubeGraphicsResources.Length; i++) {
-            var resources = new ModelGraphicsResources(_deviceContext!, _deferredTargets.GBufferRenderPass, _uniformBufferResources.DescriptorSetLayout, vehicleCube.Material, unlit: true, deferred: true);
+            var resources = new ModelGraphicsResources(deviceContext!, _deferredTargets.GBufferRenderPass, _uniformBufferResources.DescriptorSetLayout, vehicleCube.Material, unlit: true, deferred: true);
             try {
                 resources.CreatePipeline();
                 resources.CreateTextureResources(_commandPool);
@@ -186,6 +191,7 @@ public sealed class Renderer : IDisposable
                 throw;
             }
         }
+
         CreateSyncPrimitives();
 
         _imguiRenderer = new ImGuiVulkanRenderer(_vk!, _physicalDevice, _logicalDevice, _graphicsQueue, _renderPass, _commandPool,
@@ -203,7 +209,14 @@ public sealed class Renderer : IDisposable
     {
         CommandPoolCreateInfo poolInfo = new() { SType = StructureType.CommandPoolCreateInfo, QueueFamilyIndex = _graphicsQueueFamilyIndex, Flags = CommandPoolCreateFlags.ResetCommandBufferBit };
         _vk!.CreateCommandPool(_logicalDevice, in poolInfo, null, out _commandPool);
-        CommandBufferAllocateInfo allocInfo = new() { SType = StructureType.CommandBufferAllocateInfo, CommandPool = _commandPool, Level = CommandBufferLevel.Primary, CommandBufferCount = (uint)_framebuffers.Length };
+
+        CommandBufferAllocateInfo allocInfo = new() {
+            SType = StructureType.CommandBufferAllocateInfo,
+            CommandPool = _commandPool,
+            Level = CommandBufferLevel.Primary,
+            CommandBufferCount = (uint)_framebuffers.Length,
+        };
+
         _commandBuffers = new CommandBuffer[_framebuffers.Length];
         fixed (CommandBuffer* cbPtr = _commandBuffers) {
             _vk.AllocateCommandBuffers(_logicalDevice, in allocInfo, cbPtr);
@@ -268,7 +281,7 @@ public sealed class Renderer : IDisposable
 
     private unsafe bool RecreateSwapchain()
     {
-        var framebufferSize = _window!.FramebufferSize;
+        var framebufferSize = window!.FramebufferSize;
         if (framebufferSize.X == 0 || framebufferSize.Y == 0) return false;
         var previousExtent = _swapchainExtent;
 
@@ -289,7 +302,7 @@ public sealed class Renderer : IDisposable
             _taaHistoryInitialized = false;
             _taaResolveInitialized = false;
         }
-        _deferredPassResources = new DeferredPassResources(_deviceContext!, _renderPass, _deferredTargets!, _uniformBufferResources!);
+        _deferredPassResources = new DeferredPassResources(deviceContext!, _renderPass, _deferredTargets!, _uniformBufferResources!);
         CreateCommandInfrastructure();
         CreateSyncPrimitives();
         _imguiRenderer?.ResizeBuffers(_swapchainImages.Length);
@@ -300,14 +313,14 @@ public sealed class Renderer : IDisposable
 
     private void SetupInputs()
     {
-        _inputController = new ViewerInputController(_window!, _camera, () => _imguiRenderer?.WantCaptureMouse ?? false);
+        _inputController = new ViewerInputController(window!, _camera, () => _imguiRenderer?.WantCaptureMouse ?? false);
     }
 
     private void OnUpdateFrame(double deltaTime)
     {
         if (_exitRequested) {
             _exitRequested = false;
-            _window?.Close();
+            window?.Close();
             return;
         }
 
@@ -376,7 +389,7 @@ public sealed class Renderer : IDisposable
                 _waterGraphicsResources!.UploadMesh(result.Water);
                 DisposePathAccessoryResources();
                 foreach (var batch in result.PathAccessories) {
-                    var resources = new ModelGraphicsResources(_deviceContext!, _deferredTargets!.GBufferRenderPass, _uniformBufferResources!.DescriptorSetLayout, batch.Material, deferred: true);
+                    var resources = new ModelGraphicsResources(deviceContext!, _deferredTargets!.GBufferRenderPass, _uniformBufferResources!.DescriptorSetLayout, batch.Material, deferred: true);
                     try {
                         resources.CreatePipeline();
                         resources.CreateTextureResources(_commandPool);
@@ -440,12 +453,11 @@ public sealed class Renderer : IDisposable
 
     private void UpdateVehicleCubeInstances()
     {
-        if (_vehicleCubeGraphicsResources.Length == 0)
-            return;
+        if (_vehicleCubeGraphicsResources.Length == 0) return;
 
         var snapshots = _parkLoadTask is null && _pendingParkLoadResult is null
-            ? _simulation?.VehicleSnapshots
-            : null;
+            ? _simulation?.VehicleSnapshots : null;
+
         var instances = VehicleCubeRenderer.BuildInstances(snapshots, _loadedMapWidth, _loadedMapHeight);
         _vehicleCubeGraphicsResources[(int)_currentFrame].UploadInstances(instances);
     }
@@ -458,7 +470,7 @@ public sealed class Renderer : IDisposable
 
     private unsafe void OnRenderFrame(double deltaTime)
     {
-        if (_window!.FramebufferSize.X == 0 || _window.FramebufferSize.Y == 0) return;
+        if (window!.FramebufferSize.X == 0 || window.FramebufferSize.Y == 0) return;
         if (_framebufferResized && !RecreateSwapchain()) return;
 
         var frameStart = Stopwatch.GetTimestamp();
@@ -468,8 +480,9 @@ public sealed class Renderer : IDisposable
         _vk!.WaitForFences(_logicalDevice, 1, in _inFlightFences[_currentFrame], true, ulong.MaxValue);
         synchronizationTicks += Stopwatch.GetTimestamp() - synchronizationStart;
         synchronizationStart = Stopwatch.GetTimestamp();
-        var acquireResult = _deviceContext!.SwapchainExtension!.AcquireNextImage(_logicalDevice, _swapchain, ulong.MaxValue, _imageAvailableSemaphores[_currentFrame], default, ref imageIndex);
+        var acquireResult = deviceContext!.SwapchainExtension!.AcquireNextImage(_logicalDevice, _swapchain, ulong.MaxValue, _imageAvailableSemaphores[_currentFrame], default, ref imageIndex);
         synchronizationTicks += Stopwatch.GetTimestamp() - synchronizationStart;
+
         if (acquireResult == Result.ErrorOutOfDateKhr) {
             RecreateSwapchain();
             return;
@@ -493,11 +506,12 @@ public sealed class Renderer : IDisposable
         UpdateParkLoad();
         UpdateVehicleCubeInstances();
 
-        _ui.BuildFrameUi(deltaTime, _activeFrameTimeMilliseconds, LoadPark, () => _exitRequested = true, _deviceContext!.SupportsWireframe);
+        _ui.BuildFrameUi(deltaTime, _activeFrameTimeMilliseconds, _simulation?.GameTimeOfDayHours, LoadPark, () => _exitRequested = true, deviceContext!.SupportsWireframe);
         if (_taaEnabledLastFrame != _ui.TaaEnabled) {
             _taaHistoryValid = false;
             _taaEnabledLastFrame = _ui.TaaEnabled;
         }
+
         _vk.ResetCommandBuffer(cmd, 0);
 
         CommandBufferBeginInfo beginInfo = new() {
@@ -558,12 +572,10 @@ public sealed class Renderer : IDisposable
         var viewProjection = _camera.GetViewMatrix() * _camera.GetProjectionMatrix(aspect);
         if (!Matrix4x4.Invert(viewProjection, out var inverseViewProjection))
             throw new InvalidOperationException("The camera view-projection matrix is not invertible.");
+
+        CalculateSunDirection(out var sunElevation, out var sunDirection);
+
         var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
-        var timeAngle = (_ui.TimeOfDayHours - 6.0f) * (MathF.PI / 12.0f);
-        var sunElevation = MathF.Sin(timeAngle);
-        var horizontalLength = MathF.Cos(timeAngle);
-        var sunAzimuth = _ui.SunAngleDegrees * (MathF.PI / 180.0f);
-        var sunDirection = Vector3.Normalize(new Vector3(MathF.Cos(sunAzimuth) * horizontalLength, sunElevation, MathF.Sin(sunAzimuth) * horizontalLength));
         var ambientLight = 0.15f + 0.15f * MathF.Max(sunElevation, 0.0f);
         var cameraPosition = _camera.Position;
 
@@ -646,6 +658,7 @@ public sealed class Renderer : IDisposable
             _sceneOutputInitialized ? PipelineStageFlags.ComputeShaderBit : PipelineStageFlags.TopOfPipeBit,
             _sceneOutputInitialized ? AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit : AccessFlags.None,
             PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+
         _deferredPassResources!.Composite.Dispatch(cmd, 0, uniformDescriptorSet, renderDimensions);
         _sceneOutputInitialized = true;
 
@@ -655,6 +668,7 @@ public sealed class Renderer : IDisposable
             Framebuffer = _deferredTargets.WaterFramebuffer,
             RenderArea = new Rect2D(new Offset2D(0, 0), _swapchainExtent)
         };
+
         _vk.CmdBeginRenderPass(cmd, in waterRenderPassInfo, SubpassContents.Inline);
 
         if (_waterMesh is { Indices.Length: > 0 } waterMesh && _waterGraphicsResources is { IndexCount: > 0 } waterResources) {
@@ -673,6 +687,7 @@ public sealed class Renderer : IDisposable
             var waterVertexBuffer = waterResources.VertexBuffer;
             _vk.CmdBindVertexBuffers(cmd, 0, 1, in waterVertexBuffer, in offset);
             _vk.CmdBindIndexBuffer(cmd, waterResources.IndexBuffer, 0, IndexType.Uint32);
+
             foreach (var region in visibleWaterRegions)
                 _vk.CmdDrawIndexed(cmd, region.IndexCount, 1, region.FirstIndex, 0, 0);
         }
@@ -736,8 +751,17 @@ public sealed class Renderer : IDisposable
             _taaHistoryInitialized = true;
         }
 
-        clearValues[0] = new ClearValue { Color = new ClearColorValue(0.4f, 0.6f, 0.9f, 1.0f) };
-        clearValues[1] = new ClearValue { DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 } };
+        clearValues[0] = new ClearValue {
+            Color = new ClearColorValue(0.4f, 0.6f, 0.9f, 1.0f),
+        };
+
+        clearValues[1] = new ClearValue {
+            DepthStencil = new ClearDepthStencilValue {
+                Depth = 1.0f,
+                Stencil = 0,
+            },
+        };
+
         RenderPassBeginInfo presentationRenderPassInfo = new() {
             SType = StructureType.RenderPassBeginInfo,
             RenderPass = _renderPass,
@@ -746,6 +770,7 @@ public sealed class Renderer : IDisposable
             ClearValueCount = 2,
             PClearValues = clearValues
         };
+
         _vk.CmdBeginRenderPass(cmd, in presentationRenderPassInfo, SubpassContents.Inline);
         _vk.CmdSetViewport(cmd, 0, 1, &viewport);
         _vk.CmdSetScissor(cmd, 0, 1, &scissor);
@@ -791,7 +816,7 @@ public sealed class Renderer : IDisposable
         };
 
         synchronizationStart = Stopwatch.GetTimestamp();
-        var presentResult = _deviceContext!.SwapchainExtension!.QueuePresent(_graphicsQueue, in presentInfo);
+        var presentResult = deviceContext!.SwapchainExtension!.QueuePresent(_graphicsQueue, in presentInfo);
         synchronizationTicks += Stopwatch.GetTimestamp() - synchronizationStart;
         if (presentResult != Result.Success && presentResult != Result.SuboptimalKhr && presentResult != Result.ErrorOutOfDateKhr)
             throw new Exception($"Failed to present a swapchain image: {presentResult}.");
@@ -800,7 +825,7 @@ public sealed class Renderer : IDisposable
             0.0,
             Stopwatch.GetElapsedTime(frameStart).TotalMilliseconds - synchronizationTicks * 1000.0 / Stopwatch.Frequency);
 
-        _currentFrame = (uint)((_currentFrame + 1) % MaxFramesInFlight);
+        _currentFrame = (_currentFrame + 1) % MaxFramesInFlight;
         if (recreateAfterPresent || _framebufferResized || presentResult == Result.SuboptimalKhr || presentResult == Result.ErrorOutOfDateKhr)
             RecreateSwapchain();
     }
@@ -832,6 +857,7 @@ public sealed class Renderer : IDisposable
             SrcAccessMask = sourceAccess,
             DstAccessMask = destinationAccess
         };
+
         _vk!.CmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, null, 0, null, 1, &barrier);
     }
 
@@ -840,7 +866,9 @@ public sealed class Renderer : IDisposable
         try {
             _parkLoadTask?.GetAwaiter().GetResult();
         }
-        catch {}
+        catch {
+            // ignore
+        }
 
         _parkLoadTask = null;
         _pendingParkLoadResult = null;
@@ -872,8 +900,7 @@ public sealed class Renderer : IDisposable
 
         DisposePathAccessoryResources();
 
-        foreach (var resources in _vehicleCubeGraphicsResources)
-            resources.Dispose();
+        foreach (var resources in _vehicleCubeGraphicsResources) resources.Dispose();
         _vehicleCubeGraphicsResources = Array.Empty<ModelGraphicsResources>();
 
         var waterResources = _waterGraphicsResources;
@@ -896,8 +923,8 @@ public sealed class Renderer : IDisposable
         _uniformBufferResources = null;
         uniformBufferResources?.Dispose();
 
-        var deviceContext = _deviceContext;
-        _deviceContext = null;
+        var deviceContext = this.deviceContext;
+        this.deviceContext = null;
         deviceContext?.Dispose();
 
         var simulation = _simulation;
@@ -918,4 +945,14 @@ public sealed class Renderer : IDisposable
         _pathAccessoryGraphicsResources.Clear();
     }
 
+    private void CalculateSunDirection(out float sunElevation, out Vector3 sunDirection)
+    {
+        var timeAngle = (_ui.EffectiveTimeOfDayHours - 6.0f) * (MathF.PI / 12.0f);
+        var zenithAngle = _ui.ZenithDegrees * (MathF.PI / 180.0f);
+        sunElevation = MathF.Sin(timeAngle) * MathF.Cos(zenithAngle);
+
+        var horizontalLength = MathF.Sqrt(MathF.Max(0.0f, 1.0f - sunElevation * sunElevation));
+        var sunAzimuth = _ui.AzimuthDegrees * (MathF.PI / 180.0f);
+        sunDirection = Vector3.Normalize(new Vector3(MathF.Cos(sunAzimuth) * horizontalLength, sunElevation, MathF.Sin(sunAzimuth) * horizontalLength));
+    }
 }

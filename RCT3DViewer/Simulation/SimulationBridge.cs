@@ -15,9 +15,11 @@ public sealed class SimulationBridge : IDisposable
     private Exception? _shutdownException;
     private Exception? _simulationFailure;
     private bool _parkLoaded;
+    private float _gameTimeOfDayHours;
     private VehicleSnapshotPair? _vehicleSnapshots;
 
     public VehicleSnapshotPair? VehicleSnapshots => Volatile.Read(ref _vehicleSnapshots);
+    public float? GameTimeOfDayHours => Volatile.Read(ref _parkLoaded) ? Volatile.Read(ref _gameTimeOfDayHours) : null;
     public Exception? SimulationFailure => Volatile.Read(ref _simulationFailure);
 
 
@@ -69,6 +71,7 @@ public sealed class SimulationBridge : IDisposable
 
                     var pathData = new RCTTilePathData[(int)pathCount];
                     openRCT2.CopyPathData(pathData);
+                    Volatile.Write(ref _gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                     Volatile.Write(ref _vehicleSnapshots, new VehicleSnapshotPair(null, ReadVehicleSnapshot(openRCT2)));
                     Volatile.Write(ref _parkLoaded, true);
                     completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData));
@@ -118,6 +121,7 @@ public sealed class SimulationBridge : IDisposable
                 else if (now >= nextUpdate) {
                     try {
                         openRCT2.AdvanceSimulation();
+                        Volatile.Write(ref _gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                         PublishVehicleSnapshot(openRCT2);
                         nextUpdate += updateInterval;
                         if (now - nextUpdate > updateInterval * 4)

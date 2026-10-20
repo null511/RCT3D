@@ -14,8 +14,11 @@ internal sealed class ViewerUiController
     private bool _showSkyModal;
     private bool _showGraphicsOptions;
     private bool _showParkLoadError;
+    private bool _useGameTime = true;
     private float _timeOfDayHours = 9.0f;
-    private float _sunAngleDegrees = 25.0f;
+    private float _azimuthDegrees = 25.0f;
+    private float _zenithDegrees;
+    private float? _gameTimeOfDayHours;
     private float _displayedFps;
     private double _displayedFrameTimeMilliseconds;
     private bool _wireframeEnabled;
@@ -24,7 +27,11 @@ internal sealed class ViewerUiController
     private float _mipBias = -1.0f;
 
     public float TimeOfDayHours => _timeOfDayHours;
-    public float SunAngleDegrees => _sunAngleDegrees;
+    public float EffectiveTimeOfDayHours => _useGameTime && _gameTimeOfDayHours is float gameTime
+        ? gameTime
+        : _timeOfDayHours;
+    public float AzimuthDegrees => _azimuthDegrees;
+    public float ZenithDegrees => _zenithDegrees;
     public bool WireframeEnabled => _wireframeEnabled;
     public bool TaaEnabled => _taaEnabled;
     public float Sharpening => _sharpening;
@@ -74,8 +81,9 @@ internal sealed class ViewerUiController
     //    _showParkLoadError = false;
     //}
 
-    public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, Action<string> loadPark, Action requestExit, bool wireframeAvailable = true)
+    public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, Action<string> loadPark, Action requestExit, bool wireframeAvailable = true)
     {
+        _gameTimeOfDayHours = gameTimeOfDayHours;
         var instantFps = deltaTime > 0.0 ? (float)(1.0 / deltaTime) : 0.0f;
         var smoothing = 1.0f - MathF.Exp(-Math.Max((float)deltaTime, 0.0f) * 5.0f);
         _displayedFps = _displayedFps <= 0.0f ? instantFps : float.Lerp(_displayedFps, instantFps, smoothing);
@@ -115,8 +123,12 @@ internal sealed class ViewerUiController
             var skyModalVisible = ImGui.BeginPopupModal("Sky settings", ImGuiWindowFlags.AlwaysAutoResize);
             ImGui.PopStyleColor();
             if (skyModalVisible) {
+                ImGui.Checkbox("Use game time", ref _useGameTime);
+                ImGui.BeginDisabled(_useGameTime);
                 ImGui.SliderFloat("Time of day", ref _timeOfDayHours, 0.0f, 24.0f, "%.1f h");
-                ImGui.SliderFloat("Sun angle", ref _sunAngleDegrees, 0.0f, 360.0f, "%.0f°");
+                ImGui.EndDisabled();
+                ImGui.SliderFloat("Azimuth", ref _azimuthDegrees, 0.0f, 360.0f, "%.0f°");
+                ImGui.SliderFloat("Zenith", ref _zenithDegrees, 0.0f, 90.0f, "%.0f°");
                 if (ImGui.Button("Close"))
                     ImGui.CloseCurrentPopup();
                 ImGui.EndPopup();
