@@ -91,8 +91,14 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
             throw new Exception("Failed to create fullscreen-pass sampler.");
 
         var poolSizes = new[] {
-            new DescriptorPoolSize { Type = DescriptorType.SampledImage, DescriptorCount = checked((uint)(imageCount * sampledImageSets.Length)) },
-            new DescriptorPoolSize { Type = DescriptorType.Sampler, DescriptorCount = (uint)sampledImageSets.Length }
+            new DescriptorPoolSize {
+                Type = DescriptorType.SampledImage,
+                DescriptorCount = checked((uint)(imageCount * sampledImageSets.Length)),
+            },
+            new DescriptorPoolSize {
+                Type = DescriptorType.Sampler,
+                DescriptorCount = (uint)sampledImageSets.Length,
+            },
         };
 
         fixed (DescriptorPoolSize* poolSizePointer = poolSizes) {
@@ -109,6 +115,7 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
 
         var layouts = Enumerable.Repeat(_descriptorSetLayout, sampledImageSets.Length).ToArray();
         _descriptorSets = new DescriptorSet[layouts.Length];
+
         fixed (DescriptorSetLayout* layoutPointer = layouts)
         fixed (DescriptorSet* descriptorPointer = _descriptorSets) {
             var allocateInfo = new DescriptorSetAllocateInfo {
@@ -177,16 +184,26 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
             fragmentModule = CreateShaderModule(File.ReadAllBytes(fragmentPath));
 
             var stages = new[] {
-                new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo, Stage = ShaderStageFlags.VertexBit, Module = vertexModule, PName = (byte*)vertexName },
-                new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo, Stage = ShaderStageFlags.FragmentBit, Module = fragmentModule, PName = (byte*)fragmentName }
+                new PipelineShaderStageCreateInfo {
+                    SType = StructureType.PipelineShaderStageCreateInfo,
+                    Stage = ShaderStageFlags.VertexBit,
+                    Module = vertexModule,
+                    PName = (byte*)vertexName,
+                },
+                new PipelineShaderStageCreateInfo {
+                    SType = StructureType.PipelineShaderStageCreateInfo,
+                    Stage = ShaderStageFlags.FragmentBit,
+                    Module = fragmentModule,
+                    PName = (byte*)fragmentName,
+                },
             };
 
             var descriptorLayout = _descriptorSetLayout;
 
             var layoutInfo = new PipelineLayoutCreateInfo {
                 SType = StructureType.PipelineLayoutCreateInfo,
+                PSetLayouts = &descriptorLayout,
                 SetLayoutCount = 1,
-                PSetLayouts = &descriptorLayout
             };
 
             if (vk.CreatePipelineLayout(device, in layoutInfo, null, out var pipelineLayout) != Result.Success)
@@ -214,7 +231,7 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
                 PolygonMode = PolygonMode.Fill,
                 CullMode = CullModeFlags.None,
                 FrontFace = FrontFace.CounterClockwise,
-                LineWidth = 1.0f
+                LineWidth = 1.0f,
             };
 
             var multisampling = new PipelineMultisampleStateCreateInfo {
@@ -224,22 +241,22 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
             
             var depthStencil = new PipelineDepthStencilStateCreateInfo {
                 SType = StructureType.PipelineDepthStencilStateCreateInfo,
-                DepthTestEnable = false,
-                DepthWriteEnable = false,
                 DepthCompareOp = CompareOp.Always,
                 MinDepthBounds = 0.0f,
                 MaxDepthBounds = 1.0f,
+                DepthTestEnable = false,
+                DepthWriteEnable = false,
             };
 
             var blendAttachment = new PipelineColorBlendAttachmentState {
                 ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit,
-                BlendEnable = false
+                BlendEnable = false,
             };
 
             var colorBlend = new PipelineColorBlendStateCreateInfo {
                 SType = StructureType.PipelineColorBlendStateCreateInfo,
+                PAttachments = &blendAttachment,
                 AttachmentCount = 1,
-                PAttachments = &blendAttachment
             };
 
             var dynamicStates = new[] {
@@ -257,7 +274,6 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
                 StageCount = (uint)stages.Length,
                 Layout = PipelineLayout,
                 RenderPass = renderPass,
-                Subpass = 0,
                 PVertexInputState = &vertexInput,
                 PInputAssemblyState = &inputAssembly,
                 PViewportState = &viewportState,
@@ -265,7 +281,8 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
                 PMultisampleState = &multisampling,
                 PDepthStencilState = &depthStencil,
                 PColorBlendState = &colorBlend,
-                PDynamicState = &dynamicState
+                PDynamicState = &dynamicState,
+                Subpass = 0,
             };
 
             fixed (PipelineShaderStageCreateInfo* stagePointer = stages)
