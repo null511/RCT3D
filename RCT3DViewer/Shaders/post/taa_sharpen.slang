@@ -3,23 +3,21 @@ import lib.uniforms;
 
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
 
+[[vk::binding(0, 1)]] Texture2D<float4> taaResolved;
+[[vk::binding(1, 1)]] SamplerState linearSampler;
+[[vk::binding(2, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
+[[vk::binding(3, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> taaHistory;
+
+static const uint sharedBufferRes = 18;
+static const uint sharedBufferSize = sharedBufferRes * sharedBufferRes;
+groupshared float3 sharedBuffer[sharedBufferSize];
+
 struct ComputeInput {
     uint groupIndex : SV_GroupIndex;
     uint2 groupPos : SV_GroupID;
     uint2 localPos : SV_GroupThreadID;
     uint2 globalPos : SV_DispatchThreadID;
 };
-
-[[vk::binding(0, 1)]] Texture2D<float4> taaResolved;
-[[vk::binding(1, 1)]] SamplerState linearSampler;
-[[vk::binding(2, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
-[[vk::binding(3, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> taaHistory;
-
-extern static const float TAA_CasStrength = 0.5;
-
-static const uint sharedBufferRes = 18;
-static const uint sharedBufferSize = sharedBufferRes * sharedBufferRes;
-groupshared float3 sharedBuffer[sharedBufferSize];
 
 [shader("compute")]
 [numthreads(16, 16)]
@@ -51,7 +49,7 @@ void main(ComputeInput input) {
         // Simplified version of "slow" CAS without upscaling or better diagonals
         // https://github.com/GPUOpen-Effects/FidelityFX-CAS/blob/master/ffx-cas/ffx_cas.h#L423
 
-        const float peak = -rcp(lerp(8.0, 5.0, TAA_CasStrength));
+        const float peak = -rcp(lerp(8.0, 5.0, sceneUniforms.taa_sharpen));
 
         int2 uv = input.localPos + 1;
         float3 b = sharedBuffer[getSharedIndex(uv + int2(0, -1))];

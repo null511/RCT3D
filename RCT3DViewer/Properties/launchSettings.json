@@ -3,7 +3,8 @@
     "RCT3DViewer": {
       "commandName": "Project",
       "environmentVariables": {
-        "VK_INSTANCE_LAYERS": "VK_LAYER_KHRONOS_validation"
+        "VK_INSTANCE_LAYERS": "VK_LAYER_KHRONOS_validation",
+        "RCT3D_PARK": "C:\\Users\\null5\\Documents\\OpenRCT2\\save\\Leafy Lake Test.SV4.park"
       },
       "hotReloadEnabled": false
     }

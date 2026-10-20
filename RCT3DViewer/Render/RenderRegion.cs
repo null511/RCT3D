@@ -35,6 +35,7 @@ internal static class RenderRegionLayout
 
         var tileX = region.X * RegionSizeInTiles;
         var tileY = region.Y * RegionSizeInTiles;
+
         return new RenderRegionTileBounds(
             tileX,
             tileY,

@@ -14,7 +14,14 @@ internal class Program
         renderer.LibraryPath = Environment.GetEnvironmentVariable("RCT3DVIEWER_OPENRCT2_DLL") ?? LibOpenRCT2.DefaultLibraryPath;
         renderer.OpenRCT2Path = Environment.GetEnvironmentVariable("RCT3DVIEWER_OPENRCT2_DATA") ?? DefaultOpenRCT2Path;
         renderer.Rct2Path = Environment.GetEnvironmentVariable("RCT3DVIEWER_RCT2_DATA") ?? DefaultRCT2Path;
-        renderer.Run();
-        return 0;
+        renderer.StartupParkPath = Environment.GetEnvironmentVariable("RCT3D_PARK");
+
+        try {
+            renderer.Run();
+            return 0;
+        }
+        catch {
+            return 1;
+        }
     }
 }

@@ -17,5 +17,7 @@ struct SceneUniforms {
 	float4 sunDirection;
 	float4 lighting;
 	uint frameCounter;
-	float3 padding;
+	float taa_sharpen;
+	float mipBias;
+	float padding;
 };

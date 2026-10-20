@@ -12,16 +12,23 @@ internal sealed class ViewerUiController
     private string _parkLoadStatus = string.Empty;
     private bool _isParkLoading;
     private bool _showSkyModal;
+    private bool _showGraphicsOptions;
     private bool _showParkLoadError;
-    private float _timeOfDayHours = 12.0f;
-    private float _sunAngleDegrees = 45.0f;
+    private float _timeOfDayHours = 9.0f;
+    private float _sunAngleDegrees = 25.0f;
     private float _displayedFps;
     private double _displayedFrameTimeMilliseconds;
     private bool _wireframeEnabled;
+    private bool _taaEnabled = true;
+    private float _sharpening = 0.5f;
+    private float _mipBias = -1.0f;
 
     public float TimeOfDayHours => _timeOfDayHours;
     public float SunAngleDegrees => _sunAngleDegrees;
     public bool WireframeEnabled => _wireframeEnabled;
+    public bool TaaEnabled => _taaEnabled;
+    public float Sharpening => _sharpening;
+    public float MipBias => _mipBias;
     //public string? LoadedParkPath => _loadedParkPath;
     //public bool HasParkLoadError => _parkLoadError is not null;
     public bool IsParkLoading => _isParkLoading;
@@ -87,7 +94,7 @@ internal sealed class ViewerUiController
             }
 
             if (ImGui.BeginMenu("View")) {
-                ImGui.MenuItem("Wireframe", string.Empty, ref _wireframeEnabled, wireframeAvailable);
+                ImGui.MenuItem("Graphics Options", string.Empty, ref _showGraphicsOptions);
                 ImGui.EndMenu();
             }
 
@@ -131,6 +138,19 @@ internal sealed class ViewerUiController
             ImGui.End();
         }
 
+        if (_showGraphicsOptions) {
+            var graphicsOptionsVisible = ImGui.Begin("Graphics Options", ref _showGraphicsOptions, ImGuiWindowFlags.AlwaysAutoResize);
+            if (graphicsOptionsVisible) {
+                ImGui.BeginDisabled(!wireframeAvailable);
+                ImGui.Checkbox("Wireframe", ref _wireframeEnabled);
+                ImGui.EndDisabled();
+                ImGui.Checkbox("TAA", ref _taaEnabled);
+                ImGui.SliderFloat("Sharpening", ref _sharpening, 0.0f, 1.0f, "%.2f");
+                ImGui.SliderFloat("Mip Bias", ref _mipBias, -2.0f, 0.0f, "%.2f");
+            }
+            ImGui.End();
+        }
+
         if (_isParkLoading)
             DrawParkLoadingPanel();
     }
@@ -138,6 +158,7 @@ internal sealed class ViewerUiController
     private void DrawParkLoadingPanel()
     {
         var viewport = ImGui.GetMainViewport();
+
         ImGui.SetNextWindowPos(viewport.GetCenter(), ImGuiCond.Always, new Vector2(0.5f, 0.5f));
         ImGui.SetNextWindowBgAlpha(0.94f);
         if (ImGui.Begin("Loading park", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoInputs)) {
@@ -152,12 +173,13 @@ internal sealed class ViewerUiController
 
     private void OpenParkPicker(Action<string> loadPark)
     {
-        if (_isParkLoading)
-            return;
+        if (_isParkLoading) return;
 
         var defaultPath = _loadedParkPath is null ? string.Empty : Path.GetDirectoryName(_loadedParkPath) ?? string.Empty;
+
         try {
             var result = Dialog.FileOpen("park", defaultPath);
+
             if (result.IsError) {
                 ShowParkLoadError(result.ErrorMessage);
             }

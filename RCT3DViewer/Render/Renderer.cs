@@ -1,3 +1,4 @@
+using RCT3DViewer.Render.Buffers;
 using RCT3DViewer.Render.Paths;
 using RCT3DViewer.Render.Paths.Meshing;
 using RCT3DViewer.Render.Terrain;
@@ -68,6 +69,7 @@ public sealed class Renderer : IDisposable
     private Vector3 _cameraPositionLast;
     private Matrix4x4 _viewProjectionLast = Matrix4x4.Identity;
     private bool _taaHistoryValid;
+    private bool _taaEnabledLastFrame = true;
     private bool _sceneOutputInitialized;
     private bool _taaHistoryInitialized;
     private bool _taaResolveInitialized;
@@ -86,6 +88,7 @@ public sealed class Renderer : IDisposable
     public string? LibraryPath { get; set; }
     public string? OpenRCT2Path { get; set; }
     public string? Rct2Path { get; set; }
+    public string? StartupParkPath { get; set; }
     public float TerrainSkirtFloor { get; set; } = -24.0f;
 
 
@@ -190,6 +193,10 @@ public sealed class Renderer : IDisposable
 
         Console.WriteLine("\n=== Vulkan Engine Pipeline Fully Operational ===");
         Console.WriteLine("Hold down RIGHT-MOUSE BUTTON to look around. Use W,A,S,D to fly.");
+
+        var startupParkPath = StartupParkPath;
+        if (!string.IsNullOrWhiteSpace(startupParkPath))
+            LoadPark(startupParkPath);
     }
 
     private unsafe void CreateCommandInfrastructure()
@@ -487,6 +494,10 @@ public sealed class Renderer : IDisposable
         UpdateVehicleCubeInstances();
 
         _ui.BuildFrameUi(deltaTime, _activeFrameTimeMilliseconds, LoadPark, () => _exitRequested = true, _deviceContext!.SupportsWireframe);
+        if (_taaEnabledLastFrame != _ui.TaaEnabled) {
+            _taaHistoryValid = false;
+            _taaEnabledLastFrame = _ui.TaaEnabled;
+        }
         _vk.ResetCommandBuffer(cmd, 0);
 
         CommandBufferBeginInfo beginInfo = new() {
@@ -560,20 +571,26 @@ public sealed class Renderer : IDisposable
         CameraUniforms cameraUniforms = new() {
             CameraPosition = new Vector4(cameraPosition, 1.0f),
             ViewProjection = viewProjection,
-            ViewProjectionInverse = inverseViewProjection
+            ViewProjectionInverse = inverseViewProjection,
         };
+
+        var taaJitter = _ui.TaaEnabled ? GetR2Jitter(_taaFrameIndex + 1) : Vector2.Zero;
         TemporalUniforms temporalUniforms = new() {
             CameraPositionLast = new Vector4(_frameCounter == 0 ? cameraPosition : _cameraPositionLast, 1.0f),
-            ViewProjectionLast = _frameCounter == 0 ? viewProjection : _viewProjectionLast
+            ViewProjectionLast = _frameCounter == 0 ? viewProjection : _viewProjectionLast,
         };
+
         SceneUniforms sceneUniforms = new() {
             RenderDimensions = renderDimensions,
-            TaaJitter = GetR2Jitter(_taaFrameIndex + 1),
+            TaaJitter = taaJitter,
             SunDirection = new Vector4(sunDirection, 0.0f),
             Lighting = new Vector4(ambientLight, 1.25f, 0.0f, 0.0f),
             FrameCounter = _frameCounter,
-            Padding = Vector3.Zero
+            TaaSharpen = _ui.Sharpening,
+            MipBias = _ui.MipBias,
+            Padding = 0.0f,
         };
+
         _uniformBufferResources!.Update(_currentFrame, cameraUniforms, temporalUniforms, sceneUniforms);
 
         ulong offset = 0;
@@ -662,60 +679,62 @@ public sealed class Renderer : IDisposable
 
         _vk.CmdEndRenderPass(cmd);
 
-        var taaDescriptorIndex = _taaHistoryValid ? 0 : 1;
+        if (_ui.TaaEnabled) {
+            var taaDescriptorIndex = _taaHistoryValid ? 0 : 1;
 
-        var resolveOldLayout = _taaResolveInitialized
-            ? ImageLayout.ShaderReadOnlyOptimal
-            : ImageLayout.Undefined;
+            var resolveOldLayout = _taaResolveInitialized
+                ? ImageLayout.ShaderReadOnlyOptimal
+                : ImageLayout.Undefined;
 
-        RecordImageBarrier(cmd, _deferredTargets.TaaResolveImage, resolveOldLayout,
-            ImageLayout.General,
-            _taaResolveInitialized
-                ? PipelineStageFlags.ComputeShaderBit
-                : PipelineStageFlags.TopOfPipeBit,
-            _taaResolveInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
-            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+            RecordImageBarrier(cmd, _deferredTargets.TaaResolveImage, resolveOldLayout,
+                ImageLayout.General,
+                _taaResolveInitialized
+                    ? PipelineStageFlags.ComputeShaderBit
+                    : PipelineStageFlags.TopOfPipeBit,
+                _taaResolveInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
 
-        _deferredPassResources.TaaResolve.Dispatch(cmd, taaDescriptorIndex, uniformDescriptorSet, renderDimensions);
+            _deferredPassResources.TaaResolve.Dispatch(cmd, taaDescriptorIndex, uniformDescriptorSet, renderDimensions);
 
-        RecordImageBarrier(cmd, _deferredTargets.TaaResolveImage, ImageLayout.General,
-            ImageLayout.ShaderReadOnlyOptimal, PipelineStageFlags.ComputeShaderBit,
-            AccessFlags.ShaderWriteBit,
-            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit);
+            RecordImageBarrier(cmd, _deferredTargets.TaaResolveImage, ImageLayout.General,
+                ImageLayout.ShaderReadOnlyOptimal, PipelineStageFlags.ComputeShaderBit,
+                AccessFlags.ShaderWriteBit,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit);
 
-        _taaResolveInitialized = true;
+            _taaResolveInitialized = true;
 
-        var historyOldLayout = _taaHistoryInitialized
-            ? ImageLayout.ShaderReadOnlyOptimal
-            : ImageLayout.Undefined;
+            var historyOldLayout = _taaHistoryInitialized
+                ? ImageLayout.ShaderReadOnlyOptimal
+                : ImageLayout.Undefined;
 
-        RecordImageBarrier(cmd, _deferredTargets.TaaHistoryImage, historyOldLayout,
-            ImageLayout.General,
-            _taaHistoryInitialized
-                ? PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit
-                : PipelineStageFlags.TopOfPipeBit,
-            _taaHistoryInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
-            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+            RecordImageBarrier(cmd, _deferredTargets.TaaHistoryImage, historyOldLayout,
+                ImageLayout.General,
+                _taaHistoryInitialized
+                    ? PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit
+                    : PipelineStageFlags.TopOfPipeBit,
+                _taaHistoryInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
 
-        RecordImageBarrier(cmd, _deferredTargets.SceneOutputImage, ImageLayout.ShaderReadOnlyOptimal,
-            ImageLayout.General,
-            PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.ComputeShaderBit,
-            AccessFlags.ColorAttachmentWriteBit | AccessFlags.ShaderReadBit,
-            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+            RecordImageBarrier(cmd, _deferredTargets.SceneOutputImage, ImageLayout.ShaderReadOnlyOptimal,
+                ImageLayout.General,
+                PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.ComputeShaderBit,
+                AccessFlags.ColorAttachmentWriteBit | AccessFlags.ShaderReadBit,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
 
-        _deferredPassResources.TaaSharpen.Dispatch(cmd, 0, uniformDescriptorSet, renderDimensions);
-        
-        RecordImageBarrier(cmd, _deferredTargets.SceneOutputImage, ImageLayout.General,
-            ImageLayout.ShaderReadOnlyOptimal, PipelineStageFlags.ComputeShaderBit,
-            AccessFlags.ShaderWriteBit, PipelineStageFlags.ComputeShaderBit,
-            AccessFlags.ShaderReadBit);
+            _deferredPassResources.TaaSharpen.Dispatch(cmd, 0, uniformDescriptorSet, renderDimensions);
 
-        RecordImageBarrier(cmd, _deferredTargets.TaaHistoryImage, ImageLayout.General,
-            ImageLayout.ShaderReadOnlyOptimal, PipelineStageFlags.ComputeShaderBit,
-            AccessFlags.ShaderWriteBit,
-            PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit, AccessFlags.ShaderReadBit);
+            RecordImageBarrier(cmd, _deferredTargets.SceneOutputImage, ImageLayout.General,
+                ImageLayout.ShaderReadOnlyOptimal, PipelineStageFlags.ComputeShaderBit,
+                AccessFlags.ShaderWriteBit, PipelineStageFlags.ComputeShaderBit,
+                AccessFlags.ShaderReadBit);
 
-        _taaHistoryInitialized = true;
+            RecordImageBarrier(cmd, _deferredTargets.TaaHistoryImage, ImageLayout.General,
+                ImageLayout.ShaderReadOnlyOptimal, PipelineStageFlags.ComputeShaderBit,
+                AccessFlags.ShaderWriteBit,
+                PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit, AccessFlags.ShaderReadBit);
+
+            _taaHistoryInitialized = true;
+        }
 
         clearValues[0] = new ClearValue { Color = new ClearColorValue(0.4f, 0.6f, 0.9f, 1.0f) };
         clearValues[1] = new ClearValue { DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 } };
@@ -759,7 +778,7 @@ public sealed class Renderer : IDisposable
         _viewProjectionLast = viewProjection;
         _frameCounter = _frameCounter == uint.MaxValue ? 1u : _frameCounter + 1u;
         _taaFrameIndex++;
-        _taaHistoryValid = true;
+        _taaHistoryValid = _ui.TaaEnabled;
 
         var swap = _swapchain;
         PresentInfoKHR presentInfo = new() {

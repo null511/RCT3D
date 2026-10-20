@@ -61,11 +61,6 @@ VertexStageOutput vertexMain(VertexInput input)
 [shader("fragment")]
 GBufferOutput fragmentMain(VertexStageOutput input)
 {
-    // GBufferOutput output;
-    // output.albedo = terrainTextures.Sample(terrainSampler, float3(input.texCoord, input.materialId));
-    // output.normals = float4(normalize(input.normal), 1.0);
-    // output.specular = float4(0.5, 0.0, 0.0, 1.0);
-    // return output;
     float3 layer = float3(input.texCoord, input.materialId);
     float4 albedo = terrainTextures.Sample(terrainSampler, layer);
     // float4 normalMap = terrainNormalTextures.Sample(terrainSampler, layer);

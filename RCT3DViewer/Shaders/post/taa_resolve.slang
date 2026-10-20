@@ -54,8 +54,11 @@ void main(ComputeInput input) {
         float depth = defer_depth.Load(int3(input.globalPos, 0));
 
         float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
-        float3 clipPosLast = reproject(clipPos);
-        float2 uv_prev = clipPosLast.xy * 0.5 + 0.5;
+
+        float3 localPos = mul_project(clipPos, cameraUniforms.viewProjectionInverse);
+        float3 clipPosLast = mul_project(localPos, temporalUniforms.viewProjectionLast);
+        float2 uv_prev = clipPosLast.xy;
+        uv_prev = uv_prev * 0.5 + 0.5;
 
         float4 lastColor = taaHistory.SampleLevel(linearSampler, uv_prev, 0);
 
@@ -96,11 +99,6 @@ uint2 getSharedUV(const in uint z) {
 
 int getSharedIndex(const in int2 uv) {
     return uv.y * sharedBufferRes + uv.x;
-}
-
-float3 reproject(float3 clipPos) {
-    float3 localPos = mul_project(clipPos, cameraUniforms.viewProjectionInverse);
-    return mul_project(localPos, temporalUniforms.viewProjectionLast);
 }
 
 static const int2 sample_offsets[] = {

@@ -7,19 +7,20 @@ namespace RCT3DViewer.Render;
 
 internal sealed class ViewerInputController : IDisposable
 {
-    private readonly IInputContext _inputContext;
-    private readonly FlightCamera _camera;
+    private readonly IInputContext inputContext;
+    private readonly FlightCamera camera;
 
 
     public ViewerInputController(IWindow window, FlightCamera camera, Func<bool> wantCaptureMouse)
     {
-        _camera = camera;
-        _inputContext = window.CreateInput();
+        this.camera = camera;
 
-        foreach (var mouse in _inputContext.Mice) {
+        inputContext = window.CreateInput();
+
+        foreach (var mouse in inputContext.Mice) {
             mouse.MouseMove += (m, pos) => {
                 if (m.IsButtonPressed(MouseButton.Right) && !wantCaptureMouse()) {
-                    _camera.HandleMouse(new Vector2(pos.X, pos.Y));
+                    this.camera.HandleMouse(new Vector2(pos.X, pos.Y));
                     m.Cursor.CursorMode = CursorMode.Raw;
                 }
                 else {
@@ -29,7 +30,7 @@ internal sealed class ViewerInputController : IDisposable
 
             mouse.Scroll += (_, scroll) => {
                 if (!wantCaptureMouse())
-                    _camera.HandleScroll(scroll.Y);
+                    this.camera.HandleScroll(scroll.Y);
             };
         }
     }
@@ -38,16 +39,19 @@ internal sealed class ViewerInputController : IDisposable
     {
         if (imguiRenderer is not null) {
             var io = ImGui.GetIO();
-            if (_inputContext.Mice.Count > 0) {
-                var mouse = _inputContext.Mice[0];
+
+            if (inputContext.Mice.Count > 0) {
+                var mouse = inputContext.Mice[0];
                 var position = mouse.Position;
+
                 io.AddMousePosEvent(position.X, position.Y);
                 io.AddMouseButtonEvent(0, mouse.IsButtonPressed(MouseButton.Left));
                 io.AddMouseButtonEvent(1, mouse.IsButtonPressed(MouseButton.Right));
             }
 
-            if (_inputContext.Keyboards.Count > 0) {
-                var keyboard = _inputContext.Keyboards[0];
+            if (inputContext.Keyboards.Count > 0) {
+                var keyboard = inputContext.Keyboards[0];
+
                 io.AddKeyEvent(ImGuiKey.Tab, keyboard.IsKeyPressed(Key.Tab));
                 io.AddKeyEvent(ImGuiKey.LeftArrow, keyboard.IsKeyPressed(Key.Left));
                 io.AddKeyEvent(ImGuiKey.RightArrow, keyboard.IsKeyPressed(Key.Right));
@@ -60,12 +64,12 @@ internal sealed class ViewerInputController : IDisposable
             }
         }
 
-        if (_inputContext.Keyboards.Count > 0 && !(imguiRenderer?.WantCaptureKeyboard ?? false))
-            _camera.HandleKeyboard(_inputContext.Keyboards[0], (float)deltaTime);
+        if (inputContext.Keyboards.Count > 0 && !(imguiRenderer?.WantCaptureKeyboard ?? false))
+            camera.HandleKeyboard(inputContext.Keyboards[0], (float)deltaTime);
     }
 
     public void Dispose()
     {
-        _inputContext.Dispose();
+        inputContext.Dispose();
     }
 }

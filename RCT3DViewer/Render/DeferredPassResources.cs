@@ -1,3 +1,4 @@
+using RCT3DViewer.Render.Buffers;
 using Silk.NET.Vulkan;
 
 namespace RCT3DViewer.Render;
@@ -61,7 +62,7 @@ internal sealed class DeferredPassResources : IDisposable
 
             tonemap = new FullscreenPassResources(context, swapchainRenderPass, "tonemap",
                 new[] {
-                    new[] { targets.TaaHistoryView }
+                    new[] { targets.SceneOutputView }
                 });
 
             Composite = composite;

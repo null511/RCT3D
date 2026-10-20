@@ -51,9 +51,9 @@ VertexStageOutput vertexMain(VertexInput input)
 GBufferOutput fragmentMain(VertexStageOutput input)
 {
     float3 layer = float3(input.texCoord, input.materialId);
-    float4 albedo = terrainTextures.Sample(terrainSampler, layer);
-    float4 normalMap = terrainNormalTextures.Sample(terrainSampler, layer);
-    float4 specularMap = terrainSpecularTextures.Sample(terrainSampler, layer);
+    float4 albedo = terrainTextures.SampleBias(terrainSampler, layer, sceneUniforms.mipBias);
+    float4 normalMap = terrainNormalTextures.SampleBias(terrainSampler, layer, sceneUniforms.mipBias);
+    float4 specularMap = terrainSpecularTextures.SampleBias(terrainSampler, layer, sceneUniforms.mipBias);
 
     float3 geoNormal = normalize(input.normal);
     float3 tangentNormal = restoreNormal(normalMap.rg * 2.0 - 1.0);

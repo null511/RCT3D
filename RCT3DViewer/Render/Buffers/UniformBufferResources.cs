@@ -2,7 +2,7 @@ using Silk.NET.Vulkan;
 using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-namespace RCT3DViewer.Render;
+namespace RCT3DViewer.Render.Buffers;
 
 internal sealed unsafe class UniformBufferResources : IDisposable
 {
