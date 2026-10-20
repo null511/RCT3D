@@ -1,5 +1,6 @@
 using RCT3DViewer.Render.Paths;
 using RCT3DViewer.Render.Paths.Meshing;
+using RCT3DViewer.Render.Terrain;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 

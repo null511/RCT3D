@@ -1,7 +1,7 @@
 using RCT3DViewer.Interop;
 using System.Numerics;
 
-namespace RCT3DViewer.Render;
+namespace RCT3DViewer.Render.Terrain;
 
 internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 {

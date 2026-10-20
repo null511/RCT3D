@@ -1,4 +1,5 @@
 using RCT3DViewer.Interop;
+using RCT3DViewer.Render.Terrain;
 
 namespace RCT3DViewer.Render.Paths.Meshing;
 

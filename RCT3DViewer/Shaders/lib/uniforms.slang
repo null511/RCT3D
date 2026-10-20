@@ -8,4 +8,5 @@ struct Uniforms {
 	float4x4 viewProjection;
 	float4 sunDirection;
 	float4 lighting;
+	float4 cameraPosition;
 };

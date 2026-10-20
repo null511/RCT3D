@@ -13,6 +13,10 @@ namespace RCT3DViewer
         private float _yaw = 90.0f;
         private float _pitch = -30.0f;
         private float _speed = 40.0f;
+        private const float MinimumSpeed = 0.0f;
+        private const float MaximumSpeed = 100.0f;
+        private const float ScrollSpeedFactor = 1.1f;
+        private const float ZeroSpeedRecovery = 0.1f;
         private float _sensitivity = 0.1f;
         private Vector2 _lastMousePosition;
         private bool _firstMouse = true;
@@ -49,6 +53,17 @@ namespace RCT3DViewer
             if (keyboard.IsKeyPressed(Key.D)) Position += right * moveVelocity;
             if (keyboard.IsKeyPressed(Key.Space)) Position += Up * moveVelocity;
             if (keyboard.IsKeyPressed(Key.ControlLeft)) Position -= Up * moveVelocity;
+        }
+
+        public void HandleScroll(float scrollDelta)
+        {
+            if (scrollDelta == 0.0f)
+                return;
+
+            if (_speed == MinimumSpeed && scrollDelta > 0.0f)
+                _speed = ZeroSpeedRecovery;
+
+            _speed = Math.Clamp(_speed * MathF.Pow(ScrollSpeedFactor, scrollDelta), MinimumSpeed, MaximumSpeed);
         }
 
         public void HandleMouse(Vector2 mousePosition)

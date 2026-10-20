@@ -3,7 +3,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-namespace RCT3DViewer.Render;
+namespace RCT3DViewer.Render.Terrain;
 
 internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context, RenderPass renderPass) : IDisposable
 {
@@ -17,6 +17,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
     public Buffer VertexBuffer => _vertexBuffer;
     public Buffer IndexBuffer => _indexBuffer;
     public uint IndexCount { get; private set; }
+
 
     public void CreatePipeline()
     {

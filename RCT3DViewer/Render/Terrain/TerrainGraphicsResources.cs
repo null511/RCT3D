@@ -5,7 +5,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-namespace RCT3DViewer.Render;
+namespace RCT3DViewer.Render.Terrain;
 
 internal sealed unsafe class TerrainGraphicsResources(
     VulkanDeviceContext context,
@@ -21,6 +21,12 @@ internal sealed unsafe class TerrainGraphicsResources(
     private Image _textureImage;
     private DeviceMemory _textureMemory;
     private ImageView _textureView;
+    private Image _normalTextureImage;
+    private DeviceMemory _normalTextureMemory;
+    private ImageView _normalTextureView;
+    private Image _specularTextureImage;
+    private DeviceMemory _specularTextureMemory;
+    private ImageView _specularTextureView;
     private Sampler _textureSampler;
     private Buffer _vertexBuffer;
     private DeviceMemory _vertexBufferMemory;
@@ -185,7 +191,9 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var descriptorBindings = new DescriptorSetLayoutBinding[] {
             new() { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
-            new() { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
+            new() { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+            new() { Binding = 2, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+            new() { Binding = 3, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
         };
 
         fixed (DescriptorSetLayoutBinding* bindingsPointer = descriptorBindings) {
@@ -275,76 +283,10 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var vk = context.Api;
         var device = context.LogicalDevice;
-        var layerBytes = checked((ulong)materials.Width * (ulong)materials.Height * 4);
-        var textureBytes = checked(layerBytes * (ulong)materials.LayerCount);
-
-        AllocateBuffer(textureBytes, BufferUsageFlags.TransferSrcBit,
-            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out var stagingBuffer, out var stagingMemory);
-
-        try {
-            void* mapped;
-            if (vk.MapMemory(device, stagingMemory, 0, textureBytes, 0, &mapped) != Result.Success)
-                throw new Exception("Failed to map terrain texture staging memory.");
-
-            Marshal.Copy(materials.Pixels, 0, (IntPtr)mapped, materials.Pixels.Length);
-            vk.UnmapMemory(device, stagingMemory);
-
-            ImageCreateInfo imageInfo = new() {
-                SType = StructureType.ImageCreateInfo,
-                ImageType = ImageType.Type2D,
-                Format = Format.R8G8B8A8Srgb,
-                Extent = new Extent3D((uint)materials.Width, (uint)materials.Height, 1),
-                MipLevels = 1,
-                ArrayLayers = (uint)materials.LayerCount,
-                Samples = SampleCountFlags.Count1Bit,
-                Tiling = ImageTiling.Optimal,
-                Usage = ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
-                SharingMode = SharingMode.Exclusive,
-                InitialLayout = ImageLayout.Undefined
-            };
-
-            if (vk.CreateImage(device, ref imageInfo, null, out _textureImage) != Result.Success)
-                throw new Exception("Failed to create terrain texture array image.");
-
-            vk.GetImageMemoryRequirements(device, _textureImage, out var requirements);
-            MemoryAllocateInfo allocationInfo = new() {
-                SType = StructureType.MemoryAllocateInfo,
-                AllocationSize = requirements.Size,
-                MemoryTypeIndex = context.FindMemoryType(requirements.MemoryTypeBits, MemoryPropertyFlags.DeviceLocalBit)
-            };
-
-            if (vk.AllocateMemory(device, ref allocationInfo, null, out _textureMemory) != Result.Success)
-                throw new Exception("Failed to allocate terrain texture array memory.");
-
-            if (vk.BindImageMemory(device, _textureImage, _textureMemory, 0) != Result.Success)
-                throw new Exception("Failed to bind terrain texture array memory.");
-
-            var regions = new BufferImageCopy[materials.LayerCount];
-            for (uint layer = 0; layer < regions.Length; layer++) {
-                regions[layer] = new BufferImageCopy {
-                    BufferOffset = layerBytes * layer,
-                    ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, layer, 1),
-                    ImageExtent = new Extent3D((uint)materials.Width, (uint)materials.Height, 1)
-                };
-            }
-
-            UploadTerrainTexture(stagingBuffer, regions);
-        }
-        finally {
-            vk.DestroyBuffer(device, stagingBuffer, null);
-            vk.FreeMemory(device, stagingMemory, null);
-        }
-
-        var viewInfo = new ImageViewCreateInfo {
-            SType = StructureType.ImageViewCreateInfo,
-            Image = _textureImage,
-            ViewType = ImageViewType.Type2DArray,
-            Format = Format.R8G8B8A8Srgb,
-            SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)materials.LayerCount)
-        };
-
-        if (vk.CreateImageView(device, in viewInfo, null, out _textureView) != Result.Success)
-            throw new Exception("Failed to create terrain texture array view.");
+        var mipLevels = (uint)BitOperations.Log2((uint)Math.Max(materials.Width, materials.Height)) + 1;
+        (_textureImage, _textureMemory, _textureView) = CreateTextureArray(materials.Pixels, Format.R8G8B8A8Srgb, mipLevels, "base");
+        (_normalTextureImage, _normalTextureMemory, _normalTextureView) = CreateTextureArray(materials.NormalPixels, Format.R8G8B8A8Unorm, mipLevels, "normal/AO");
+        (_specularTextureImage, _specularTextureMemory, _specularTextureView) = CreateTextureArray(materials.SpecularPixels, Format.R8G8B8A8Unorm, mipLevels, "specular");
 
         var samplerInfo = new SamplerCreateInfo {
             SType = StructureType.SamplerCreateInfo,
@@ -356,7 +298,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             AddressModeW = SamplerAddressMode.Repeat,
             MaxAnisotropy = 1,
             MinLod = 0,
-            MaxLod = 0,
+            MaxLod = mipLevels - 1,
             BorderColor = BorderColor.IntOpaqueBlack
         };
 
@@ -364,7 +306,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             throw new Exception("Failed to create terrain texture sampler.");
 
         var poolSizes = new DescriptorPoolSize[] {
-            new() { Type = DescriptorType.SampledImage, DescriptorCount = 1 },
+            new() { Type = DescriptorType.SampledImage, DescriptorCount = 3 },
             new() { Type = DescriptorType.Sampler, DescriptorCount = 1 }
         };
 
@@ -393,8 +335,18 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         DescriptorSet = descriptorSet;
 
-        var imageDescriptor = new DescriptorImageInfo {
+        var baseImageDescriptor = new DescriptorImageInfo {
             ImageView = _textureView,
+            ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+        };
+
+        var normalImageDescriptor = new DescriptorImageInfo {
+            ImageView = _normalTextureView,
+            ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+        };
+
+        var specularImageDescriptor = new DescriptorImageInfo {
+            ImageView = _specularTextureView,
             ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
         };
 
@@ -404,13 +356,119 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var writes = new WriteDescriptorSet[] {
             new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
-            new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.Sampler }
+            new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.Sampler },
+            new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
+            new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 3, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage }
         };
 
         fixed (WriteDescriptorSet* writesPointer = writes) {
-            writes[0].PImageInfo = &imageDescriptor;
+            writes[0].PImageInfo = &baseImageDescriptor;
             writes[1].PImageInfo = &samplerDescriptor;
+            writes[2].PImageInfo = &normalImageDescriptor;
+            writes[3].PImageInfo = &specularImageDescriptor;
             vk.UpdateDescriptorSets(device, (uint)writes.Length, writesPointer, 0, null);
+        }
+    }
+
+    private (Image Image, DeviceMemory Memory, ImageView View) CreateTextureArray(byte[] pixels, Format format, uint mipLevels, string mapName)
+    {
+        var vk = context.Api;
+        var device = context.LogicalDevice;
+        var layerBytes = checked((ulong)materials.Width * (ulong)materials.Height * 4);
+        var textureBytes = checked(layerBytes * (ulong)materials.LayerCount);
+        Buffer stagingBuffer = default;
+        DeviceMemory stagingMemory = default;
+        Image image = default;
+        DeviceMemory memory = default;
+        ImageView view = default;
+
+        try {
+            vk.GetPhysicalDeviceFormatProperties(context.PhysicalDevice, format, out var formatProperties);
+            var requiredFormatFeatures = FormatFeatureFlags.SampledImageBit
+                | FormatFeatureFlags.BlitSrcBit
+                | FormatFeatureFlags.BlitDstBit
+                | FormatFeatureFlags.SampledImageFilterLinearBit;
+            if ((formatProperties.OptimalTilingFeatures & requiredFormatFeatures) != requiredFormatFeatures)
+                throw new NotSupportedException($"The Vulkan device does not support sampled, linearly filtered blits for {format} {mapName} textures.");
+
+            AllocateBuffer(textureBytes, BufferUsageFlags.TransferSrcBit,
+                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out stagingBuffer, out stagingMemory);
+
+            void* mapped;
+            if (vk.MapMemory(device, stagingMemory, 0, textureBytes, 0, &mapped) != Result.Success)
+                throw new Exception($"Failed to map terrain {mapName} texture staging memory.");
+
+            Marshal.Copy(pixels, 0, (IntPtr)mapped, pixels.Length);
+            vk.UnmapMemory(device, stagingMemory);
+
+            ImageCreateInfo imageInfo = new() {
+                SType = StructureType.ImageCreateInfo,
+                ImageType = ImageType.Type2D,
+                Format = format,
+                Extent = new Extent3D((uint)materials.Width, (uint)materials.Height, 1),
+                MipLevels = mipLevels,
+                ArrayLayers = (uint)materials.LayerCount,
+                Samples = SampleCountFlags.Count1Bit,
+                Tiling = ImageTiling.Optimal,
+                Usage = ImageUsageFlags.TransferSrcBit | ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
+                SharingMode = SharingMode.Exclusive,
+                InitialLayout = ImageLayout.Undefined
+            };
+
+            if (vk.CreateImage(device, ref imageInfo, null, out image) != Result.Success)
+                throw new Exception($"Failed to create terrain {mapName} texture array image.");
+
+            vk.GetImageMemoryRequirements(device, image, out var requirements);
+            MemoryAllocateInfo allocationInfo = new() {
+                SType = StructureType.MemoryAllocateInfo,
+                AllocationSize = requirements.Size,
+                MemoryTypeIndex = context.FindMemoryType(requirements.MemoryTypeBits, MemoryPropertyFlags.DeviceLocalBit)
+            };
+
+            if (vk.AllocateMemory(device, ref allocationInfo, null, out memory) != Result.Success)
+                throw new Exception($"Failed to allocate terrain {mapName} texture array memory.");
+
+            if (vk.BindImageMemory(device, image, memory, 0) != Result.Success)
+                throw new Exception($"Failed to bind terrain {mapName} texture array memory.");
+
+            var regions = new BufferImageCopy[materials.LayerCount];
+            for (uint layer = 0; layer < regions.Length; layer++) {
+                regions[layer] = new BufferImageCopy {
+                    BufferOffset = layerBytes * layer,
+                    ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, layer, 1),
+                    ImageExtent = new Extent3D((uint)materials.Width, (uint)materials.Height, 1)
+                };
+            }
+
+            UploadTextureArray(image, stagingBuffer, regions, mipLevels);
+
+            var viewInfo = new ImageViewCreateInfo {
+                SType = StructureType.ImageViewCreateInfo,
+                Image = image,
+                ViewType = ImageViewType.Type2DArray,
+                Format = format,
+                SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, mipLevels, 0, (uint)materials.LayerCount)
+            };
+
+            if (vk.CreateImageView(device, in viewInfo, null, out view) != Result.Success)
+                throw new Exception($"Failed to create terrain {mapName} texture array view.");
+
+            return (image, memory, view);
+        }
+        catch {
+            if (view.Handle != 0)
+                vk.DestroyImageView(device, view, null);
+            if (image.Handle != 0)
+                vk.DestroyImage(device, image, null);
+            if (memory.Handle != 0)
+                vk.FreeMemory(device, memory, null);
+            throw;
+        }
+        finally {
+            if (stagingBuffer.Handle != 0)
+                vk.DestroyBuffer(device, stagingBuffer, null);
+            if (stagingMemory.Handle != 0)
+                vk.FreeMemory(device, stagingMemory, null);
         }
     }
 
@@ -482,7 +540,7 @@ internal sealed unsafe class TerrainGraphicsResources(
         vertices.AsSpan().CopyTo(vertexSpan);
         vk.UnmapMemory(device, _vertexBufferMemory);
 
-        var indexBufferSize = checked((ulong)sizeof(uint) * (ulong)indices.Length);
+        var indexBufferSize = checked(sizeof(uint) * (ulong)indices.Length);
         AllocateBuffer(indexBufferSize, BufferUsageFlags.IndexBufferBit,
             MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _indexBuffer, out _indexBufferMemory);
 
@@ -535,7 +593,7 @@ internal sealed unsafe class TerrainGraphicsResources(
         _instanceBufferCapacity = 0;
     }
 
-    private void UploadTerrainTexture(Buffer stagingBuffer, BufferImageCopy[] regions)
+    private void UploadTextureArray(Image image, Buffer stagingBuffer, BufferImageCopy[] regions, uint mipLevels)
     {
         var vk = context.Api;
         var device = context.LogicalDevice;
@@ -563,8 +621,8 @@ internal sealed unsafe class TerrainGraphicsResources(
                 NewLayout = ImageLayout.TransferDstOptimal,
                 SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
                 DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
-                Image = _textureImage,
-                SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)materials.LayerCount),
+                Image = image,
+                SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, mipLevels, 0, (uint)materials.LayerCount),
                 SrcAccessMask = AccessFlags.None,
                 DstAccessMask = AccessFlags.TransferWriteBit,
             };
@@ -572,22 +630,69 @@ internal sealed unsafe class TerrainGraphicsResources(
             vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TopOfPipeBit, PipelineStageFlags.TransferBit, 0, 0, null, 0, null, 1, &toTransfer);
 
             fixed (BufferImageCopy* regionsPointer = regions)
-                vk.CmdCopyBufferToImage(commandBuffer, stagingBuffer, _textureImage,
+                vk.CmdCopyBufferToImage(commandBuffer, stagingBuffer, image,
                     ImageLayout.TransferDstOptimal, (uint)regions.Length, regionsPointer);
 
-            var toShader = new ImageMemoryBarrier {
+            for (uint mipLevel = 1; mipLevel < mipLevels; mipLevel++) {
+                var sourceMipLevel = mipLevel - 1;
+                var sourceWidth = Math.Max(1u, (uint)materials.Width >> (int)sourceMipLevel);
+                var sourceHeight = Math.Max(1u, (uint)materials.Height >> (int)sourceMipLevel);
+                var destinationWidth = Math.Max(1u, (uint)materials.Width >> (int)mipLevel);
+                var destinationHeight = Math.Max(1u, (uint)materials.Height >> (int)mipLevel);
+
+                var toBlitSource = new ImageMemoryBarrier {
+                    SType = StructureType.ImageMemoryBarrier,
+                    OldLayout = ImageLayout.TransferDstOptimal,
+                    NewLayout = ImageLayout.TransferSrcOptimal,
+                    SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                    DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                    Image = image,
+                    SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, sourceMipLevel, 1, 0, (uint)materials.LayerCount),
+                    SrcAccessMask = AccessFlags.TransferWriteBit,
+                    DstAccessMask = AccessFlags.TransferReadBit,
+                };
+
+                vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.TransferBit, 0, 0, null, 0, null, 1, &toBlitSource);
+
+                var blit = new ImageBlit {
+                    SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, sourceMipLevel, 0, (uint)materials.LayerCount),
+                    DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, mipLevel, 0, (uint)materials.LayerCount),
+                };
+                blit.SrcOffsets[0] = new Offset3D(0, 0, 0);
+                blit.SrcOffsets[1] = new Offset3D((int)sourceWidth, (int)sourceHeight, 1);
+                blit.DstOffsets[0] = new Offset3D(0, 0, 0);
+                blit.DstOffsets[1] = new Offset3D((int)destinationWidth, (int)destinationHeight, 1);
+                vk.CmdBlitImage(commandBuffer, image, ImageLayout.TransferSrcOptimal,
+                    image, ImageLayout.TransferDstOptimal, 1, &blit, Filter.Linear);
+
+                var sourceMipToShader = new ImageMemoryBarrier {
+                    SType = StructureType.ImageMemoryBarrier,
+                    OldLayout = ImageLayout.TransferSrcOptimal,
+                    NewLayout = ImageLayout.ShaderReadOnlyOptimal,
+                    SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                    DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                    Image = image,
+                    SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, sourceMipLevel, 1, 0, (uint)materials.LayerCount),
+                    SrcAccessMask = AccessFlags.TransferReadBit,
+                    DstAccessMask = AccessFlags.ShaderReadBit,
+                };
+
+                vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit, 0, 0, null, 0, null, 1, &sourceMipToShader);
+            }
+
+            var lastMipToShader = new ImageMemoryBarrier {
                 SType = StructureType.ImageMemoryBarrier,
                 OldLayout = ImageLayout.TransferDstOptimal,
                 NewLayout = ImageLayout.ShaderReadOnlyOptimal,
                 SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
                 DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
-                Image = _textureImage,
-                SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)materials.LayerCount),
+                Image = image,
+                SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, mipLevels - 1, 1, 0, (uint)materials.LayerCount),
                 SrcAccessMask = AccessFlags.TransferWriteBit,
                 DstAccessMask = AccessFlags.ShaderReadBit,
             };
 
-            vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit, 0, 0, null, 0, null, 1, &toShader);
+            vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit, 0, 0, null, 0, null, 1, &lastMipToShader);
 
             vk.EndCommandBuffer(commandBuffer);
             var submitInfo = new SubmitInfo {
@@ -637,18 +742,42 @@ internal sealed unsafe class TerrainGraphicsResources(
         if (_textureView.Handle != 0)
             vk.DestroyImageView(device, _textureView, null);
 
+        if (_normalTextureView.Handle != 0)
+            vk.DestroyImageView(device, _normalTextureView, null);
+
+        if (_specularTextureView.Handle != 0)
+            vk.DestroyImageView(device, _specularTextureView, null);
+
         if (_textureImage.Handle != 0)
             vk.DestroyImage(device, _textureImage, null);
 
+        if (_normalTextureImage.Handle != 0)
+            vk.DestroyImage(device, _normalTextureImage, null);
+
+        if (_specularTextureImage.Handle != 0)
+            vk.DestroyImage(device, _specularTextureImage, null);
+
         if (_textureMemory.Handle != 0)
             vk.FreeMemory(device, _textureMemory, null);
+
+        if (_normalTextureMemory.Handle != 0)
+            vk.FreeMemory(device, _normalTextureMemory, null);
+
+        if (_specularTextureMemory.Handle != 0)
+            vk.FreeMemory(device, _specularTextureMemory, null);
 
         _descriptorPool = default;
         DescriptorSet = default;
         _textureSampler = default;
         _textureView = default;
+        _normalTextureView = default;
+        _specularTextureView = default;
         _textureImage = default;
+        _normalTextureImage = default;
+        _specularTextureImage = default;
         _textureMemory = default;
+        _normalTextureMemory = default;
+        _specularTextureMemory = default;
     }
 
     public void Dispose()

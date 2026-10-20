@@ -9,4 +9,5 @@ public struct UniformBufferObject
     public Matrix4x4 ViewProjection;
     public Vector4 SunDirection;
     public Vector4 Lighting;
+    public Vector4 CameraPosition;
 }

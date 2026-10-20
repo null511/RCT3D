@@ -2,7 +2,7 @@ using System.Text;
 using StbImageSharp;
 using System.Text.Json;
 
-namespace RCT3DViewer.Render;
+namespace RCT3DViewer.Render.Terrain;
 
 public sealed class TerrainMaterialLibrary
 {
@@ -14,18 +14,22 @@ public sealed class TerrainMaterialLibrary
     public int Width { get; }
     public int Height { get; }
     public byte[] Pixels { get; }
+    public byte[] NormalPixels { get; }
+    public byte[] SpecularPixels { get; }
     public uint FallbackLayer {get;}
 
     public int LayerCount => Pixels.Length / (Width * Height * 4);
 
 
     private TerrainMaterialLibrary(
-        int width, int height, byte[] pixels, Dictionary<uint, uint> layersByObjectIdHash,
+        int width, int height, byte[] pixels, byte[] normalPixels, byte[] specularPixels, Dictionary<uint, uint> layersByObjectIdHash,
         Dictionary<uint, GrassTextureLayers> grassLayersByObjectIdHash, uint fallbackLayer)
     {
         Width = width;
         Height = height;
         Pixels = pixels;
+        NormalPixels = normalPixels;
+        SpecularPixels = specularPixels;
         FallbackLayer = fallbackLayer;
 
         _layersByObjectIdHash = layersByObjectIdHash;
@@ -88,7 +92,23 @@ public sealed class TerrainMaterialLibrary
             pixels[pixel + 3] = ScaleChannel(pixels[pixel + 3], factor.W);
         }
 
-        return new TerrainMaterialLibrary(width, height, pixels, new Dictionary<uint, uint>(), new Dictionary<uint, GrassTextureLayers>(), 0);
+        return new TerrainMaterialLibrary(width, height, pixels,
+            CreateSolidPixels(width, height, 128, 128, 255, 255),
+            CreateSolidPixels(width, height, 255, 0, 0, 0),
+            new Dictionary<uint, uint>(), new Dictionary<uint, GrassTextureLayers>(), 0);
+    }
+
+    private static byte[] CreateSolidPixels(int width, int height, byte red, byte green, byte blue, byte alpha)
+    {
+        var pixels = new byte[checked(width * height * 4)];
+        for (var offset = 0; offset < pixels.Length; offset += 4) {
+            pixels[offset] = red;
+            pixels[offset + 1] = green;
+            pixels[offset + 2] = blue;
+            pixels[offset + 3] = alpha;
+        }
+
+        return pixels;
     }
 
     private static byte ScaleChannel(byte channel, float factor)
@@ -116,7 +136,7 @@ public sealed class TerrainMaterialLibrary
             materials.AddRange(additionalMaterials.EnumerateArray());
         if (materials.Count == 0) throw new InvalidDataException("Terrain material manifest has no materials.");
 
-        var images = new List<(string ObjectId, byte[] Pixels, int Width, int Height)>(materials.Count);
+        var images = new List<(string ObjectId, byte[] Pixels, byte[] NormalPixels, byte[] SpecularPixels, int Width, int Height)>(materials.Count);
         var objectIds = new HashSet<string>(StringComparer.Ordinal);
         var layers = new Dictionary<uint, uint>();
         var grassLayers = new Dictionary<uint, GrassTextureLayers>();
@@ -139,9 +159,28 @@ public sealed class TerrainMaterialLibrary
             if (width.HasValue && (image.Width != width.Value || image.Height != height!.Value))
                 throw new InvalidDataException($"Terrain texture '{texture}' has dimensions {image.Width}x{image.Height}, expected {width}x{height}.");
 
+            byte[] LoadCompanion(string suffix, byte red, byte green, byte blue, byte alpha)
+            {
+                var companionPath = Path.Combine(
+                    Path.GetDirectoryName(texturePath)!,
+                    $"{Path.GetFileNameWithoutExtension(texturePath)}_{suffix}{Path.GetExtension(texturePath)}");
+                if (!File.Exists(companionPath))
+                    return CreateSolidPixels(image.Width, image.Height, red, green, blue, alpha);
+
+                using var companionStream = File.OpenRead(companionPath);
+                var companion = ImageResult.FromStream(companionStream, ColorComponents.RedGreenBlueAlpha);
+                if (companion.Width != image.Width || companion.Height != image.Height)
+                    throw new InvalidDataException($"Terrain {suffix} texture '{Path.GetFileName(companionPath)}' has dimensions {companion.Width}x{companion.Height}, expected {image.Width}x{image.Height}.");
+
+                return companion.Data;
+            }
+
             width ??= image.Width;
             height ??= image.Height;
-            images.Add((objectId, image.Data, image.Width, image.Height));
+            images.Add((objectId, image.Data,
+                LoadCompanion("n", 128, 128, 255, 255),
+                LoadCompanion("s", 255, 0, 0, 0),
+                image.Width, image.Height));
         }
 
         foreach (var material in materials) {
@@ -197,15 +236,19 @@ public sealed class TerrainMaterialLibrary
 
         var layerSize = checked(width!.Value * height!.Value * 4);
         var pixels = new byte[checked(layerSize * images.Count)];
+        var normalPixels = new byte[pixels.Length];
+        var specularPixels = new byte[pixels.Length];
 
         for (var layer = 0; layer < images.Count; layer++) {
             images[layer].Pixels.CopyTo(pixels, layer * layerSize);
+            images[layer].NormalPixels.CopyTo(normalPixels, layer * layerSize);
+            images[layer].SpecularPixels.CopyTo(specularPixels, layer * layerSize);
         }
 
         if (!configuredFallbackLayer.HasValue)
             throw new InvalidDataException($"Terrain fallback object '{fallbackObjectId}' is not defined in materials.");
 
-        return new TerrainMaterialLibrary(width.Value, height.Value, pixels, layers, grassLayers, configuredFallbackLayer.Value);
+        return new TerrainMaterialLibrary(width.Value, height.Value, pixels, normalPixels, specularPixels, layers, grassLayers, configuredFallbackLayer.Value);
     }
 
     public static uint HashObjectId(string objectId)

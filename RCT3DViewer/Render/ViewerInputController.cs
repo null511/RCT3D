@@ -26,6 +26,11 @@ internal sealed class ViewerInputController : IDisposable
                     m.Cursor.CursorMode = CursorMode.Normal;
                 }
             };
+
+            mouse.Scroll += (_, scroll) => {
+                if (!wantCaptureMouse())
+                    _camera.HandleScroll(scroll.Y);
+            };
         }
     }
 

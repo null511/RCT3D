@@ -1,5 +1,6 @@
 using RCT3DViewer.Render.Paths;
 using RCT3DViewer.Render.Paths.Meshing;
+using RCT3DViewer.Render.Terrain;
 using RCT3DViewer.Simulation;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
@@ -524,7 +525,8 @@ public sealed class Renderer : IDisposable
         UniformBufferObject ubo = new() {
             ViewProjection = viewProjection,
             SunDirection = new Vector4(sunDirection, 0.0f),
-            Lighting = new Vector4(ambientLight, 0.85f, 0.0f, 0.0f)
+            Lighting = new Vector4(ambientLight, 1.25f, 0.0f, 0.0f),
+            CameraPosition = new Vector4(_camera.Position, 1.0f)
         };
 
         _vk.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);

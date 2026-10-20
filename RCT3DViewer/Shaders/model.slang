@@ -1,8 +1,7 @@
 import lib.uniforms;
 
 
-struct VertexInput
-{
+struct VertexInput {
 	float3 position     : POSITION;
 	float3 normal       : NORMAL;
 	float2 texCoord     : TEXCOORD0;
@@ -13,8 +12,7 @@ struct VertexInput
 	float4 transformRow3 : TEXCOORD5;
 };
 
-struct VertexStageOutput
-{
+struct VertexStageOutput {
 	float4 position  : SV_Position;
 	float3 normal    : NORMAL;
 	float2 texCoord  : TEXCOORD0;
@@ -31,10 +29,12 @@ SamplerState terrainSampler;
 VertexStageOutput vertexMain(VertexInput input)
 {
 	VertexStageOutput output;
+
 	float4 worldPosition = input.position.x * input.transformRow0
 		+ input.position.y * input.transformRow1
 		+ input.position.z * input.transformRow2
 		+ input.transformRow3;
+
 	float3 worldNormal = input.normal.x * input.transformRow0.xyz
 		+ input.normal.y * input.transformRow1.xyz
 		+ input.normal.z * input.transformRow2.xyz;
@@ -43,6 +43,7 @@ VertexStageOutput vertexMain(VertexInput input)
 	output.normal = normalize(worldNormal);
 	output.texCoord = input.texCoord;
 	output.materialId = (uint)input.materialId;
+
 	return output;
 }
 
@@ -53,5 +54,6 @@ float4 fragmentMain(VertexStageOutput input) : SV_Target
 
 	float3 sunDir = normalize(globalUniforms.sunDirection.xyz);
 	color.rgb *= max(dot(normalize(input.normal), sunDir), 0.0) * globalUniforms.lighting.y + globalUniforms.lighting.x;
+	
 	return color;
 }
