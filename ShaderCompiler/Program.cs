@@ -15,6 +15,7 @@ namespace ShaderCompiler
             var input = args[0];
             var outputBase = args[1];
             var anyCompiled = false;
+            var hasCompilationFailures = false;
 
             // Ensure Slang native runtime assets are discoverable (from NuGet package runtimes/*/native)
             if (!TryEnsureSlangNativeDependencies(out var nativeMsg)) {
@@ -44,10 +45,32 @@ namespace ShaderCompiler
                 foreach (var file in files) {
                     Console.WriteLine($"[Slang BuildTime] Processing shader file: {file}");
 
-                    // Convention: try to compile vertex entrypoint named 'vertexMain' and fragment 'fragmentMain'
                     var rel = Path.GetRelativePath(input, file);
                     var outDir = Path.Combine(outputBase, Path.GetDirectoryName(rel) ?? string.Empty);
                     if (!Directory.Exists(outDir)) Directory.CreateDirectory(outDir);
+
+                    if (IsComputeShader(file)) {
+                        var computeOutPath = Path.Combine(outDir, Path.GetFileNameWithoutExtension(file) + ".comp.spv");
+                        try {
+                            var computeArgs = new[] { file, "-I", importRoot, "-stage", "compute", "-entry", "main", "-target", "spirv" };
+                            var computeBytes = Slangc.NET.SlangCompiler.Compile(computeArgs);
+                            if (computeBytes is not { Length: > 0 })
+                                throw new InvalidOperationException("compute compile produced no output");
+
+                            File.WriteAllBytes(computeOutPath, computeBytes);
+                            Console.WriteLine($" Wrote: {computeOutPath}");
+                            anyCompiled = true;
+                        }
+                        catch (Exception ex) {
+                            if (File.Exists(computeOutPath))
+                                File.Delete(computeOutPath);
+                            Console.WriteLine($" Error: compute compile failed for {file}: {ex.Message}");
+                            Console.WriteLine($"ERROR: Shader file '{file}' failed to compile.");
+                            hasCompilationFailures = true;
+                        }
+
+                        continue;
+                    }
 
                     // Vertex
                     var vertOk = false;
@@ -116,10 +139,13 @@ namespace ShaderCompiler
 
                     // If either stage failed, consider overall compilation for this shader file a failure
                     if (!vertOk || !fragOk) {
-                        Console.WriteLine($"ERROR: Shader file '{file}' failed to compile both stages cleanly. Aborting shader build.");
-                        return 5;
+                        Console.WriteLine($"ERROR: Shader file '{file}' failed to compile both stages cleanly.");
+                        hasCompilationFailures = true;
                     }
                 }
+
+                if (hasCompilationFailures)
+                    return 5;
 
                 if (!anyCompiled) {
                     Console.WriteLine("ERROR: No shaders were compiled. Ensure Slang runtime native dependencies are present and shaders contain expected entry points.");
@@ -145,6 +171,9 @@ namespace ShaderCompiler
 
             return false;
         }
+
+        private static bool IsComputeShader(string file) =>
+            File.ReadLines(file).Any(line => line.Contains("[shader(\"compute\")]") || line.Contains("[shader(\"compute\" )]"));
 
         private static bool TryEnsureSlangNativeDependencies(out string message)
         {

@@ -1,13 +1,13 @@
 import lib.uniforms;
 
+[[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 
-struct VertexInput
-{
+
+struct VertexInput {
 	float3 position : POSITION;
 };
 
-struct VertexStageOutput
-{
+struct VertexStageOutput {
 	float4 position : SV_Position;
 };
 
@@ -15,7 +15,7 @@ struct VertexStageOutput
 VertexStageOutput vertexMain(VertexInput input)
 {
 	VertexStageOutput output;
-	output.position = mul(float4(input.position, 1.0), globalUniforms.viewProjection);
+	output.position = mul(float4(input.position, 1.0), cameraUniforms.viewProjection);
 	return output;
 }
 

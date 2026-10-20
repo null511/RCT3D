@@ -1,0 +1,16 @@
+public module colors;
+
+
+float3 srgbToLinear(const in float3 color) {
+    const float3 cutoff = 0.04045;
+    float3 low = color / 12.92;
+    float3 high = pow(max(color + 0.055, 0.0) / 1.055, 2.4);
+    return lerp(low, high, step(cutoff, color));
+}
+
+float3 linearToSrgb(const in float3 color) {
+    const float3 cutoff = 0.0031308;
+    float3 low = color * 12.92;
+    float3 high = 1.055 * pow(max(color, 0.0), 1.0 / 2.4) - 0.055;
+    return lerp(low, high, step(cutoff, color));
+}

@@ -10,10 +10,12 @@ namespace RCT3DViewer.Render.Terrain;
 internal sealed unsafe class TerrainGraphicsResources(
     VulkanDeviceContext context,
     RenderPass renderPass,
+    DescriptorSetLayout uniformDescriptorSetLayout,
     TerrainMaterialLibrary materials,
     bool useInstances = false,
     string shaderNameOverride = "",
-    bool createWireframePipeline = false) : IDisposable
+    bool createWireframePipeline = false,
+    uint colorAttachmentCount = 1) : IDisposable
 {
     private CommandPool _commandPool;
     private DescriptorSetLayout _descriptorSetLayout;
@@ -51,8 +53,9 @@ internal sealed unsafe class TerrainGraphicsResources(
         var vk = context.Api;
         var device = context.LogicalDevice;
         var shaderName = string.IsNullOrEmpty(shaderNameOverride) ? useInstances ? "model" : "terrain" : shaderNameOverride;
-        var vertPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", $"{shaderName}.vert.spv");
-        var fragPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", $"{shaderName}.frag.spv");
+        var shaderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", shaderName);
+        var vertPath = $"{shaderPath}.vert.spv";
+        var fragPath = $"{shaderPath}.frag.spv";
 
         byte[] vertShaderCode;
         byte[] fragShaderCode;
@@ -97,9 +100,9 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var bindingDescriptions = new List<VertexInputBindingDescription> {
             new() {
-            Binding = 0,
-            Stride = (uint)Marshal.SizeOf<TerrainVertex>(),
-            InputRate = VertexInputRate.Vertex
+                Binding = 0,
+                Stride = (uint)Marshal.SizeOf<TerrainVertex>(),
+                InputRate = VertexInputRate.Vertex
             }
         };
 
@@ -113,6 +116,7 @@ internal sealed unsafe class TerrainGraphicsResources(
         if (useInstances) {
             var instanceStride = (uint)Marshal.SizeOf<ModelInstance>();
             var matrixOffset = checked((uint)Marshal.OffsetOf<ModelInstance>(nameof(ModelInstance.Transform)).ToInt64());
+
             bindingDescriptions.Add(new VertexInputBindingDescription {
                 Binding = 1,
                 Stride = instanceStride,
@@ -178,15 +182,14 @@ internal sealed unsafe class TerrainGraphicsResources(
             MaxDepthBounds = 1.0f
         };
 
-        var colorBlendAttachment = new PipelineColorBlendAttachmentState {
+        var colorBlendAttachments = Enumerable.Repeat(new PipelineColorBlendAttachmentState {
             ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit,
             BlendEnable = false,
-        };
+        }, checked((int)colorAttachmentCount)).ToArray();
         
         var colorBlending = new PipelineColorBlendStateCreateInfo {
             SType = StructureType.PipelineColorBlendStateCreateInfo,
-            AttachmentCount = 1,
-            PAttachments = &colorBlendAttachment,
+            AttachmentCount = (uint)colorBlendAttachments.Length,
         };
 
         var descriptorBindings = new DescriptorSetLayoutBinding[] {
@@ -207,23 +210,18 @@ internal sealed unsafe class TerrainGraphicsResources(
                 throw new Exception("Failed to create the terrain texture descriptor-set layout.");
         }
 
-        var descriptorLayout = _descriptorSetLayout;
-        var pushConstantRange = new PushConstantRange {
-            StageFlags = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
-            Size = (uint)Marshal.SizeOf<UniformBufferObject>(),
-            Offset = 0,
-        };
+        var descriptorLayouts = new[] { uniformDescriptorSetLayout, _descriptorSetLayout };
 
-        var pipelineLayoutInfo = new PipelineLayoutCreateInfo {
-            SType = StructureType.PipelineLayoutCreateInfo,
-            SetLayoutCount = 1,
-            PSetLayouts = &descriptorLayout,
-            PushConstantRangeCount = 1,
-            PPushConstantRanges = &pushConstantRange
-        };
+        fixed (DescriptorSetLayout* descriptorLayoutsPointer = descriptorLayouts) {
+            var pipelineLayoutInfo = new PipelineLayoutCreateInfo {
+                SType = StructureType.PipelineLayoutCreateInfo,
+                SetLayoutCount = (uint)descriptorLayouts.Length,
+                PSetLayouts = descriptorLayoutsPointer
+            };
 
-        vk.CreatePipelineLayout(device, in pipelineLayoutInfo, null, out var pipelineLayout);
-        PipelineLayout = pipelineLayout;
+            vk.CreatePipelineLayout(device, in pipelineLayoutInfo, null, out var pipelineLayout);
+            PipelineLayout = pipelineLayout;
+        }
 
         var pipelineInfo = new GraphicsPipelineCreateInfo {
             SType = StructureType.GraphicsPipelineCreateInfo,
@@ -246,10 +244,12 @@ internal sealed unsafe class TerrainGraphicsResources(
         fixed (PipelineShaderStageCreateInfo* stagePointer = shaderStages)
         fixed (VertexInputBindingDescription* bindingPointer = bindingDescriptionArray)
         fixed (VertexInputAttributeDescription* attributePointer = attributeDescriptionArray)
+        fixed (PipelineColorBlendAttachmentState* colorBlendPointer = colorBlendAttachments)
         fixed (DynamicState* dynamicStatesPointer = dynamicStates) {
             vertexInputInfo.PVertexBindingDescriptions = bindingPointer;
             vertexInputInfo.PVertexAttributeDescriptions = attributePointer;
             dynamicState.PDynamicStates = dynamicStatesPointer;
+            colorBlending.PAttachments = colorBlendPointer;
             pipelineInfo.PStages = stagePointer;
 
             var result = vk.CreateGraphicsPipelines(device, default, 1, in pipelineInfo, null, out var pipeline);

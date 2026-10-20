@@ -20,15 +20,21 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
     public uint IndexCount => _graphicsResources.IndexCount;
     public ModelRegionBatch[] RegionBatches { get; private set; } = Array.Empty<ModelRegionBatch>();
 
-    public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, ImportedModelMaterial material, bool unlit = false)
+
+    public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout, ImportedModelMaterial material, bool unlit = false, bool deferred = false)
     {
         _context = context;
+
         _graphicsResources = new TerrainGraphicsResources(
             context,
             renderPass,
+            uniformDescriptorSetLayout,
             TerrainMaterialLibrary.FromModelMaterial(material),
             useInstances: true,
-            shaderNameOverride: unlit ? "vehicleCube" : "model");
+            shaderNameOverride: deferred
+                ? Path.Combine("defer", unlit ? "deferredVehicleCube" : "deferredModel")
+                : unlit ? "vehicleCube" : "model",
+            colorAttachmentCount: deferred ? 3u : 1u);
     }
 
     public void CreatePipeline() => _graphicsResources.CreatePipeline();
@@ -68,18 +74,17 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
         RegionBatches = uploadedRegions;
     }
 
-    public void DrawInstanced(CommandBuffer commandBuffer, UniformBufferObject uniforms, ModelRegionBatch region)
+    public void DrawInstanced(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, ModelRegionBatch region)
     {
         if (IndexCount == 0 || region.InstanceCount == 0)
             return;
 
         var vk = _context.Api;
         vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, Pipeline);
-        var descriptorSet = DescriptorSet;
-        vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, PipelineLayout, 0, 1, in descriptorSet, 0, null);
-        var constants = &uniforms;
-        vk.CmdPushConstants(commandBuffer, PipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
-            0, (uint)sizeof(UniformBufferObject), constants);
+        var descriptorSets = stackalloc DescriptorSet[2];
+        descriptorSets[0] = uniformDescriptorSet;
+        descriptorSets[1] = DescriptorSet;
+        vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, PipelineLayout, 0, 2, descriptorSets, 0, null);
 
         var vertexBuffers = stackalloc Buffer[2];
         vertexBuffers[0] = VertexBuffer;

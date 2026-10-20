@@ -1,12 +1,21 @@
 public module uniforms;
 
-
-[[vk::push_constant]]
-Uniforms globalUniforms;
-
-struct Uniforms {
+struct CameraUniforms {
+	float4 cameraPosition;
 	float4x4 viewProjection;
+	float4x4 viewProjectionInverse;
+};
+
+struct TemporalUniforms {
+	float4 cameraPositionLast;
+	float4x4 viewProjectionLast;
+};
+
+struct SceneUniforms {
+	uint2 renderDimensions;
+	float2 taa_jitter;
 	float4 sunDirection;
 	float4 lighting;
-	float4 cameraPosition;
+	uint frameCounter;
+	float3 padding;
 };

@@ -5,7 +5,7 @@ using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace RCT3DViewer.Render.Terrain;
 
-internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context, RenderPass renderPass) : IDisposable
+internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout) : IDisposable
 {
     private Buffer _vertexBuffer;
     private DeviceMemory _vertexBufferMemory;
@@ -136,16 +136,11 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
                 PAttachments = &colorBlendAttachment
             };
 
-            PushConstantRange pushConstantRange = new() {
-                StageFlags = ShaderStageFlags.VertexBit,
-                Size = (uint)Marshal.SizeOf<UniformBufferObject>(),
-                Offset = 0
-            };
-
+            var uniformLayout = uniformDescriptorSetLayout;
             PipelineLayoutCreateInfo layoutInfo = new() {
                 SType = StructureType.PipelineLayoutCreateInfo,
-                PushConstantRangeCount = 1,
-                PPushConstantRanges = &pushConstantRange
+                SetLayoutCount = 1,
+                PSetLayouts = &uniformLayout
             };
 
             if (vk.CreatePipelineLayout(device, in layoutInfo, null, out var layout) != Result.Success)

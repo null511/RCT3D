@@ -7,7 +7,6 @@ using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 using System.Diagnostics;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
 using Semaphore = Silk.NET.Vulkan.Semaphore;
 
@@ -23,6 +22,9 @@ public sealed class Renderer : IDisposable
     private Queue _graphicsQueue => _deviceContext?.GraphicsQueue ?? default;
     private uint _graphicsQueueFamilyIndex => _deviceContext?.GraphicsQueueFamilyIndex ?? 0;
     private SwapchainResources? _swapchainResources;
+    private DeferredRenderTargets? _deferredTargets;
+    private DeferredPassResources? _deferredPassResources;
+    private UniformBufferResources? _uniformBufferResources;
     private SwapchainKHR _swapchain => _swapchainResources?.Swapchain ?? default;
     private Image[] _swapchainImages => _swapchainResources?.Images ?? Array.Empty<Image>();
     //private ImageView[] _swapchainImageViews => _swapchainResources?.ImageViews ?? Array.Empty<ImageView>();
@@ -61,6 +63,14 @@ public sealed class Renderer : IDisposable
     private ImGuiVulkanRenderer? _imguiRenderer;
     private bool _exitRequested;
     private readonly FlightCamera _camera = new();
+    private ulong _taaFrameIndex;
+    private uint _frameCounter;
+    private Vector3 _cameraPositionLast;
+    private Matrix4x4 _viewProjectionLast = Matrix4x4.Identity;
+    private bool _taaHistoryValid;
+    private bool _sceneOutputInitialized;
+    private bool _taaHistoryInitialized;
+    private bool _taaResolveInitialized;
     private TerrainMeshBuilder? _terrainMeshBuilder;
     private PathMeshBuilder? _pathMeshBuilder;
     private TerrainMeshData? _terrainMesh;
@@ -140,11 +150,16 @@ public sealed class Renderer : IDisposable
         _swapchainResources.CreateImageViews();
         _swapchainResources.CreateDepthResources();
         _swapchainResources.CreateRenderPass();
-        _terrainGraphicsResources = new TerrainGraphicsResources(_deviceContext, _renderPass, _terrainMaterials!, createWireframePipeline: true);
+        _deferredTargets = new DeferredRenderTargets(_deviceContext, _swapchainExtent);
+        _uniformBufferResources = new UniformBufferResources(_deviceContext, MaxFramesInFlight);
+        _deferredPassResources = new DeferredPassResources(_deviceContext, _renderPass, _deferredTargets, _uniformBufferResources);
+        _terrainGraphicsResources = new TerrainGraphicsResources(_deviceContext, _deferredTargets.GBufferRenderPass, _uniformBufferResources.DescriptorSetLayout, _terrainMaterials!,
+            shaderNameOverride: Path.Combine("defer", "deferredTerrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         _terrainGraphicsResources.CreatePipeline();
-        _pathGraphicsResources = new TerrainGraphicsResources(_deviceContext, _renderPass, _pathMaterials!.TextureLibrary, createWireframePipeline: true);
+        _pathGraphicsResources = new TerrainGraphicsResources(_deviceContext, _deferredTargets.GBufferRenderPass, _uniformBufferResources.DescriptorSetLayout, _pathMaterials!.TextureLibrary,
+            shaderNameOverride: Path.Combine("defer", "deferredTerrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         _pathGraphicsResources.CreatePipeline();
-        _waterGraphicsResources = new WaterGraphicsResources(_deviceContext, _renderPass);
+        _waterGraphicsResources = new WaterGraphicsResources(_deviceContext, _deferredTargets.WaterRenderPass, _uniformBufferResources.DescriptorSetLayout);
         _waterGraphicsResources.CreatePipeline();
         _swapchainResources.CreateFramebuffers();
 
@@ -156,7 +171,7 @@ public sealed class Renderer : IDisposable
         var vehicleCube = VehicleCubeRenderer.CreateMesh();
         _vehicleCubeGraphicsResources = new ModelGraphicsResources[MaxFramesInFlight];
         for (var i = 0; i < _vehicleCubeGraphicsResources.Length; i++) {
-            var resources = new ModelGraphicsResources(_deviceContext!, _renderPass, vehicleCube.Material, unlit: true);
+            var resources = new ModelGraphicsResources(_deviceContext!, _deferredTargets.GBufferRenderPass, _uniformBufferResources.DescriptorSetLayout, vehicleCube.Material, unlit: true, deferred: true);
             try {
                 resources.CreatePipeline();
                 resources.CreateTextureResources(_commandPool);
@@ -248,6 +263,7 @@ public sealed class Renderer : IDisposable
     {
         var framebufferSize = _window!.FramebufferSize;
         if (framebufferSize.X == 0 || framebufferSize.Y == 0) return false;
+        var previousExtent = _swapchainExtent;
 
         if (_vk!.DeviceWaitIdle(_logicalDevice) != Result.Success)
             throw new Exception("Failed to wait for the Vulkan device before recreating the swapchain.");
@@ -257,6 +273,16 @@ public sealed class Renderer : IDisposable
         _commandPool = default;
         _commandBuffers = Array.Empty<CommandBuffer>();
         _swapchainResources!.Recreate();
+        _frameCounter = 0;
+        _deferredPassResources?.Dispose();
+        _deferredTargets?.Resize(_swapchainExtent);
+        if (previousExtent.Width != _swapchainExtent.Width || previousExtent.Height != _swapchainExtent.Height) {
+            _taaHistoryValid = false;
+            _sceneOutputInitialized = false;
+            _taaHistoryInitialized = false;
+            _taaResolveInitialized = false;
+        }
+        _deferredPassResources = new DeferredPassResources(_deviceContext!, _renderPass, _deferredTargets!, _uniformBufferResources!);
         CreateCommandInfrastructure();
         CreateSyncPrimitives();
         _imguiRenderer?.ResizeBuffers(_swapchainImages.Length);
@@ -343,7 +369,7 @@ public sealed class Renderer : IDisposable
                 _waterGraphicsResources!.UploadMesh(result.Water);
                 DisposePathAccessoryResources();
                 foreach (var batch in result.PathAccessories) {
-                    var resources = new ModelGraphicsResources(_deviceContext!, _renderPass, batch.Material);
+                    var resources = new ModelGraphicsResources(_deviceContext!, _deferredTargets!.GBufferRenderPass, _uniformBufferResources!.DescriptorSetLayout, batch.Material, deferred: true);
                     try {
                         resources.CreatePipeline();
                         resources.CreateTextureResources(_commandPool);
@@ -362,6 +388,7 @@ public sealed class Renderer : IDisposable
                 _loadedMapWidth = result.Width;
                 _loadedMapHeight = result.Height;
                 _camera.Position = new Vector3(result.Width * 1.5f, 120.0f, -result.Height * 1.5f);
+                _taaHistoryValid = false;
                 _pendingParkLoadResult = null;
                 _ui.CompleteParkLoad(result.ParkPath);
             }
@@ -381,6 +408,7 @@ public sealed class Renderer : IDisposable
         _waterMesh = null;
         _loadedMapWidth = 0;
         _loadedMapHeight = 0;
+        _taaHistoryValid = false;
         _pendingParkLoadResult = null;
         _parkLoadTask = null;
 
@@ -467,12 +495,11 @@ public sealed class Renderer : IDisposable
 
         _vk.BeginCommandBuffer(cmd, in beginInfo);
 
-        var clearValues = stackalloc ClearValue[2];
-        clearValues[0] = new ClearValue {
-            Color = new ClearColorValue(0.4f, 0.6f, 0.9f, 1.0f),
-        };
-
-        clearValues[1] = new ClearValue {
+        var clearValues = stackalloc ClearValue[4];
+        clearValues[0] = new ClearValue { Color = new ClearColorValue(0.4f, 0.6f, 0.9f, 1.0f) };
+        clearValues[1] = new ClearValue { Color = new ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f) };
+        clearValues[2] = new ClearValue { Color = new ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f) };
+        clearValues[3] = new ClearValue {
             DepthStencil = new ClearDepthStencilValue {
                 Depth = 1.0f,
                 Stencil = 0,
@@ -481,10 +508,10 @@ public sealed class Renderer : IDisposable
 
         RenderPassBeginInfo renderPassInfo = new() {
             SType = StructureType.RenderPassBeginInfo,
-            RenderPass = _renderPass,
-            Framebuffer = _framebuffers[imageIndex],
+            RenderPass = _deferredTargets!.GBufferRenderPass,
+            Framebuffer = _deferredTargets.GBufferFramebuffer,
             RenderArea = new Rect2D(new Offset2D(0, 0), _swapchainExtent),
-            ClearValueCount = 2,
+            ClearValueCount = 4,
             PClearValues = clearValues
         };
 
@@ -509,11 +536,17 @@ public sealed class Renderer : IDisposable
         _vk.CmdSetViewport(cmd, 0, 1, &viewport);
         _vk.CmdSetScissor(cmd, 0, 1, &scissor);
         var terrainDescriptorSet = _terrainDescriptorSet;
-        _vk.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, _pipelineLayout, 0, 1, in terrainDescriptorSet, 0, null);
+        var uniformDescriptorSet = _uniformBufferResources!.GetDescriptorSet(_currentFrame);
+        var terrainDescriptorSets = stackalloc DescriptorSet[2];
+        terrainDescriptorSets[0] = uniformDescriptorSet;
+        terrainDescriptorSets[1] = terrainDescriptorSet;
+        _vk.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, _pipelineLayout, 0, 2, terrainDescriptorSets, 0, null);
 
         var aspect = (float)_swapchainExtent.Width / _swapchainExtent.Height;
         // Row-vector convention in shader: clip = position * viewProjection
         var viewProjection = _camera.GetViewMatrix() * _camera.GetProjectionMatrix(aspect);
+        if (!Matrix4x4.Invert(viewProjection, out var inverseViewProjection))
+            throw new InvalidOperationException("The camera view-projection matrix is not invertible.");
         var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
         var timeAngle = (_ui.TimeOfDayHours - 6.0f) * (MathF.PI / 12.0f);
         var sunElevation = MathF.Sin(timeAngle);
@@ -521,15 +554,27 @@ public sealed class Renderer : IDisposable
         var sunAzimuth = _ui.SunAngleDegrees * (MathF.PI / 180.0f);
         var sunDirection = Vector3.Normalize(new Vector3(MathF.Cos(sunAzimuth) * horizontalLength, sunElevation, MathF.Sin(sunAzimuth) * horizontalLength));
         var ambientLight = 0.15f + 0.15f * MathF.Max(sunElevation, 0.0f);
+        var cameraPosition = _camera.Position;
 
-        UniformBufferObject ubo = new() {
+        var renderDimensions = new Vector2D<uint>(_swapchainExtent.Width, _swapchainExtent.Height);
+        CameraUniforms cameraUniforms = new() {
+            CameraPosition = new Vector4(cameraPosition, 1.0f),
             ViewProjection = viewProjection,
+            ViewProjectionInverse = inverseViewProjection
+        };
+        TemporalUniforms temporalUniforms = new() {
+            CameraPositionLast = new Vector4(_frameCounter == 0 ? cameraPosition : _cameraPositionLast, 1.0f),
+            ViewProjectionLast = _frameCounter == 0 ? viewProjection : _viewProjectionLast
+        };
+        SceneUniforms sceneUniforms = new() {
+            RenderDimensions = renderDimensions,
+            TaaJitter = GetR2Jitter(_taaFrameIndex + 1),
             SunDirection = new Vector4(sunDirection, 0.0f),
             Lighting = new Vector4(ambientLight, 1.25f, 0.0f, 0.0f),
-            CameraPosition = new Vector4(_camera.Position, 1.0f)
+            FrameCounter = _frameCounter,
+            Padding = Vector3.Zero
         };
-
-        _vk.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
+        _uniformBufferResources!.Update(_currentFrame, cameraUniforms, temporalUniforms, sceneUniforms);
 
         ulong offset = 0;
         if (_terrainMesh is { Vertices.Length: > 0, Indices.Length: > 0 } terrainMesh && _vertexBuffer.Handle != 0 && _indexBuffer.Handle != 0) {
@@ -546,7 +591,7 @@ public sealed class Renderer : IDisposable
             var vehicleResources = _vehicleCubeGraphicsResources[(int)_currentFrame];
             foreach (var region in vehicleResources.RegionBatches) {
                 if (viewFrustum.Intersects(region.Bounds))
-                    vehicleResources.DrawInstanced(cmd, ubo, region);
+                    vehicleResources.DrawInstanced(cmd, uniformDescriptorSet, region);
             }
         }
 
@@ -555,10 +600,10 @@ public sealed class Renderer : IDisposable
             var pathPipeline = _ui.WireframeEnabled ? pathResources.WireframePipeline : pathResources.Pipeline;
             _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, pathPipeline);
             var pathDescriptorSet = pathResources.DescriptorSet;
-            _vk.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, pathResources.PipelineLayout, 0, 1, in pathDescriptorSet, 0, null);
-            _vk.CmdPushConstants(cmd, pathResources.PipelineLayout,
-                ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0,
-                (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
+            var pathDescriptorSets = stackalloc DescriptorSet[2];
+            pathDescriptorSets[0] = uniformDescriptorSet;
+            pathDescriptorSets[1] = pathDescriptorSet;
+            _vk.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, pathResources.PipelineLayout, 0, 2, pathDescriptorSets, 0, null);
             var pathVertexBuffer = pathResources.VertexBuffer;
             _vk.CmdBindVertexBuffers(cmd, 0, 1, in pathVertexBuffer, in offset);
             _vk.CmdBindIndexBuffer(cmd, pathResources.IndexBuffer, 0, IndexType.Uint32);
@@ -572,9 +617,28 @@ public sealed class Renderer : IDisposable
             foreach (var (_, resources) in _pathAccessoryGraphicsResources)
             foreach (var region in resources.RegionBatches) {
                 if (viewFrustum.Intersects(region.Bounds))
-                    resources.DrawInstanced(cmd, ubo, region);
+                    resources.DrawInstanced(cmd, uniformDescriptorSet, region);
             }
         }
+
+        _vk.CmdEndRenderPass(cmd);
+
+        RecordImageBarrier(cmd, _deferredTargets.SceneOutputImage,
+            _sceneOutputInitialized ? ImageLayout.ShaderReadOnlyOptimal : ImageLayout.Undefined,
+            ImageLayout.General,
+            _sceneOutputInitialized ? PipelineStageFlags.ComputeShaderBit : PipelineStageFlags.TopOfPipeBit,
+            _sceneOutputInitialized ? AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit : AccessFlags.None,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+        _deferredPassResources!.Composite.Dispatch(cmd, 0, uniformDescriptorSet, renderDimensions);
+        _sceneOutputInitialized = true;
+
+        RenderPassBeginInfo waterRenderPassInfo = new() {
+            SType = StructureType.RenderPassBeginInfo,
+            RenderPass = _deferredTargets.WaterRenderPass,
+            Framebuffer = _deferredTargets.WaterFramebuffer,
+            RenderArea = new Rect2D(new Offset2D(0, 0), _swapchainExtent)
+        };
+        _vk.CmdBeginRenderPass(cmd, in waterRenderPassInfo, SubpassContents.Inline);
 
         if (_waterMesh is { Indices.Length: > 0 } waterMesh && _waterGraphicsResources is { IndexCount: > 0 } waterResources) {
             var visibleWaterRegions = new List<RenderRegionIndexRange>();
@@ -588,8 +652,7 @@ public sealed class Renderer : IDisposable
                     .CompareTo(Vector3.DistanceSquared(_camera.Position, left.Bounds.Center)));
 
             _vk.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, waterResources.Pipeline);
-            _vk.CmdPushConstants(cmd, waterResources.PipelineLayout, ShaderStageFlags.VertexBit, 0,
-                (uint)Marshal.SizeOf<UniformBufferObject>(), &ubo);
+            _vk.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, waterResources.PipelineLayout, 0, 1, in uniformDescriptorSet, 0, null);
             var waterVertexBuffer = waterResources.VertexBuffer;
             _vk.CmdBindVertexBuffers(cmd, 0, 1, in waterVertexBuffer, in offset);
             _vk.CmdBindIndexBuffer(cmd, waterResources.IndexBuffer, 0, IndexType.Uint32);
@@ -597,11 +660,82 @@ public sealed class Renderer : IDisposable
                 _vk.CmdDrawIndexed(cmd, region.IndexCount, 1, region.FirstIndex, 0, 0);
         }
 
+        _vk.CmdEndRenderPass(cmd);
+
+        var taaDescriptorIndex = _taaHistoryValid ? 0 : 1;
+
+        var resolveOldLayout = _taaResolveInitialized
+            ? ImageLayout.ShaderReadOnlyOptimal
+            : ImageLayout.Undefined;
+
+        RecordImageBarrier(cmd, _deferredTargets.TaaResolveImage, resolveOldLayout,
+            ImageLayout.General,
+            _taaResolveInitialized
+                ? PipelineStageFlags.ComputeShaderBit
+                : PipelineStageFlags.TopOfPipeBit,
+            _taaResolveInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+
+        _deferredPassResources.TaaResolve.Dispatch(cmd, taaDescriptorIndex, uniformDescriptorSet, renderDimensions);
+
+        RecordImageBarrier(cmd, _deferredTargets.TaaResolveImage, ImageLayout.General,
+            ImageLayout.ShaderReadOnlyOptimal, PipelineStageFlags.ComputeShaderBit,
+            AccessFlags.ShaderWriteBit,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit);
+
+        _taaResolveInitialized = true;
+
+        var historyOldLayout = _taaHistoryInitialized
+            ? ImageLayout.ShaderReadOnlyOptimal
+            : ImageLayout.Undefined;
+
+        RecordImageBarrier(cmd, _deferredTargets.TaaHistoryImage, historyOldLayout,
+            ImageLayout.General,
+            _taaHistoryInitialized
+                ? PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit
+                : PipelineStageFlags.TopOfPipeBit,
+            _taaHistoryInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+
+        RecordImageBarrier(cmd, _deferredTargets.SceneOutputImage, ImageLayout.ShaderReadOnlyOptimal,
+            ImageLayout.General,
+            PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.ComputeShaderBit,
+            AccessFlags.ColorAttachmentWriteBit | AccessFlags.ShaderReadBit,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+
+        _deferredPassResources.TaaSharpen.Dispatch(cmd, 0, uniformDescriptorSet, renderDimensions);
+        
+        RecordImageBarrier(cmd, _deferredTargets.SceneOutputImage, ImageLayout.General,
+            ImageLayout.ShaderReadOnlyOptimal, PipelineStageFlags.ComputeShaderBit,
+            AccessFlags.ShaderWriteBit, PipelineStageFlags.ComputeShaderBit,
+            AccessFlags.ShaderReadBit);
+
+        RecordImageBarrier(cmd, _deferredTargets.TaaHistoryImage, ImageLayout.General,
+            ImageLayout.ShaderReadOnlyOptimal, PipelineStageFlags.ComputeShaderBit,
+            AccessFlags.ShaderWriteBit,
+            PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit, AccessFlags.ShaderReadBit);
+
+        _taaHistoryInitialized = true;
+
+        clearValues[0] = new ClearValue { Color = new ClearColorValue(0.4f, 0.6f, 0.9f, 1.0f) };
+        clearValues[1] = new ClearValue { DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 } };
+        RenderPassBeginInfo presentationRenderPassInfo = new() {
+            SType = StructureType.RenderPassBeginInfo,
+            RenderPass = _renderPass,
+            Framebuffer = _framebuffers[imageIndex],
+            RenderArea = new Rect2D(new Offset2D(0, 0), _swapchainExtent),
+            ClearValueCount = 2,
+            PClearValues = clearValues
+        };
+        _vk.CmdBeginRenderPass(cmd, in presentationRenderPassInfo, SubpassContents.Inline);
+        _vk.CmdSetViewport(cmd, 0, 1, &viewport);
+        _vk.CmdSetScissor(cmd, 0, 1, &scissor);
+        _deferredPassResources.Tonemap.Draw(cmd, 0);
         _imguiRenderer?.Render(cmd, imageIndex);
         _vk.CmdEndRenderPass(cmd);
         _vk.EndCommandBuffer(cmd);
 
-        var waitStages = PipelineStageFlags.ColorAttachmentOutputBit;
+        var waitStages = PipelineStageFlags.AllCommandsBit;
         var imgAnimSema = _imageAvailableSemaphores[_currentFrame];
         var rendFinSema = _renderFinishedSemaphores[imageIndex];
 
@@ -617,7 +751,15 @@ public sealed class Renderer : IDisposable
         };
 
         _vk.ResetFences(_logicalDevice, 1, in _inFlightFences[_currentFrame]);
-        _vk.QueueSubmit(_graphicsQueue, 1, in submitInfo, _inFlightFences[_currentFrame]);
+        var submitResult = _vk.QueueSubmit(_graphicsQueue, 1, in submitInfo, _inFlightFences[_currentFrame]);
+        if (submitResult != Result.Success)
+            throw new Exception($"Failed to submit the frame to the graphics queue: {submitResult}.");
+
+        _cameraPositionLast = cameraPosition;
+        _viewProjectionLast = viewProjection;
+        _frameCounter = _frameCounter == uint.MaxValue ? 1u : _frameCounter + 1u;
+        _taaFrameIndex++;
+        _taaHistoryValid = true;
 
         var swap = _swapchain;
         PresentInfoKHR presentInfo = new() {
@@ -645,6 +787,34 @@ public sealed class Renderer : IDisposable
     }
 
     private void OnEngineShutdown() => Dispose();
+
+    private static Vector2 GetR2Jitter(ulong sampleIndex)
+    {
+        const double generator = 1.324717957244746;
+        const double alphaX = 1.0 / generator;
+        const double alphaY = 1.0 / (generator * generator);
+        var sample = (double)sampleIndex;
+        return new Vector2(
+            (float)(0.5 + sample * alphaX - Math.Floor(0.5 + sample * alphaX)) - 0.5f,
+            (float)(0.5 + sample * alphaY - Math.Floor(0.5 + sample * alphaY)) - 0.5f);
+    }
+
+    private unsafe void RecordImageBarrier(CommandBuffer commandBuffer, Image image, ImageLayout oldLayout, ImageLayout newLayout,
+        PipelineStageFlags sourceStage, AccessFlags sourceAccess, PipelineStageFlags destinationStage, AccessFlags destinationAccess)
+    {
+        var barrier = new ImageMemoryBarrier {
+            SType = StructureType.ImageMemoryBarrier,
+            OldLayout = oldLayout,
+            NewLayout = newLayout,
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            Image = image,
+            SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1),
+            SrcAccessMask = sourceAccess,
+            DstAccessMask = destinationAccess
+        };
+        _vk!.CmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, null, 0, null, 1, &barrier);
+    }
 
     public unsafe void Dispose()
     {
@@ -691,9 +861,21 @@ public sealed class Renderer : IDisposable
         _waterGraphicsResources = null;
         waterResources?.Dispose();
 
+        var deferredPassResources = _deferredPassResources;
+        _deferredPassResources = null;
+        deferredPassResources?.Dispose();
+
+        var deferredTargets = _deferredTargets;
+        _deferredTargets = null;
+        deferredTargets?.Dispose();
+
         var swapchainResources = _swapchainResources;
         _swapchainResources = null;
         swapchainResources?.Dispose();
+
+        var uniformBufferResources = _uniformBufferResources;
+        _uniformBufferResources = null;
+        uniformBufferResources?.Dispose();
 
         var deviceContext = _deviceContext;
         _deviceContext = null;

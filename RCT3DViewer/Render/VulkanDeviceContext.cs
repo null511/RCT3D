@@ -1,13 +1,21 @@
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
+using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Windowing;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace RCT3DViewer.Render;
 
 internal sealed unsafe class VulkanDeviceContext : IDisposable
 {
+#if DEBUG
+    private static readonly DebugUtilsMessengerCallbackFunctionEXT ValidationCallback = DebugCallback;
+    private ExtDebugUtils? _debugUtils;
+    private DebugUtilsMessengerEXT _debugMessenger;
+#endif
+
     private bool _disposed;
 
     public Vk Api { get; }
@@ -77,6 +85,11 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
     {
         var applicationName = Marshal.StringToHGlobalAnsi("RCT3DViewer");
         var engineName = Marshal.StringToHGlobalAnsi("Custom");
+#if DEBUG
+        var validationLayerName = Marshal.StringToHGlobalAnsi("VK_LAYER_KHRONOS_validation");
+        var debugUtilsExtensionName = Marshal.StringToHGlobalAnsi(ExtDebugUtils.ExtensionName);
+        var validationFeaturesExtensionName = Marshal.StringToHGlobalAnsi("VK_EXT_validation_features");
+#endif
 
         try {
             ApplicationInfo appInfo = new() {
@@ -89,23 +102,83 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
             };
 
             var extensions = window.VkSurface!.GetRequiredExtensions(out var extCount);
+#if DEBUG
+            var enabledExtensions = stackalloc byte*[(int)extCount + 2];
+            for (var index = 0; index < extCount; index++)
+                enabledExtensions[index] = extensions[index];
+            enabledExtensions[extCount] = (byte*)debugUtilsExtensionName;
+            enabledExtensions[extCount + 1] = (byte*)validationFeaturesExtensionName;
+
+            var enabledLayers = stackalloc byte*[1];
+            enabledLayers[0] = (byte*)validationLayerName;
+
+            var synchronizationValidation = ValidationFeatureEnableEXT.SynchronizationValidationExt;
+            ValidationFeaturesEXT validationFeatures = new() {
+                SType = StructureType.ValidationFeaturesExt,
+                EnabledValidationFeatureCount = 1,
+                PEnabledValidationFeatures = &synchronizationValidation
+            };
+            var debugMessengerInfo = CreateDebugMessengerInfo();
+            validationFeatures.PNext = &debugMessengerInfo;
+#endif
             InstanceCreateInfo createInfo = new() {
                 SType = StructureType.InstanceCreateInfo,
                 PApplicationInfo = &appInfo,
+#if DEBUG
+                PNext = &validationFeatures,
+                EnabledLayerCount = 1,
+                PpEnabledLayerNames = enabledLayers,
+                EnabledExtensionCount = extCount + 2,
+                PpEnabledExtensionNames = enabledExtensions
+#else
                 EnabledExtensionCount = extCount,
                 PpEnabledExtensionNames = extensions
+#endif
             };
 
             if (Api.CreateInstance(in createInfo, null, out var instance) != Result.Success)
                 throw new Exception("CRITICAL: Failed to spin up Native Vulkan Instance.");
 
             Instance = instance;
+#if DEBUG
+            if (!Api.TryGetInstanceExtension<ExtDebugUtils>(Instance, out _debugUtils))
+                throw new NotSupportedException("VK_EXT_debug_utils is required for Vulkan validation output.");
+
+            var messengerInfo = CreateDebugMessengerInfo();
+            if (_debugUtils.CreateDebugUtilsMessenger(Instance, in messengerInfo, null, out _debugMessenger) != Result.Success)
+                throw new Exception("Failed to create the Vulkan validation debug messenger.");
+#endif
         }
         finally {
             Marshal.FreeHGlobal(applicationName);
             Marshal.FreeHGlobal(engineName);
+#if DEBUG
+            Marshal.FreeHGlobal(validationLayerName);
+            Marshal.FreeHGlobal(debugUtilsExtensionName);
+            Marshal.FreeHGlobal(validationFeaturesExtensionName);
+#endif
         }
     }
+
+#if DEBUG
+    private static DebugUtilsMessengerCreateInfoEXT CreateDebugMessengerInfo() => new() {
+        SType = StructureType.DebugUtilsMessengerCreateInfoExt,
+        MessageSeverity = DebugUtilsMessageSeverityFlagsEXT.WarningBitExt | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt,
+        MessageType = DebugUtilsMessageTypeFlagsEXT.GeneralBitExt | DebugUtilsMessageTypeFlagsEXT.ValidationBitExt | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt,
+        PfnUserCallback = ValidationCallback
+    };
+
+    private static uint DebugCallback(
+        DebugUtilsMessageSeverityFlagsEXT severity,
+        DebugUtilsMessageTypeFlagsEXT types,
+        DebugUtilsMessengerCallbackDataEXT* callbackData,
+        void* userData)
+    {
+        var message = Marshal.PtrToStringAnsi((nint)callbackData->PMessage) ?? "(validation message unavailable)";
+        Debug.WriteLine($"[Vulkan {severity} {types}] {message}");
+        return 0;
+    }
+#endif
 
     private void CreateSurface(IWindow window)
     {
@@ -122,6 +195,7 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
     {
         uint deviceCount = 0;
         Api.EnumeratePhysicalDevices(Instance, ref deviceCount, null);
+
         var devices = new PhysicalDevice[deviceCount];
         fixed (PhysicalDevice* devicesPtr = devices) {
             Api.EnumeratePhysicalDevices(Instance, ref deviceCount, devicesPtr);
@@ -134,6 +208,7 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
     {
         uint queueFamilyCount = 0;
         Api.GetPhysicalDeviceQueueFamilyProperties(PhysicalDevice, ref queueFamilyCount, null);
+
         var queueFamilies = new QueueFamilyProperties[queueFamilyCount];
         fixed (QueueFamilyProperties* queueFamiliesPtr = queueFamilies) {
             Api.GetPhysicalDeviceQueueFamilyProperties(PhysicalDevice, ref queueFamilyCount, queueFamiliesPtr);
@@ -145,6 +220,9 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
                 break;
             }
         }
+
+        if (GraphicsQueueFamilyIndex >= queueFamilyCount || (queueFamilies[GraphicsQueueFamilyIndex].QueueFlags & QueueFlags.GraphicsBit) == 0)
+            throw new NotSupportedException("No Vulkan graphics-capable queue family is available.");
 
         var queuePriority = 1.0f;
         DeviceQueueCreateInfo queueCreateInfo = new() {
@@ -162,13 +240,33 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
             Api.GetPhysicalDeviceFeatures(PhysicalDevice, out PhysicalDeviceFeatures supportedFeatures);
             SupportsWireframe = supportedFeatures.FillModeNonSolid;
 
+            PhysicalDeviceVulkan11Features supportedVulkan11Features = new() {
+                SType = StructureType.PhysicalDeviceVulkan11Features
+            };
+
+            PhysicalDeviceFeatures2 supportedFeatures2 = new() {
+                SType = StructureType.PhysicalDeviceFeatures2,
+                PNext = &supportedVulkan11Features
+            };
+
+            Api.GetPhysicalDeviceFeatures2(PhysicalDevice, &supportedFeatures2);
+            if (!supportedVulkan11Features.ShaderDrawParameters)
+                throw new NotSupportedException("The tonemap shader requires Vulkan 1.1 shaderDrawParameters support.");
+
             PhysicalDeviceFeatures deviceFeatures = new() {
                 SamplerAnisotropy = supportedFeatures.SamplerAnisotropy,
                 FillModeNonSolid = supportedFeatures.FillModeNonSolid,
+                ShaderStorageImageExtendedFormats = supportedFeatures.ShaderStorageImageExtendedFormats,
+            };
+
+            PhysicalDeviceVulkan11Features enabledVulkan11Features = new() {
+                SType = StructureType.PhysicalDeviceVulkan11Features,
+                ShaderDrawParameters = 1
             };
 
             DeviceCreateInfo deviceCreateInfo = new() {
                 SType = StructureType.DeviceCreateInfo,
+                PNext = &enabledVulkan11Features,
                 QueueCreateInfoCount = 1,
                 PQueueCreateInfos = &queueCreateInfo,
                 EnabledExtensionCount = 1,
@@ -187,6 +285,7 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
 
         Api.GetDeviceQueue(LogicalDevice, GraphicsQueueFamilyIndex, 0, out var graphicsQueue);
         GraphicsQueue = graphicsQueue;
+
         if (!Api.TryGetDeviceExtension<KhrSwapchain>(Instance, LogicalDevice, out var swapchainExtensionApi))
             throw new NotSupportedException("Vulkan Swapchain extension not available on device.");
 
@@ -209,6 +308,13 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
         Surface = default;
 
         if (Instance.Handle != 0) {
+#if DEBUG
+            if (_debugMessenger.Handle != 0)
+                _debugUtils?.DestroyDebugUtilsMessenger(Instance, _debugMessenger, null);
+
+            _debugMessenger = default;
+            _debugUtils = null;
+#endif
             Api.DestroyInstance(Instance, null);
             Instance = default;
         }
