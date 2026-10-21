@@ -118,18 +118,19 @@ public sealed class TerrainMaterialLibrary
 
     public static TerrainMaterialLibrary Load(string assetDirectory)
     {
-        return Load(assetDirectory, null);
+        return Load(assetDirectory, null, GetSharedMissingTexturePath(assetDirectory));
     }
 
     public static TerrainMaterialLibrary Load(string assetDirectory, string? additionalArrayProperty)
     {
+        return Load(assetDirectory, additionalArrayProperty, GetSharedMissingTexturePath(assetDirectory));
+    }
+
+    public static TerrainMaterialLibrary Load(string assetDirectory, string? additionalArrayProperty, string missingTexturePath)
+    {
         var manifestPath = Path.Combine(assetDirectory, "materials.json");
         using var manifestStream = File.OpenRead(manifestPath);
         using var manifest = JsonDocument.Parse(manifestStream);
-        var fallbackObjectId = manifest.RootElement.GetProperty("fallback").GetString();
-
-        if (string.IsNullOrWhiteSpace(fallbackObjectId))
-            throw new InvalidDataException("Terrain material manifest fallback must specify an objectId.");
 
         var materials = manifest.RootElement.GetProperty("materials").EnumerateArray().ToList();
         if (additionalArrayProperty is not null && manifest.RootElement.TryGetProperty(additionalArrayProperty, out var additionalMaterials))
@@ -140,17 +141,16 @@ public sealed class TerrainMaterialLibrary
         var objectIds = new HashSet<string>(StringComparer.Ordinal);
         var layers = new Dictionary<uint, uint>();
         var grassLayers = new Dictionary<uint, GrassTextureLayers>();
-        uint? configuredFallbackLayer = null;
         int? width = null;
         int? height = null;
 
-        void AddImage(string objectId, string texture)
+        void AddImage(string objectId, string texture, string textureDirectory)
         {
             if (string.IsNullOrWhiteSpace(texture))
                 throw new InvalidDataException("Terrain material texture values must not be empty.");
 
-            var texturePath = Path.GetFullPath(Path.Combine(assetDirectory, texture));
-            var rootPath = Path.GetFullPath(assetDirectory) + Path.DirectorySeparatorChar;
+            var texturePath = Path.GetFullPath(Path.Combine(textureDirectory, texture));
+            var rootPath = Path.GetFullPath(textureDirectory) + Path.DirectorySeparatorChar;
             if (!texturePath.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase) || !File.Exists(texturePath))
                 throw new InvalidDataException($"Terrain texture path is invalid or missing: {texture}");
 
@@ -183,6 +183,12 @@ public sealed class TerrainMaterialLibrary
                 image.Width, image.Height));
         }
 
+        var missingTextureFullPath = Path.GetFullPath(missingTexturePath);
+        var missingTextureDirectory = Path.GetDirectoryName(missingTextureFullPath)
+            ?? throw new InvalidDataException($"Missing texture path has no directory: {missingTexturePath}");
+        var fallbackLayer = (uint)images.Count;
+        AddImage(string.Empty, Path.GetFileName(missingTextureFullPath), missingTextureDirectory);
+
         foreach (var material in materials) {
             var objectId = material.GetProperty("objectId").GetString();
             var texture = material.GetProperty("texture").GetString();
@@ -194,10 +200,7 @@ public sealed class TerrainMaterialLibrary
             if (!layers.TryAdd(HashObjectId(objectId), layer))
                 throw new InvalidDataException($"Terrain object identifier hash collision: {objectId}");
 
-            AddImage(objectId, texture);
-
-            if (string.Equals(objectId, fallbackObjectId, StringComparison.Ordinal))
-                configuredFallbackLayer = layer;
+            AddImage(objectId, texture, assetDirectory);
         }
 
         if (manifest.RootElement.TryGetProperty("grassVariants", out var grassVariantEntries)) {
@@ -217,7 +220,7 @@ public sealed class TerrainMaterialLibrary
                     for (var variant = 0; variant < variantTextures.Length; variant++) {
                         var texture = variantTextures[variant].GetString();
                         variantLayers[variant] = (uint)images.Count;
-                        AddImage($"{objectId}#grass-{property}-{variant}", texture ?? string.Empty);
+                        AddImage($"{objectId}#grass-{property}-{variant}", texture ?? string.Empty, assetDirectory);
                     }
 
                     return variantLayers;
@@ -245,10 +248,14 @@ public sealed class TerrainMaterialLibrary
             images[layer].SpecularPixels.CopyTo(specularPixels, layer * layerSize);
         }
 
-        if (!configuredFallbackLayer.HasValue)
-            throw new InvalidDataException($"Terrain fallback object '{fallbackObjectId}' is not defined in materials.");
+        return new TerrainMaterialLibrary(width.Value, height.Value, pixels, normalPixels, specularPixels, layers, grassLayers, fallbackLayer);
+    }
 
-        return new TerrainMaterialLibrary(width.Value, height.Value, pixels, normalPixels, specularPixels, layers, grassLayers, configuredFallbackLayer.Value);
+    private static string GetSharedMissingTexturePath(string assetDirectory)
+    {
+        var textureRoot = Directory.GetParent(Path.GetFullPath(assetDirectory))?.FullName
+            ?? throw new InvalidDataException($"Texture asset directory has no parent: {assetDirectory}");
+        return Path.Combine(textureRoot, "missing.png");
     }
 
     public static uint HashObjectId(string objectId)

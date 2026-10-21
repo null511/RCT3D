@@ -7,7 +7,7 @@ import lib.uniforms;
 static const float3 groundAlbedo = 0.3;
 static const bool planetSurfaceEnabled = true;
 
-//static const float3 SunColor = 2000.0;// * transformer.fromGamma(1.0);
+static const float SunLux = 8.0;// * transformer.fromGamma(1.0);
 //static const float3 MoonColor = 0.2;// * transformer.fromGamma(1.0);
 
 // TODO: use camera height?

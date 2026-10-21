@@ -81,7 +81,7 @@ void getMulScattValues(float3 pos, float3 sunDir, out float3 lumTotal, out float
 
                 // This is slightly different from the paper, but I think the paper has a mistake?
                 // In equation (6), I think S(x,w_s) should be S(x-tv,w_s).
-                float3 sunTransmittance = getValFromTLUT(skyTransmit, linearSampler, newPos, sunDir);
+                float3 sunTransmittance = SunLux * getValFromTLUT(skyTransmit, linearSampler, newPos, sunDir);
 
                 float3 rayleighInScattering = rayleighScattering * rayleighPhaseValue;
                 float mieInScattering = mieScattering * miePhaseValue;

@@ -74,7 +74,7 @@ float3 raymarchScattering(float3 pos, float3 rayDir, float3 sunDir, float tMax, 
 
         float3 sampleTransmittance = exp(-dt * extinction);
 
-        float3 sunTransmittance = getValFromTLUT(skyTransmit, linearSampler, newPos, sunDir);
+        float3 sunTransmittance = SunLux * getValFromTLUT(skyTransmit, linearSampler, newPos, sunDir);
         float3 psiMS = getValFromMultiScattLUT(skyMultiscatter, linearSampler, newPos, sunDir);
 
         float3 rayleighInScattering = rayleighScattering * (rayleighPhaseValue * sunTransmittance + psiMS);

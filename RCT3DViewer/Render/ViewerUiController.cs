@@ -14,10 +14,10 @@ internal sealed class ViewerUiController
     private bool _showSkyModal;
     private bool _showGraphicsOptions;
     private bool _showParkLoadError;
-    private bool _useGameTime = true;
+    private bool _useGameTime = false;
     private float _timeOfDayHours = 9.0f;
     private float _azimuthDegrees = 25.0f;
-    private float _zenithDegrees;
+    private float _zenithDegrees = 18.0f;
     private float? _gameTimeOfDayHours;
     private float _displayedFps;
     private double _displayedFrameTimeMilliseconds;

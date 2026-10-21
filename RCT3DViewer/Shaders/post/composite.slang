@@ -39,7 +39,8 @@ void main(ComputeInput input) {
         float4 normalsMap = defer_normals.Load(pos);
         float4 specularMap = defer_specular.Load(pos);
 
-        float3 albedo = srgbToLinear(albedoMap.rgb);
+        //float3 albedo = srgbToLinear(albedoMap.rgb);
+        float3 albedo = albedoMap.rgb;
         float3 geoNormal = octohedral::decode(normalsMap.xy);
         float3 texNormal = octohedral::decode(normalsMap.zw);
 
@@ -49,10 +50,11 @@ void main(ComputeInput input) {
         float sss = specularMap.b;
         float emission = fract(specularMap.a);
 
-        float3 lightDirection = normalize(sceneUniforms.sunDirection.xyz);
+        float3 sunDir = normalize(sceneUniforms.sunDirection.xyz);
+
         float3 viewDirection = normalize(cameraUniforms.cameraPosition.xyz - worldPosition);
-        float3 halfDirection = normalize(lightDirection + viewDirection);
-        float nDotL = max(dot(texNormal, lightDirection), 0.0);
+        float3 halfDirection = normalize(sunDir + viewDirection);
+        float nDotL = max(dot(texNormal, sunDir), 0.0);
         float nDotV = max(dot(texNormal, viewDirection), 0.0001);
         float nDotH = max(dot(texNormal, halfDirection), 0.0);
         float hDotV = max(dot(halfDirection, viewDirection), 0.0);
@@ -65,8 +67,12 @@ void main(ComputeInput input) {
         float3 diffuseWeight = (1.0 - fresnel) * (1.0 - metalness);
         float wrappedNdotL = saturate((nDotL + sss) / (1.0 + sss));
         float diffuseNdotL = lerp(nDotL, wrappedNdotL, sss);
-        float3 directLighting = (diffuseWeight * albedo * (diffuseNdotL / PI) + specular * nDotL) * sceneUniforms.lighting.y;
-        float3 ambientLighting = diffuseWeight * albedo * sceneUniforms.lighting.x * ao;
+
+        float3 sunLight = SunLux * getValFromTLUT(sky_transmit, linearSampler, sky_viewPos, sunDir);
+        float3 ambientLight = getValFromSkyLUT(sky_view, linearSampler, texNormal, sunDir);
+
+        float3 directLighting = (diffuseWeight * albedo * (diffuseNdotL / PI) + specular * nDotL) * sunLight;
+        float3 ambientLighting = diffuseWeight * albedo * ambientLight * ao;
         color = directLighting + ambientLighting + albedo * emission * 8.0;
     }
     else {
@@ -76,7 +82,7 @@ void main(ComputeInput input) {
         color = 0.0;
 
         if (rayIntersectSphere(sky_viewPos, localViewDir, GroundRadius_MM) < 0.0) {
-            color += renderSun(localViewDir, localSunDir);
+            color += SunLux * renderSun(localViewDir, localSunDir);
             // TODO: moon
 
             // apply transmittance to all celestial objects (sun, moon, stars)

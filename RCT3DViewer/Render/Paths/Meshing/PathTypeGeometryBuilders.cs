@@ -29,19 +29,21 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     private static readonly byte[] ExpectedSurfaceSlopeByPathDirection = { 12, 9, 3, 6 };
 
+    protected PathMaterialLibrary Materials {get;} = materials;
+
 
     public void AddPath(
         RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
     {
         AddSurface(path, geometry);
 
-        if (materials.HasVisibleRailings(path.RailingsIdHash) && (path.IsQueue || path.IsSloped || path.BaseZ != surface.BaseZ || surface.SlopeFlags != 0)) {
+        if (Materials.HasVisibleRailings(path.RailingsIdHash) && (path.IsQueue || path.IsSloped || path.BaseZ != surface.BaseZ || surface.SlopeFlags != 0)) {
             AddRailings(path, geometry);
         }
 
         if (ShouldDrawSupports(path, surface)) {
             AddElevatedPlatformSlab(path, geometry);
-            AddSupports(path, surface, materials.GetRailingLayer(path.RailingsIdHash), geometry, supportStations);
+            AddSupports(path, surface, Materials.GetRailingLayer(path.RailingsIdHash), geometry, supportStations);
         }
     }
 
@@ -52,7 +54,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var south = path.TileY * TileSize;
         var north = (path.TileY + 1) * TileSize;
         var baseHeight = path.BaseZ * BaseHeightScale;
-        var material = materials.GetRailingLayer(path.RailingsIdHash);
+        var material = Materials.GetRailingLayer(path.RailingsIdHash);
 
         if (path.IsSloped) {
             if (path.SlopeDirection is DirectionWest or DirectionEast) {
@@ -111,7 +113,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var northEast = new Vector3(east, GetPathCornerHeight(path, false, true, baseHeight) + SurfaceBias, north);
         var northWest = new Vector3(west, GetPathCornerHeight(path, true, true, baseHeight) + SurfaceBias, north);
 
-        var material = materials.GetLayer(path.SurfaceIdHash, path.IsQueue);
+        var material = Materials.GetLayer(path.SurfaceIdHash);
 
         geometry.AddTriangle(northEast, new Vector2(1, 1), southEast, new Vector2(1, 0), northWest, new Vector2(0, 1), material);
         geometry.AddTriangle(southEast, new Vector2(1, 0), southWest, new Vector2(0, 0), northWest, new Vector2(0, 1), material);
@@ -141,8 +143,6 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
         var center = (topSouthWest + topSouthEast + topNorthEast + topNorthWest
             + bottomSouthWest + bottomSouthEast + bottomNorthEast + bottomNorthWest) / 8.0f;
-
-        //var material = materials.GetLayer(path.SurfaceIdHash, path.IsQueue);
 
         geometry.AddPrismFace(topSouthWest, topSouthEast, topNorthEast, topNorthWest, center, material);
         geometry.AddPrismFace(bottomSouthWest, bottomNorthWest, bottomNorthEast, bottomSouthEast, center, material);

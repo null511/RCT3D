@@ -79,8 +79,10 @@ public sealed class Renderer : IDisposable
                 OpenRCT2Path = Path.Combine(AppContext.BaseDirectory, OpenRCT2Path);
 
             simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path);
-            terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures", "Terrain"));
-            pathMaterials = PathMaterialLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures", "Paths"));
+            var textureRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Textures");
+            var missingTexturePath = Path.Combine(textureRoot, "missing.png");
+            terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(textureRoot, "Terrain"), null, missingTexturePath);
+            pathMaterials = PathMaterialLibrary.Load(Path.Combine(textureRoot, "Paths"), missingTexturePath);
             pathAccessoryAssets = PathAccessoryAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
         }
         catch (Exception ex) {
@@ -130,6 +132,8 @@ public sealed class Renderer : IDisposable
 
     private void OnRenderFrame(double deltaTime)
     {
+        if (parkScene == null) return;
+
         frameCoordinator!.RenderFrame(
             deltaTime,
             activeFrameTimeMilliseconds => {

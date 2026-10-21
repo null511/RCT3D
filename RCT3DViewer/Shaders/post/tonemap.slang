@@ -28,7 +28,7 @@ float4 fragmentMain(FullscreenVertexOutput input) : SV_Target
 
     //color = getColorSpace().toLinear(color);
 
-    color = aces_fit_tonemap(color);
+     color = aces_fit_tonemap(color);
 
     color = linearToSrgb(color);
 

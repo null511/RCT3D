@@ -86,14 +86,18 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         resources.UniformBufferResources.Update(currentFrame, cameraUniforms, temporalUniforms, sceneUniforms);
 
         var skyImageOldLayout = skyViewInitialized ? ImageLayout.ShaderReadOnlyOptimal : ImageLayout.Undefined;
+
         RecordImageBarrier(commandBuffer, resources.SkyTargets!.SkyViewImage, skyImageOldLayout, ImageLayout.General,
             skyViewInitialized ? PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit : PipelineStageFlags.TopOfPipeBit,
             skyViewInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
             PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+
         deferredPassResources.SkyView.Dispatch(commandBuffer, 0, uniformDescriptorSet, new Vector2D<uint>(256, 256));
+
         RecordImageBarrier(commandBuffer, resources.SkyTargets.SkyViewImage, ImageLayout.General, ImageLayout.ShaderReadOnlyOptimal,
             PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
             PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit, AccessFlags.ShaderReadBit);
+
         skyViewInitialized = true;
 
         var clearValues = stackalloc ClearValue[4];
@@ -233,10 +237,12 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
                     .CompareTo(Vector3.DistanceSquared(cameraPosition, left.Bounds.Center)));
 
             Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, waterResources.Pipeline);
+
             var waterDescriptorSets = stackalloc DescriptorSet[2];
             waterDescriptorSets[0] = uniformDescriptorSet;
             waterDescriptorSets[1] = waterResources.SkyDescriptorSet;
             Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, waterResources.PipelineLayout, 0, 2, waterDescriptorSets, 0, null);
+            
             var waterVertexBuffer = waterResources.VertexBuffer;
             Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in waterVertexBuffer, in offset);
             Vk.CmdBindIndexBuffer(commandBuffer, waterResources.IndexBuffer, 0, IndexType.Uint32);
@@ -383,12 +389,20 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
     private void CalculateSunDirection(out float sunElevation, out Vector3 sunDirection)
     {
-        var timeAngle = (ui.EffectiveTimeOfDayHours - 6.0f) * (MathF.PI / 12.0f);
-        var zenithAngle = ui.ZenithDegrees * (MathF.PI / 180.0f);
-        sunElevation = MathF.Sin(timeAngle) * MathF.Cos(zenithAngle);
+        var timeOfDayHours = ui.EffectiveTimeOfDayHours % 24.0f;
+        if (timeOfDayHours < 0.0f) timeOfDayHours += 24.0f;
 
-        var horizontalLength = MathF.Sqrt(MathF.Max(0.0f, 1.0f - sunElevation * sunElevation));
+        var timeAngle = (timeOfDayHours - 6.0f) * (MathF.Tau / 24.0f);
         var sunAzimuth = ui.AzimuthDegrees * (MathF.PI / 180.0f);
-        sunDirection = Vector3.Normalize(new Vector3(MathF.Cos(sunAzimuth) * horizontalLength, sunElevation, MathF.Sin(sunAzimuth) * horizontalLength));
+        var zenithAngle = ui.ZenithDegrees * (MathF.PI / 180.0f);
+        var sunriseDirection = new Vector3(MathF.Cos(sunAzimuth), 0.0f, MathF.Sin(sunAzimuth));
+
+        var orbitDirection = new Vector3(
+            -MathF.Sin(sunAzimuth) * MathF.Sin(zenithAngle),
+            MathF.Cos(zenithAngle),
+            MathF.Cos(sunAzimuth) * MathF.Sin(zenithAngle));
+
+        sunDirection = Vector3.Normalize(sunriseDirection * MathF.Cos(timeAngle) + orbitDirection * MathF.Sin(timeAngle));
+        sunElevation = sunDirection.Y;
     }
 }

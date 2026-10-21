@@ -191,7 +191,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
             DstAccessMask = destinationAccess
         };
 
-        Vk.CmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, null, 0, null, 1, &barrier);
+        Vk!.CmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, null, 0, null, 1, &barrier);
     }
 
     private void CreateVehicleCubeResources()
