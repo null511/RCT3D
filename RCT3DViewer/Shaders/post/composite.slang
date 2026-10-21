@@ -3,6 +3,9 @@ import lib.uniforms;
 import lib.colors;
 import lib.octohedral;
 import lib.celestial;
+import lib.sky;
+import lib.sky_transmit;
+import lib.sky_view;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
@@ -15,8 +18,10 @@ struct ComputeInput {
 [[vk::binding(1, 1)]] Texture2D<float4> defer_normals;
 [[vk::binding(2, 1)]] Texture2D<float4> defer_specular;
 [[vk::binding(3, 1)]] Texture2D<float> defer_depth;
-[[vk::binding(4, 1)]] SamplerState linearSampler;
-[[vk::binding(5, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
+[[vk::binding(4, 1)]] Texture2D<float4> sky_transmit;
+[[vk::binding(5, 1)]] Texture2D<float4> sky_view;
+[[vk::binding(6, 1)]] SamplerState linearSampler;
+[[vk::binding(7, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
 
 [shader("compute")]
 [numthreads(16, 16)]
@@ -65,12 +70,21 @@ void main(ComputeInput input) {
         color = directLighting + ambientLighting + albedo * emission * 8.0;
     }
     else {
-        // TODO: skybox
-        color = srgbToLinear(float3(0.510, 0.792, 0.988));
-
         float3 localViewDir = normalize(worldPosition - cameraUniforms.cameraPosition.xyz);
         float3 localSunDir = normalize(sceneUniforms.sunDirection.xyz);
-        color += renderSun(localViewDir, localSunDir);
+
+        color = 0.0;
+
+        if (rayIntersectSphere(sky_viewPos, localViewDir, GroundRadius_MM) < 0.0) {
+            color += renderSun(localViewDir, localSunDir);
+            // TODO: moon
+
+            // apply transmittance to all celestial objects (sun, moon, stars)
+            color *= getValFromTLUT(sky_transmit, linearSampler, localViewDir, localSunDir);
+        }
+
+        // Add atmosphere
+        color += getValFromSkyLUT(sky_view, linearSampler, localViewDir, localSunDir);
     }
 
     sceneOutput[input.globalPos] = float4(color, 1.0);

@@ -1,3 +1,4 @@
+using RCT3DViewer.Render.Shaders;
 using Silk.NET.Vulkan;
 using System.Runtime.InteropServices;
 
@@ -167,9 +168,9 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
     {
         var vk = _context.Api;
         var device = _context.LogicalDevice;
-        var shaderDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", "post");
-        var vertexPath = Path.Combine(shaderDirectory, $"{shaderName}.vert.spv");
-        var fragmentPath = Path.Combine(shaderDirectory, $"{shaderName}.frag.spv");
+
+        var vertexPath = ShaderFile.Get(shaderName, "vert");
+        var fragmentPath = ShaderFile.Get(shaderName, "frag");
 
         if (!File.Exists(vertexPath) || !File.Exists(fragmentPath))
             throw new FileNotFoundException($"Fullscreen shader binaries are missing for '{shaderName}'.");

@@ -1,6 +1,9 @@
 import lib.uniforms;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
+[[vk::binding(0, 1)]] Texture2D<float4> sky_transmit;
+[[vk::binding(1, 1)]] Texture2D<float4> sky_view;
+[[vk::binding(2, 1)]] SamplerState skySampler;
 
 
 struct VertexInput {

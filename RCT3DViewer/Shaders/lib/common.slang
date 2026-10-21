@@ -19,10 +19,18 @@ float3 minOf(float3 x, float3 y, float3 z) {
     return min(x, min(y, z));
 }
 
+T pow2<T>(const in T value) where T : IArithmetic {
+    return value * value;
+}
+
 T sumOf<T>(const in vector<T, 2> vec) where T : IArithmetic {
     return vec.x + vec.y;
 }
 
 T sumOf<T>(const in vector<T, 3> vec) where T : IArithmetic {
     return vec.x + vec.y + vec.z;
+}
+
+T unmix<T>(const in T valueMin, const in T valueMax, const in T value) where T : IFloat {
+    return (value - valueMin) / (valueMax - valueMin);
 }

@@ -15,6 +15,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
     private bool taaHistoryValid;
     private bool taaEnabledLastFrame = true;
     private bool sceneOutputInitialized;
+    private bool skyViewInitialized;
     private bool taaHistoryInitialized;
     private bool taaResolveInitialized;
     private ulong taaFrameIndex;
@@ -48,6 +49,52 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         var extent = resources.SwapchainExtent;
         var deferredTargets = resources.DeferredTargets!;
         var deferredPassResources = resources.DeferredPassResources!;
+        var aspect = (float)extent.Width / extent.Height;
+        var viewProjection = camera.GetViewMatrix() * camera.GetProjectionMatrix(aspect);
+        if (!Matrix4x4.Invert(viewProjection, out var inverseViewProjection))
+            throw new InvalidOperationException("The camera view-projection matrix is not invertible.");
+
+        CalculateSunDirection(out var sunElevation, out var sunDirection);
+        var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
+        var ambientLight = 0.15f + 0.15f * MathF.Max(sunElevation, 0.0f);
+        var cameraPosition = camera.Position;
+        var renderDimensions = new Vector2D<uint>(extent.Width, extent.Height);
+        var uniformDescriptorSet = resources.UniformBufferResources!.GetDescriptorSet(currentFrame);
+        CameraUniforms cameraUniforms = new() {
+            CameraPosition = new Vector4(cameraPosition, 1.0f),
+            ViewProjection = viewProjection,
+            ViewProjectionInverse = inverseViewProjection,
+        };
+
+        var taaJitter = ui.TaaEnabled ? GetR2Jitter(taaFrameIndex + 1) : Vector2.Zero;
+        TemporalUniforms temporalUniforms = new() {
+            CameraPositionLast = new Vector4(frameCounter == 0 ? cameraPosition : cameraPositionLast, 1.0f),
+            ViewProjectionLast = frameCounter == 0 ? viewProjection : viewProjectionLast,
+        };
+
+        SceneUniforms sceneUniforms = new() {
+            RenderDimensions = renderDimensions,
+            TaaJitter = taaJitter,
+            SunDirection = new Vector4(sunDirection, 0.0f),
+            Lighting = new Vector4(ambientLight, 1.25f, 0.0f, 0.0f),
+            FrameCounter = frameCounter,
+            TaaSharpen = ui.Sharpening,
+            MipBias = ui.MipBias,
+            Padding = 0.0f,
+        };
+
+        resources.UniformBufferResources.Update(currentFrame, cameraUniforms, temporalUniforms, sceneUniforms);
+
+        var skyImageOldLayout = skyViewInitialized ? ImageLayout.ShaderReadOnlyOptimal : ImageLayout.Undefined;
+        RecordImageBarrier(commandBuffer, resources.SkyTargets!.SkyViewImage, skyImageOldLayout, ImageLayout.General,
+            skyViewInitialized ? PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit : PipelineStageFlags.TopOfPipeBit,
+            skyViewInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+        deferredPassResources.SkyView.Dispatch(commandBuffer, 0, uniformDescriptorSet, new Vector2D<uint>(256, 256));
+        RecordImageBarrier(commandBuffer, resources.SkyTargets.SkyViewImage, ImageLayout.General, ImageLayout.ShaderReadOnlyOptimal,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
+            PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit, AccessFlags.ShaderReadBit);
+        skyViewInitialized = true;
 
         var clearValues = stackalloc ClearValue[4];
         clearValues[0] = new ClearValue {
@@ -98,46 +145,10 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         Vk.CmdSetScissor(commandBuffer, 0, 1, &scissor);
 
         var terrainDescriptorSet = resources.TerrainDescriptorSet;
-        var uniformDescriptorSet = resources.UniformBufferResources!.GetDescriptorSet(currentFrame);
         var terrainDescriptorSets = stackalloc DescriptorSet[2];
         terrainDescriptorSets[0] = uniformDescriptorSet;
         terrainDescriptorSets[1] = terrainDescriptorSet;
         Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, resources.PipelineLayout, 0, 2, terrainDescriptorSets, 0, null);
-
-        var aspect = (float)extent.Width / extent.Height;
-        var viewProjection = camera.GetViewMatrix() * camera.GetProjectionMatrix(aspect);
-        if (!Matrix4x4.Invert(viewProjection, out var inverseViewProjection))
-            throw new InvalidOperationException("The camera view-projection matrix is not invertible.");
-
-        CalculateSunDirection(out var sunElevation, out var sunDirection);
-        var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
-        var ambientLight = 0.15f + 0.15f * MathF.Max(sunElevation, 0.0f);
-        var cameraPosition = camera.Position;
-        var renderDimensions = new Vector2D<uint>(extent.Width, extent.Height);
-        CameraUniforms cameraUniforms = new() {
-            CameraPosition = new Vector4(cameraPosition, 1.0f),
-            ViewProjection = viewProjection,
-            ViewProjectionInverse = inverseViewProjection,
-        };
-
-        var taaJitter = ui.TaaEnabled ? GetR2Jitter(taaFrameIndex + 1) : Vector2.Zero;
-        TemporalUniforms temporalUniforms = new() {
-            CameraPositionLast = new Vector4(frameCounter == 0 ? cameraPosition : cameraPositionLast, 1.0f),
-            ViewProjectionLast = frameCounter == 0 ? viewProjection : viewProjectionLast,
-        };
-
-        SceneUniforms sceneUniforms = new() {
-            RenderDimensions = renderDimensions,
-            TaaJitter = taaJitter,
-            SunDirection = new Vector4(sunDirection, 0.0f),
-            Lighting = new Vector4(ambientLight, 1.25f, 0.0f, 0.0f),
-            FrameCounter = frameCounter,
-            TaaSharpen = ui.Sharpening,
-            MipBias = ui.MipBias,
-            Padding = 0.0f,
-        };
-
-        resources.UniformBufferResources!.Update(currentFrame, cameraUniforms, temporalUniforms, sceneUniforms);
 
         ulong offset = 0;
         if (terrainMesh is { Vertices.Length: > 0, Indices.Length: > 0 } && resources.VertexBuffer.Handle != 0 && resources.IndexBuffer.Handle != 0) {
@@ -222,7 +233,10 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
                     .CompareTo(Vector3.DistanceSquared(cameraPosition, left.Bounds.Center)));
 
             Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, waterResources.Pipeline);
-            Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, waterResources.PipelineLayout, 0, 1, in uniformDescriptorSet, 0, null);
+            var waterDescriptorSets = stackalloc DescriptorSet[2];
+            waterDescriptorSets[0] = uniformDescriptorSet;
+            waterDescriptorSets[1] = waterResources.SkyDescriptorSet;
+            Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, waterResources.PipelineLayout, 0, 2, waterDescriptorSets, 0, null);
             var waterVertexBuffer = waterResources.VertexBuffer;
             Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in waterVertexBuffer, in offset);
             Vk.CmdBindIndexBuffer(commandBuffer, waterResources.IndexBuffer, 0, IndexType.Uint32);

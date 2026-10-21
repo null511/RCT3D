@@ -1,19 +1,24 @@
 using Silk.NET.Vulkan;
+using RCT3DViewer.Render;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace RCT3DViewer.Render.Terrain;
 
-internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout) : IDisposable
+internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout, SkyRenderTargets skyTargets) : IDisposable
 {
     private Buffer _vertexBuffer;
     private DeviceMemory _vertexBufferMemory;
     private Buffer _indexBuffer;
     private DeviceMemory _indexBufferMemory;
+    private DescriptorSetLayout _skyDescriptorSetLayout;
+    private DescriptorPool _skyDescriptorPool;
+    private Sampler _skySampler;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline Pipeline { get; private set; }
+    public DescriptorSet SkyDescriptorSet { get; private set; }
     public Buffer VertexBuffer => _vertexBuffer;
     public Buffer IndexBuffer => _indexBuffer;
     public uint IndexCount { get; private set; }
@@ -23,6 +28,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
     {
         var vk = context.Api;
         var device = context.LogicalDevice;
+        CreateSkyDescriptors();
         var shaderDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders");
         var vertPath = Path.Combine(shaderDirectory, "water.vert.spv");
         var fragPath = Path.Combine(shaderDirectory, "water.frag.spv");
@@ -136,17 +142,19 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
                 PAttachments = &colorBlendAttachment
             };
 
-            var uniformLayout = uniformDescriptorSetLayout;
+            var descriptorLayouts = new[] { uniformDescriptorSetLayout, _skyDescriptorSetLayout };
             PipelineLayoutCreateInfo layoutInfo = new() {
                 SType = StructureType.PipelineLayoutCreateInfo,
-                SetLayoutCount = 1,
-                PSetLayouts = &uniformLayout
+                SetLayoutCount = (uint)descriptorLayouts.Length
             };
 
-            if (vk.CreatePipelineLayout(device, in layoutInfo, null, out var layout) != Result.Success)
-                throw new InvalidOperationException("Failed to create the water pipeline layout.");
+            fixed (DescriptorSetLayout* layoutsPointer = descriptorLayouts) {
+                layoutInfo.PSetLayouts = layoutsPointer;
+                if (vk.CreatePipelineLayout(device, in layoutInfo, null, out var layout) != Result.Success)
+                    throw new InvalidOperationException("Failed to create the water pipeline layout.");
 
-            PipelineLayout = layout;
+                PipelineLayout = layout;
+            }
 
             GraphicsPipelineCreateInfo pipelineInfo = new() {
                 SType = StructureType.GraphicsPipelineCreateInfo,
@@ -183,6 +191,100 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
             if (fragModule.Handle != 0)
                 vk.DestroyShaderModule(device, fragModule, null);
         }
+    }
+
+    private void CreateSkyDescriptors()
+    {
+        var vk = context.Api;
+        var device = context.LogicalDevice;
+        var bindings = new[] {
+            new DescriptorSetLayoutBinding { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+            new DescriptorSetLayoutBinding { Binding = 1, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+            new DescriptorSetLayoutBinding { Binding = 2, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+        };
+
+        fixed (DescriptorSetLayoutBinding* bindingsPointer = bindings) {
+            var layoutInfo = new DescriptorSetLayoutCreateInfo {
+                SType = StructureType.DescriptorSetLayoutCreateInfo,
+                BindingCount = (uint)bindings.Length,
+                PBindings = bindingsPointer
+            };
+
+            if (vk.CreateDescriptorSetLayout(device, in layoutInfo, null, out _skyDescriptorSetLayout) != Result.Success)
+                throw new InvalidOperationException("Failed to create the water sky descriptor-set layout.");
+        }
+
+        var poolSizes = new[] {
+            new DescriptorPoolSize { Type = DescriptorType.SampledImage, DescriptorCount = 2 },
+            new DescriptorPoolSize { Type = DescriptorType.Sampler, DescriptorCount = 1 },
+        };
+
+        fixed (DescriptorPoolSize* poolSizesPointer = poolSizes) {
+            var poolInfo = new DescriptorPoolCreateInfo {
+                SType = StructureType.DescriptorPoolCreateInfo,
+                MaxSets = 1,
+                PoolSizeCount = (uint)poolSizes.Length,
+                PPoolSizes = poolSizesPointer
+            };
+
+            if (vk.CreateDescriptorPool(device, in poolInfo, null, out _skyDescriptorPool) != Result.Success)
+                throw new InvalidOperationException("Failed to create the water sky descriptor pool.");
+        }
+
+        var layout = _skyDescriptorSetLayout;
+        var allocateInfo = new DescriptorSetAllocateInfo {
+            SType = StructureType.DescriptorSetAllocateInfo,
+            DescriptorPool = _skyDescriptorPool,
+            DescriptorSetCount = 1,
+            PSetLayouts = &layout
+        };
+
+        if (vk.AllocateDescriptorSets(device, in allocateInfo, out var descriptorSet) != Result.Success)
+            throw new InvalidOperationException("Failed to allocate the water sky descriptor set.");
+        SkyDescriptorSet = descriptorSet;
+
+        var samplerInfo = new SamplerCreateInfo {
+            SType = StructureType.SamplerCreateInfo,
+            MagFilter = Filter.Linear,
+            MinFilter = Filter.Linear,
+            MipmapMode = SamplerMipmapMode.Nearest,
+            AddressModeU = SamplerAddressMode.ClampToEdge,
+            AddressModeV = SamplerAddressMode.ClampToEdge,
+            AddressModeW = SamplerAddressMode.ClampToEdge,
+            MaxAnisotropy = 1,
+            MinLod = 0,
+            MaxLod = 0,
+            BorderColor = BorderColor.IntOpaqueBlack
+        };
+
+        if (vk.CreateSampler(device, in samplerInfo, null, out _skySampler) != Result.Success)
+            throw new InvalidOperationException("Failed to create the water sky sampler.");
+
+        var images = new[] {
+            new DescriptorImageInfo { ImageView = skyTargets.SkyTransmitView, ImageLayout = ImageLayout.ShaderReadOnlyOptimal },
+            new DescriptorImageInfo { ImageView = skyTargets.SkyViewView, ImageLayout = ImageLayout.ShaderReadOnlyOptimal },
+        };
+
+        fixed (DescriptorImageInfo* imagesPointer = images) {
+            var imageWrites = new[] {
+                new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstSet = SkyDescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage, PImageInfo = &imagesPointer[0] },
+                new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstSet = SkyDescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage, PImageInfo = &imagesPointer[1] },
+            };
+
+            fixed (WriteDescriptorSet* writesPointer = imageWrites)
+                vk.UpdateDescriptorSets(device, (uint)imageWrites.Length, writesPointer, 0, null);
+        }
+
+        var samplerDescriptor = new DescriptorImageInfo { Sampler = _skySampler };
+        var samplerWrite = new WriteDescriptorSet {
+            SType = StructureType.WriteDescriptorSet,
+            DstSet = SkyDescriptorSet,
+            DstBinding = 2,
+            DescriptorCount = 1,
+            DescriptorType = DescriptorType.Sampler,
+            PImageInfo = &samplerDescriptor
+        };
+        vk.UpdateDescriptorSets(device, 1, &samplerWrite, 0, null);
     }
 
     public void UploadMesh(WaterMeshData mesh)
@@ -329,8 +431,21 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
         if (PipelineLayout.Handle != 0)
             vk.DestroyPipelineLayout(device, PipelineLayout, null);
 
+        if (_skyDescriptorPool.Handle != 0)
+            vk.DestroyDescriptorPool(device, _skyDescriptorPool, null);
+
+        if (_skySampler.Handle != 0)
+            vk.DestroySampler(device, _skySampler, null);
+
+        if (_skyDescriptorSetLayout.Handle != 0)
+            vk.DestroyDescriptorSetLayout(device, _skyDescriptorSetLayout, null);
+
         Pipeline = default;
         PipelineLayout = default;
+        SkyDescriptorSet = default;
+        _skyDescriptorPool = default;
+        _skySampler = default;
+        _skyDescriptorSetLayout = default;
         IndexCount = 0;
     }
 }

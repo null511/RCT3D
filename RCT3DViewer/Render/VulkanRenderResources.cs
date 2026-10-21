@@ -2,6 +2,7 @@ using RCT3DViewer.Render.Buffers;
 using RCT3DViewer.Render.Paths;
 using RCT3DViewer.Render.Paths.Meshing;
 using RCT3DViewer.Render.Terrain;
+using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 using Buffer = Silk.NET.Vulkan.Buffer;
@@ -18,6 +19,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
     public VulkanDeviceContext? DeviceContext { get; private set; }
     public SwapchainResources? SwapchainResources { get; private set; }
     public DeferredRenderTargets? DeferredTargets { get; private set; }
+    public SkyRenderTargets? SkyTargets { get; private set; }
     public DeferredPassResources? DeferredPassResources { get; private set; }
     public UniformBufferResources? UniformBufferResources { get; private set; }
     public TerrainGraphicsResources? TerrainGraphicsResources { get; private set; }
@@ -87,19 +89,21 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         SwapchainResources.CreateRenderPass();
 
         DeferredTargets = new DeferredRenderTargets(DeviceContext, SwapchainExtent);
+        SkyTargets = new SkyRenderTargets(DeviceContext);
         UniformBufferResources = new UniformBufferResources(DeviceContext, MaxFramesInFlight);
-        DeferredPassResources = new DeferredPassResources(DeviceContext, RenderPass, DeferredTargets, UniformBufferResources);
+        DeferredPassResources = new DeferredPassResources(DeviceContext, RenderPass, DeferredTargets, SkyTargets, UniformBufferResources);
         TerrainGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, TerrainMaterials,
             shaderNameOverride: Path.Combine("defer", "deferredTerrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         TerrainGraphicsResources.CreatePipeline();
         PathGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, PathMaterials.TextureLibrary,
             shaderNameOverride: Path.Combine("defer", "deferredTerrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         PathGraphicsResources.CreatePipeline();
-        WaterGraphicsResources = new WaterGraphicsResources(DeviceContext, DeferredTargets.WaterRenderPass, UniformBufferResources.DescriptorSetLayout);
+        WaterGraphicsResources = new WaterGraphicsResources(DeviceContext, DeferredTargets.WaterRenderPass, UniformBufferResources.DescriptorSetLayout, SkyTargets);
         WaterGraphicsResources.CreatePipeline();
         SwapchainResources.CreateFramebuffers();
 
         CreateCommandInfrastructure();
+        InitializeSkyTextures();
         TerrainGraphicsResources.CreateTextureResources(CommandPool);
         PathGraphicsResources.CreateTextureResources(CommandPool);
         CreateVehicleCubeResources();
@@ -107,6 +111,87 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
 
         ImGuiRenderer = new ImGuiVulkanRenderer(Vk!, DeviceContext.PhysicalDevice, LogicalDevice, GraphicsQueue, RenderPass, CommandPool,
             Path.Combine(AppContext.BaseDirectory, "Shaders"), SwapchainImages.Length);
+    }
+
+    private void InitializeSkyTextures()
+    {
+        var commandBuffer = default(CommandBuffer);
+        var allocateInfo = new CommandBufferAllocateInfo {
+            SType = StructureType.CommandBufferAllocateInfo,
+            CommandPool = CommandPool,
+            Level = CommandBufferLevel.Primary,
+            CommandBufferCount = 1
+        };
+
+        if (Vk!.AllocateCommandBuffers(LogicalDevice, in allocateInfo, &commandBuffer) != Result.Success)
+            throw new InvalidOperationException("Failed to allocate the sky initialization command buffer.");
+
+        try {
+            var beginInfo = new CommandBufferBeginInfo {
+                SType = StructureType.CommandBufferBeginInfo,
+                Flags = CommandBufferUsageFlags.OneTimeSubmitBit
+            };
+            if (Vk.BeginCommandBuffer(commandBuffer, in beginInfo) != Result.Success)
+                throw new InvalidOperationException("Failed to begin the sky initialization command buffer.");
+
+            var skyTargets = SkyTargets!;
+            var skyPasses = DeferredPassResources!;
+            var uniformDescriptorSet = UniformBufferResources!.GetDescriptorSet(0);
+
+            RecordSkyImageBarrier(commandBuffer, skyTargets.SkyTransmitImage,
+                ImageLayout.Undefined, ImageLayout.General,
+                PipelineStageFlags.TopOfPipeBit, AccessFlags.None,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+            skyPasses.SkyTransmit.Dispatch(commandBuffer, 0, uniformDescriptorSet, new Vector2D<uint>(256, 64));
+            RecordSkyImageBarrier(commandBuffer, skyTargets.SkyTransmitImage,
+                ImageLayout.General, ImageLayout.ShaderReadOnlyOptimal,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
+                PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit, AccessFlags.ShaderReadBit);
+
+            RecordSkyImageBarrier(commandBuffer, skyTargets.SkyMultiscatterImage,
+                ImageLayout.Undefined, ImageLayout.General,
+                PipelineStageFlags.TopOfPipeBit, AccessFlags.None,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+            skyPasses.SkyMultiscatter.Dispatch(commandBuffer, 0, uniformDescriptorSet, new Vector2D<uint>(32, 32));
+            RecordSkyImageBarrier(commandBuffer, skyTargets.SkyMultiscatterImage,
+                ImageLayout.General, ImageLayout.ShaderReadOnlyOptimal,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit);
+
+            if (Vk.EndCommandBuffer(commandBuffer) != Result.Success)
+                throw new InvalidOperationException("Failed to end the sky initialization command buffer.");
+
+            var submitInfo = new SubmitInfo {
+                SType = StructureType.SubmitInfo,
+                CommandBufferCount = 1,
+                PCommandBuffers = &commandBuffer
+            };
+            if (Vk.QueueSubmit(GraphicsQueue, 1, in submitInfo, default) != Result.Success)
+                throw new InvalidOperationException("Failed to submit the sky initialization commands.");
+            if (Vk.QueueWaitIdle(GraphicsQueue) != Result.Success)
+                throw new InvalidOperationException("Failed to wait for sky initialization commands.");
+        }
+        finally {
+            Vk.FreeCommandBuffers(LogicalDevice, CommandPool, 1, &commandBuffer);
+        }
+    }
+
+    private void RecordSkyImageBarrier(CommandBuffer commandBuffer, Image image, ImageLayout oldLayout, ImageLayout newLayout,
+        PipelineStageFlags sourceStage, AccessFlags sourceAccess, PipelineStageFlags destinationStage, AccessFlags destinationAccess)
+    {
+        var barrier = new ImageMemoryBarrier {
+            SType = StructureType.ImageMemoryBarrier,
+            OldLayout = oldLayout,
+            NewLayout = newLayout,
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            Image = image,
+            SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1),
+            SrcAccessMask = sourceAccess,
+            DstAccessMask = destinationAccess
+        };
+
+        Vk.CmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, null, 0, null, 1, &barrier);
     }
 
     private void CreateVehicleCubeResources()
@@ -192,7 +277,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         DeferredPassResources?.Dispose();
         DeferredPassResources = null;
         DeferredTargets!.Resize(SwapchainExtent);
-        DeferredPassResources = new DeferredPassResources(DeviceContext!, RenderPass, DeferredTargets, UniformBufferResources!);
+        DeferredPassResources = new DeferredPassResources(DeviceContext!, RenderPass, DeferredTargets, SkyTargets!, UniformBufferResources!);
         CreateCommandInfrastructure();
         CreateSyncPrimitives();
         ImGuiRenderer?.ResizeBuffers(SwapchainImages.Length);
@@ -271,6 +356,10 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         var deferredTargets = DeferredTargets;
         DeferredTargets = null;
         deferredTargets?.Dispose();
+
+        var skyTargets = SkyTargets;
+        SkyTargets = null;
+        skyTargets?.Dispose();
 
         var swapchainResources = SwapchainResources;
         SwapchainResources = null;

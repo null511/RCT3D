@@ -61,10 +61,6 @@
     </Content>
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Shaders\lib\" />
-  </ItemGroup>
-
   <Target Name="CopyOpenRCT2RuntimeData" AfterTargets="Build">
     <ItemGroup>
       <OpenRCT2Language Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\language\**\*" />
