@@ -49,48 +49,17 @@ internal sealed class TrackMeshGeometry
         var positionB = _vertices[checked((int)b)].Position;
         var positionC = _vertices[checked((int)c)].Position;
         var cross = Vector3.Cross(positionB - positionA, positionC - positionA);
-        if (cross.LengthSquared() <= float.Epsilon)
-            return;
+        if (cross.LengthSquared() <= float.Epsilon) return;
 
         var expectedNormal = _vertices[checked((int)a)].Normal
             + _vertices[checked((int)b)].Normal
             + _vertices[checked((int)c)].Normal;
+
         if (Vector3.Dot(cross, expectedNormal) < 0.0f)
             (b, c) = (c, b);
 
         _indices.Add(a);
         _indices.Add(b);
         _indices.Add(c);
-    }
-
-    public void AddTriangle(Vector3 a, Vector3 b, Vector3 c, byte paletteIndex, Vector3? expectedNormal = null)
-        => AddTriangle(a, b, c, paletteIndex, default, expectedNormal);
-
-    public void AddTriangle(Vector3 a, Vector3 b, Vector3 c, byte paletteIndex, TrackRailSpecularData specular, Vector3? expectedNormal = null)
-    {
-        var cross = Vector3.Cross(b - a, c - a);
-        if (cross.LengthSquared() <= float.Epsilon)
-            return;
-
-        var normal = expectedNormal ?? Vector3.Normalize(cross);
-        if (Vector3.Dot(cross, normal) < 0.0f)
-            (b, c) = (c, b);
-
-        var firstIndex = (uint)_vertices.Count;
-        _vertices.Add(new TrackVertex(a, normal, paletteIndex, specular.Roughness, specular.Metalness, false));
-        _vertices.Add(new TrackVertex(b, normal, paletteIndex, specular.Roughness, specular.Metalness, false));
-        _vertices.Add(new TrackVertex(c, normal, paletteIndex, specular.Roughness, specular.Metalness, false));
-        _indices.Add(firstIndex);
-        _indices.Add(firstIndex + 1);
-        _indices.Add(firstIndex + 2);
-    }
-
-    public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, byte paletteIndex, Vector3? expectedNormal = null)
-        => AddQuad(a, b, c, d, paletteIndex, default, expectedNormal);
-
-    public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, byte paletteIndex, TrackRailSpecularData specular, Vector3? expectedNormal = null)
-    {
-        AddTriangle(a, b, c, paletteIndex, specular, expectedNormal);
-        AddTriangle(a, c, d, paletteIndex, specular, expectedNormal);
     }
 }

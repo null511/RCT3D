@@ -40,7 +40,9 @@ VertexStageOutput vertexMain(VertexInput input)
 	output.paletteIndex = input.paletteIndex;
 	output.specularData = input.specularData;
 	output.untinted = input.untinted;
+
 	output.position.xy += (sceneUniforms.taa_jitter / sceneUniforms.renderDimensions) * (2.0 * output.position.w);
+
 	return output;
 }
 
@@ -48,9 +50,11 @@ VertexStageOutput vertexMain(VertexInput input)
 GBufferOutput fragmentMain(VertexStageOutput input)
 {
 	float paletteU = (float(input.paletteIndex) + 0.5) / 256.0;
+
 	float4 albedo = input.untinted > 0.5
 		? float4(1.0, 1.0, 1.0, 1.0)
 		: paletteLut.Sample(paletteSampler, float2(paletteU, 0.5));
+
 	float3 normal = normalize(input.normal);
 
 	GBufferOutput output;
