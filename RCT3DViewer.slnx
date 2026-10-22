@@ -17,7 +17,7 @@
   <Project Path="OpenRCT2/src/openrct2/libopenrct2.vcxproj" Id="d24d94f6-2a74-480c-b512-629c306ce92f">
     <Build Solution="Debug|Any CPU" Project="false" />
   </Project>
-  <Project Path="RCT3DViewer/RCT3DViewer.csproj">
+  <Project Path="RCT3DViewer/RCT3D-Viewer.csproj">
     <BuildDependency Project="ShaderCompiler/ShaderCompiler.csproj" />
     <BuildType Solution="ReleaseLTCG|*" Project="Release" />
   </Project>

@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using System.Runtime.InteropServices;
 
-namespace RCT3DViewer.Render.Terrain;
+namespace RCT3D.Render.Terrain;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct TerrainVertex(Vector3 pos, Vector3 norm, Vector2 textureCoordinate, uint materialId)

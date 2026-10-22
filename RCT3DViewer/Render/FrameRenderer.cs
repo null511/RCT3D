@@ -1,11 +1,12 @@
-using RCT3DViewer.Render.Buffers;
-using RCT3DViewer.Render.Paths.Meshing;
-using RCT3DViewer.Render.Terrain;
+using RCT3D.Render.Buffers;
+using RCT3D.Render.Paths.Meshing;
+using RCT3D.Render.Terrain;
+using RCT3D.Render.Tracks.Meshing;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using System.Numerics;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, ViewerUiController ui, FlightCamera camera)
 {
@@ -31,7 +32,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         uint currentFrame,
         TerrainMeshData? terrainMesh,
         PathMeshData? pathMesh,
-        WaterMeshData? waterMesh)
+        WaterMeshData? waterMesh,
+        TrackMeshData? trackMesh)
     {
         if (taaEnabledLastFrame != ui.TaaEnabled) {
             taaHistoryValid = false;
@@ -160,6 +162,27 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in vertexBuffer, in offset);
             Vk.CmdBindIndexBuffer(commandBuffer, resources.IndexBuffer, 0, IndexType.Uint32);
             foreach (var region in terrainMesh.Regions) {
+                if (viewFrustum.Intersects(region.Bounds))
+                    Vk.CmdDrawIndexed(commandBuffer, region.IndexCount, 1, region.FirstIndex, 0, 0);
+            }
+        }
+
+        if (trackMesh is { Vertices.Length: > 0, Indices.Length: > 0 }
+            && resources.TrackGraphicsResources is { IndexCount: > 0 } trackResources) {
+            var trackPipeline = ui.WireframeEnabled ? trackResources.WireframePipeline : trackResources.Pipeline;
+            Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, trackPipeline);
+
+            var trackDescriptorSets = stackalloc DescriptorSet[2];
+            trackDescriptorSets[0] = uniformDescriptorSet;
+            trackDescriptorSets[1] = trackResources.DescriptorSet;
+            Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, trackResources.PipelineLayout,
+                0, 2, trackDescriptorSets, 0, null);
+
+            var trackVertexBuffer = trackResources.VertexBuffer;
+            Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in trackVertexBuffer, in offset);
+            Vk.CmdBindIndexBuffer(commandBuffer, trackResources.IndexBuffer, 0, IndexType.Uint32);
+
+            foreach (var region in trackMesh.Regions) {
                 if (viewFrustum.Intersects(region.Bounds))
                     Vk.CmdDrawIndexed(commandBuffer, region.IndexCount, 1, region.FirstIndex, 0, 0);
             }

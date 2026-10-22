@@ -1,4 +1,4 @@
-﻿namespace RCT3DViewer.Render.Shaders;
+﻿namespace RCT3D.Render.Shaders;
 
 internal class ShaderFile
 {

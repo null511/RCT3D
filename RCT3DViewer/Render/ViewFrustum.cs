@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal readonly struct ViewFrustum
 {

@@ -1,7 +1,7 @@
-using RCT3DViewer.Render.Terrain;
 using System.Numerics;
+using RCT3D.Render.Terrain;
 
-namespace RCT3DViewer.Render.Paths.Meshing;
+namespace RCT3D.Render.Paths.Meshing;
 
 internal sealed class PathMeshGeometry
 {

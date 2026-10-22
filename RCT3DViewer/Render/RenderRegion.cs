@@ -1,7 +1,8 @@
-using RCT3DViewer.Render.Terrain;
 using System.Numerics;
+using RCT3D.Render.Terrain;
+using RCT3D.Render.Tracks.Meshing;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal static class RenderRegionLayout
 {
@@ -106,6 +107,29 @@ internal static class RenderRegionMeshRanges
     public static RenderRegionIndexRange Create(
         RenderRegionCoordinate region,
         List<TerrainVertex> vertices,
+        List<uint> indices,
+        int firstVertex,
+        int firstIndex)
+    {
+        if (firstVertex < 0 || firstVertex >= vertices.Count)
+            throw new ArgumentOutOfRangeException(nameof(firstVertex));
+        if (firstIndex < 0 || firstIndex >= indices.Count)
+            throw new ArgumentOutOfRangeException(nameof(firstIndex));
+
+        var bounds = new AxisAlignedBounds(vertices[firstVertex].Position, vertices[firstVertex].Position);
+        for (var i = firstVertex + 1; i < vertices.Count; i++)
+            bounds = bounds.Encapsulate(vertices[i].Position);
+
+        return new RenderRegionIndexRange(
+            region,
+            bounds,
+            checked((uint)firstIndex),
+            checked((uint)(indices.Count - firstIndex)));
+    }
+
+    public static RenderRegionIndexRange Create(
+        RenderRegionCoordinate region,
+        List<TrackVertex> vertices,
         List<uint> indices,
         int firstVertex,
         int firstIndex)

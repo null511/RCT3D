@@ -1,8 +1,8 @@
-using RCT3DViewer.Interop;
-using RCT3DViewer.Render.Terrain;
 using System.Numerics;
+using RCT3D.Interop;
+using RCT3D.Render.Terrain;
 
-namespace RCT3DViewer.Render.Paths.Meshing;
+namespace RCT3D.Render.Paths.Meshing;
 
 internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 {

@@ -1,7 +1,7 @@
-using Silk.NET.Input;
 using System.Numerics;
+using Silk.NET.Input;
 
-namespace RCT3DViewer
+namespace RCT3D
 {
     public class FlightCamera
     {

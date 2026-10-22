@@ -1,7 +1,7 @@
-using RCT3DViewer.Render.Terrain;
 using System.Text.Json;
+using RCT3D.Render.Terrain;
 
-namespace RCT3DViewer.Render.Paths;
+namespace RCT3D.Render.Paths;
 
 internal sealed class PathAccessoryAssetLibrary
 {

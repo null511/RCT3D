@@ -1,0 +1,63 @@
+using System.Numerics;
+
+namespace RCT3D.Render.Tracks.Meshing;
+
+internal sealed class TrackMeshGeometry
+{
+    private readonly List<TrackVertex> _vertices = new();
+    private readonly List<uint> _indices = new();
+    private readonly List<RenderRegionIndexRange> _regions = new();
+    private RenderRegionCoordinate? _region;
+    private int _firstVertex;
+    private int _firstIndex;
+
+    public void BeginRegion(RenderRegionCoordinate region)
+    {
+        if (_region.HasValue)
+            throw new InvalidOperationException("A track mesh region is already open.");
+
+        _region = region;
+        _firstVertex = _vertices.Count;
+        _firstIndex = _indices.Count;
+    }
+
+    public void EndRegion()
+    {
+        if (!_region.HasValue)
+            throw new InvalidOperationException("No track mesh region is open.");
+
+        if (_indices.Count > _firstIndex) {
+            var range = RenderRegionMeshRanges.Create(_region.Value, _vertices, _indices, _firstVertex, _firstIndex);
+            _regions.Add(range);
+        }
+
+        _region = null;
+    }
+
+    public TrackMeshData Build() => new(_vertices.ToArray(), _indices.ToArray(), _regions.ToArray());
+
+    public void AddTriangle(Vector3 a, Vector3 b, Vector3 c, byte paletteIndex, Vector3? expectedNormal = null)
+    {
+        var cross = Vector3.Cross(b - a, c - a);
+        if (cross.LengthSquared() <= float.Epsilon)
+            return;
+
+        var normal = expectedNormal ?? Vector3.Normalize(cross);
+        if (Vector3.Dot(cross, normal) < 0.0f)
+            (b, c) = (c, b);
+
+        var firstIndex = (uint)_vertices.Count;
+        _vertices.Add(new TrackVertex(a, normal, paletteIndex));
+        _vertices.Add(new TrackVertex(b, normal, paletteIndex));
+        _vertices.Add(new TrackVertex(c, normal, paletteIndex));
+        _indices.Add(firstIndex);
+        _indices.Add(firstIndex + 1);
+        _indices.Add(firstIndex + 2);
+    }
+
+    public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, byte paletteIndex, Vector3? expectedNormal = null)
+    {
+        AddTriangle(a, b, c, paletteIndex, expectedNormal);
+        AddTriangle(a, c, d, paletteIndex, expectedNormal);
+    }
+}

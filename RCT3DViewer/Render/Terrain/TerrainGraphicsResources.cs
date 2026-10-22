@@ -1,11 +1,12 @@
-using RCT3DViewer.Render.Paths;
-using RCT3DViewer.Render.Paths.Meshing;
+using RCT3D.Render.Paths;
+using RCT3D.Render.Paths.Meshing;
+using RCT3D.Render.Tracks.Meshing;
 using Silk.NET.Vulkan;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-namespace RCT3DViewer.Render.Terrain;
+namespace RCT3D.Render.Terrain;
 
 internal sealed unsafe class TerrainGraphicsResources(
     VulkanDeviceContext context,
@@ -15,7 +16,8 @@ internal sealed unsafe class TerrainGraphicsResources(
     bool useInstances = false,
     string shaderNameOverride = "",
     bool createWireframePipeline = false,
-    uint colorAttachmentCount = 1) : IDisposable
+    uint colorAttachmentCount = 1,
+    bool usePaletteLut = false) : IDisposable
 {
     private CommandPool _commandPool;
     private DescriptorSetLayout _descriptorSetLayout;
@@ -98,20 +100,27 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var shaderStages = new[] { vertStageInfo, fragStageInfo };
 
+        var vertexStride = usePaletteLut ? Marshal.SizeOf<TrackVertex>() : Marshal.SizeOf<TerrainVertex>();
         var bindingDescriptions = new List<VertexInputBindingDescription> {
             new() {
                 Binding = 0,
-                Stride = (uint)Marshal.SizeOf<TerrainVertex>(),
+                Stride = (uint)vertexStride,
                 InputRate = VertexInputRate.Vertex
             }
         };
 
-        var attributeDescriptions = new List<VertexInputAttributeDescription> {
-            new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Position)) },
-            new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Normal)) },
-            new() { Binding = 0, Location = 2, Format = Format.R32G32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.TextureCoordinate)) },
-            new() { Binding = 0, Location = 3, Format = Format.R32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.MaterialId)) }
-        };
+        var attributeDescriptions = usePaletteLut
+            ? new List<VertexInputAttributeDescription> {
+                new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.Position)) },
+                new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.Normal)) },
+                new() { Binding = 0, Location = 2, Format = Format.R8Uint, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.PaletteIndex)) }
+            }
+            : new List<VertexInputAttributeDescription> {
+                new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Position)) },
+                new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Normal)) },
+                new() { Binding = 0, Location = 2, Format = Format.R32G32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.TextureCoordinate)) },
+                new() { Binding = 0, Location = 3, Format = Format.R32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.MaterialId)) }
+            };
 
         if (useInstances) {
             var instanceStride = (uint)Marshal.SizeOf<ModelInstance>();
@@ -192,12 +201,17 @@ internal sealed unsafe class TerrainGraphicsResources(
             AttachmentCount = (uint)colorBlendAttachments.Length,
         };
 
-        var descriptorBindings = new DescriptorSetLayoutBinding[] {
-            new() { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
-            new() { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
-            new() { Binding = 2, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
-            new() { Binding = 3, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
-        };
+        var descriptorBindings = usePaletteLut
+            ? new DescriptorSetLayoutBinding[] {
+                new() { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+                new() { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
+            }
+            : new DescriptorSetLayoutBinding[] {
+                new() { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+                new() { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+                new() { Binding = 2, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+                new() { Binding = 3, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
+            };
 
         fixed (DescriptorSetLayoutBinding* bindingsPointer = descriptorBindings) {
             var descriptorLayoutInfo = new DescriptorSetLayoutCreateInfo {
@@ -283,18 +297,20 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var vk = context.Api;
         var device = context.LogicalDevice;
-        var mipLevels = (uint)BitOperations.Log2((uint)Math.Max(materials.Width, materials.Height)) + 1;
-        (_textureImage, _textureMemory, _textureView) = CreateTextureArray(materials.Pixels, Format.R8G8B8A8Srgb, mipLevels, "base");
-        (_normalTextureImage, _normalTextureMemory, _normalTextureView) = CreateTextureArray(materials.NormalPixels, Format.R8G8B8A8Unorm, mipLevels, "normal/AO");
-        (_specularTextureImage, _specularTextureMemory, _specularTextureView) = CreateTextureArray(materials.SpecularPixels, Format.R8G8B8A8Unorm, mipLevels, "specular");
+        var mipLevels = usePaletteLut ? 1u : (uint)BitOperations.Log2((uint)Math.Max(materials.Width, materials.Height)) + 1;
+        (_textureImage, _textureMemory, _textureView) = CreateTextureArray(materials.Pixels, Format.R8G8B8A8Srgb, mipLevels, usePaletteLut ? "palette LUT" : "base", usePaletteLut);
+        if (!usePaletteLut) {
+            (_normalTextureImage, _normalTextureMemory, _normalTextureView) = CreateTextureArray(materials.NormalPixels, Format.R8G8B8A8Unorm, mipLevels, "normal/AO");
+            (_specularTextureImage, _specularTextureMemory, _specularTextureView) = CreateTextureArray(materials.SpecularPixels, Format.R8G8B8A8Unorm, mipLevels, "specular");
+        }
 
         var samplerInfo = new SamplerCreateInfo {
             SType = StructureType.SamplerCreateInfo,
-            MagFilter = Filter.Linear,
-            MinFilter = Filter.Linear,
-            MipmapMode = SamplerMipmapMode.Linear,
-            AddressModeU = SamplerAddressMode.Repeat,
-            AddressModeV = SamplerAddressMode.Repeat,
+            MagFilter = usePaletteLut ? Filter.Nearest : Filter.Linear,
+            MinFilter = usePaletteLut ? Filter.Nearest : Filter.Linear,
+            MipmapMode = usePaletteLut ? SamplerMipmapMode.Nearest : SamplerMipmapMode.Linear,
+            AddressModeU = usePaletteLut ? SamplerAddressMode.ClampToEdge : SamplerAddressMode.Repeat,
+            AddressModeV = usePaletteLut ? SamplerAddressMode.ClampToEdge : SamplerAddressMode.Repeat,
             AddressModeW = SamplerAddressMode.Repeat,
             MaxAnisotropy = 1,
             MinLod = 0,
@@ -306,7 +322,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             throw new Exception("Failed to create terrain texture sampler.");
 
         var poolSizes = new DescriptorPoolSize[] {
-            new() { Type = DescriptorType.SampledImage, DescriptorCount = 3 },
+            new() { Type = DescriptorType.SampledImage, DescriptorCount = usePaletteLut ? 1u : 3u },
             new() { Type = DescriptorType.Sampler, DescriptorCount = 1 }
         };
 
@@ -340,37 +356,43 @@ internal sealed unsafe class TerrainGraphicsResources(
             ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
         };
 
-        var normalImageDescriptor = new DescriptorImageInfo {
-            ImageView = _normalTextureView,
-            ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
-        };
-
-        var specularImageDescriptor = new DescriptorImageInfo {
-            ImageView = _specularTextureView,
-            ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
-        };
-
         var samplerDescriptor = new DescriptorImageInfo {
             Sampler = _textureSampler,
         };
 
-        var writes = new WriteDescriptorSet[] {
-            new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
-            new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.Sampler },
-            new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
-            new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 3, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage }
-        };
+        var writes = usePaletteLut
+            ? new WriteDescriptorSet[] {
+                new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
+                new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.Sampler }
+            }
+            : new WriteDescriptorSet[] {
+                new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
+                new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.Sampler },
+                new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
+                new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 3, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage }
+            };
 
         fixed (WriteDescriptorSet* writesPointer = writes) {
             writes[0].PImageInfo = &baseImageDescriptor;
             writes[1].PImageInfo = &samplerDescriptor;
-            writes[2].PImageInfo = &normalImageDescriptor;
-            writes[3].PImageInfo = &specularImageDescriptor;
+            if (!usePaletteLut) {
+                var normalImageDescriptor = new DescriptorImageInfo {
+                    ImageView = _normalTextureView,
+                    ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+                };
+                var specularImageDescriptor = new DescriptorImageInfo {
+                    ImageView = _specularTextureView,
+                    ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+                };
+                writes[2].PImageInfo = &normalImageDescriptor;
+                writes[3].PImageInfo = &specularImageDescriptor;
+            }
             vk.UpdateDescriptorSets(device, (uint)writes.Length, writesPointer, 0, null);
         }
     }
 
-    private (Image Image, DeviceMemory Memory, ImageView View) CreateTextureArray(byte[] pixels, Format format, uint mipLevels, string mapName)
+    private (Image Image, DeviceMemory Memory, ImageView View) CreateTextureArray(
+        byte[] pixels, Format format, uint mipLevels, string mapName, bool isPaletteLut = false)
     {
         var vk = context.Api;
         var device = context.LogicalDevice;
@@ -384,10 +406,11 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         try {
             vk.GetPhysicalDeviceFormatProperties(context.PhysicalDevice, format, out var formatProperties);
-            var requiredFormatFeatures = FormatFeatureFlags.SampledImageBit
-                | FormatFeatureFlags.BlitSrcBit
-                | FormatFeatureFlags.BlitDstBit
-                | FormatFeatureFlags.SampledImageFilterLinearBit;
+            var requiredFormatFeatures = FormatFeatureFlags.SampledImageBit;
+            if (mipLevels > 1)
+                requiredFormatFeatures |= FormatFeatureFlags.BlitSrcBit
+                    | FormatFeatureFlags.BlitDstBit
+                    | FormatFeatureFlags.SampledImageFilterLinearBit;
             if ((formatProperties.OptimalTilingFeatures & requiredFormatFeatures) != requiredFormatFeatures)
                 throw new NotSupportedException($"The Vulkan device does not support sampled, linearly filtered blits for {format} {mapName} textures.");
 
@@ -445,7 +468,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             var viewInfo = new ImageViewCreateInfo {
                 SType = StructureType.ImageViewCreateInfo,
                 Image = image,
-                ViewType = ImageViewType.Type2DArray,
+                ViewType = isPaletteLut ? ImageViewType.Type2D : ImageViewType.Type2DArray,
                 Format = format,
                 SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, mipLevels, 0, (uint)materials.LayerCount)
             };
@@ -485,6 +508,11 @@ internal sealed unsafe class TerrainGraphicsResources(
     }
 
     public void UploadMesh(PathMeshData mesh)
+    {
+        UploadMesh(mesh.Vertices, mesh.Indices);
+    }
+
+    public void UploadMesh(TrackMeshData mesh)
     {
         UploadMesh(mesh.Vertices, mesh.Indices);
     }
@@ -537,6 +565,37 @@ internal sealed unsafe class TerrainGraphicsResources(
         void* vertexData;
         vk.MapMemory(device, _vertexBufferMemory, 0, vertexBufferSize, 0, &vertexData);
         var vertexSpan = new Span<TerrainVertex>(vertexData, vertices.Length);
+        vertices.AsSpan().CopyTo(vertexSpan);
+        vk.UnmapMemory(device, _vertexBufferMemory);
+
+        var indexBufferSize = checked(sizeof(uint) * (ulong)indices.Length);
+        AllocateBuffer(indexBufferSize, BufferUsageFlags.IndexBufferBit,
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _indexBuffer, out _indexBufferMemory);
+
+        void* indexData;
+        vk.MapMemory(device, _indexBufferMemory, 0, indexBufferSize, 0, &indexData);
+        var indexSpan = new Span<uint>(indexData, indices.Length);
+        indices.AsSpan().CopyTo(indexSpan);
+        vk.UnmapMemory(device, _indexBufferMemory);
+        IndexCount = checked((uint)indices.Length);
+    }
+
+    private void UploadMesh(TrackVertex[] vertices, uint[] indices)
+    {
+        if (vertices.Length == 0 || indices.Length == 0) {
+            ClearMesh();
+            return;
+        }
+
+        var vk = context.Api;
+        var device = context.LogicalDevice;
+        var vertexBufferSize = checked((ulong)Marshal.SizeOf<TrackVertex>() * (ulong)vertices.Length);
+        AllocateBuffer(vertexBufferSize, BufferUsageFlags.VertexBufferBit,
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vertexBuffer, out _vertexBufferMemory);
+
+        void* vertexData;
+        vk.MapMemory(device, _vertexBufferMemory, 0, vertexBufferSize, 0, &vertexData);
+        var vertexSpan = new Span<TrackVertex>(vertexData, vertices.Length);
         vertices.AsSpan().CopyTo(vertexSpan);
         vk.UnmapMemory(device, _vertexBufferMemory);
 

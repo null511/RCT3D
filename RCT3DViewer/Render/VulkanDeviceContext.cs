@@ -1,12 +1,12 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Windowing;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed unsafe class VulkanDeviceContext : IDisposable
 {

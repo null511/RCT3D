@@ -1,9 +1,9 @@
+using System.Numerics;
 using ImGuiNET;
 using Silk.NET.Input;
 using Silk.NET.Windowing;
-using System.Numerics;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed class ViewerInputController : IDisposable
 {

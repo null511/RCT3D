@@ -1,9 +1,9 @@
-using RCT3DViewer.Render.Paths;
-using RCT3DViewer.Simulation;
 using System.Diagnostics;
 using System.Numerics;
+using RCT3D.Render.Paths;
+using RCT3D.Simulation;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal static class VehicleCubeRenderer
 {

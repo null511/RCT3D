@@ -5,6 +5,7 @@
 - For nested OpenRCT2 builds, compile only the base `openrct2` project/target. Do not build the full OpenRCT2 solution or configure multiple OS variants, and do not introduce a `zstd` dependency; verify the selected target before starting native builds.
 - Do not add or implement tests unless the user explicitly asks. For this feature, the user will manually verify behavior; limit validation to builds and static checks.
 - Execute code implementation requests in Agent mode, not left as a registered plan; the user is using Agent mode rather than Plan mode.
+- For RCT3DViewer integration, use the app's own OpenRCT2 config rather than assuming the main game's settings carry over, as the embedded OpenRCT2 instance is isolated from the main game's config/data location.
 
 ## Rendering Guidelines
 - Request source-derived terrain direction reasoning rather than guess-and-test; validate rendering hypotheses before making further geometry changes.

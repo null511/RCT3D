@@ -1,10 +1,10 @@
-using ImGuiNET;
-using Silk.NET.Vulkan;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using ImGuiNET;
+using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed unsafe class ImGuiVulkanRenderer : IDisposable
 {

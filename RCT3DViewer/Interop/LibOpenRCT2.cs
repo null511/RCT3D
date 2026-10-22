@@ -1,18 +1,18 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace RCT3DViewer.Interop;
+namespace RCT3D.Interop;
 
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 12;
+    private const uint ExpectedAbiVersion = 15;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate int InitializeDelegate(byte* openRCT2Path, byte* rct2Path, out IntPtr context);
+    private delegate int InitializeDelegate(byte* openRCT2Path, byte* rct2Path, byte* rct1Path, out IntPtr context);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int LoadParkDelegate(IntPtr context, byte* parkPath);
@@ -28,6 +28,15 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int CopyPathDataDelegate(IntPtr context, RCTTilePathData* output, ulong capacity);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int GetTrackCountDelegate(IntPtr context, out ulong count);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int CopyTrackDataDelegate(IntPtr context, RCTTrackElementData* output, ulong capacity);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int CopyPaletteDataDelegate(IntPtr context, RCTPaletteEntry* output, ulong capacity);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int AdvanceSimulationDelegate(IntPtr context);
@@ -53,6 +62,9 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private readonly CopySurfaceDataDelegate _copySurfaceData;
     private readonly GetPathCountDelegate _getPathCount;
     private readonly CopyPathDataDelegate _copyPathData;
+    private readonly GetTrackCountDelegate _getTrackCount;
+    private readonly CopyTrackDataDelegate _copyTrackData;
+    private readonly CopyPaletteDataDelegate _copyPaletteData;
     private readonly AdvanceSimulationDelegate _advanceSimulation;
     private readonly GetTimeOfDayHoursDelegate _getTimeOfDayHours;
     private readonly GetVehicleCountDelegate _getVehicleCount;
@@ -67,7 +79,7 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     //public bool IsAvailable => !_disposed && _context != IntPtr.Zero;
 
 
-    public LibOpenRCT2(string libraryPath, string openRCT2Path, string rct2Path)
+    public LibOpenRCT2(string libraryPath, string openRCT2Path, string rct2Path, string rct1Path)
     {
         _libraryPath = Path.GetFullPath(libraryPath);
         if (!NativeLoader.TryLoadNativeLibrary(_libraryPath, out _nativeHandle, out var error))
@@ -89,12 +101,21 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (Marshal.SizeOf<RCTVehicleData>() != 28)
                 throw new InvalidOperationException("RCTVehicleData must be 28 bytes to match the OpenRCT2 adapter ABI.");
 
+            if (Marshal.SizeOf<RCTTrackElementData>() != 23)
+                throw new InvalidOperationException("RCTTrackElementData must be 23 bytes to match the OpenRCT2 adapter ABI.");
+
+            if (Marshal.SizeOf<RCTPaletteEntry>() != 4)
+                throw new InvalidOperationException("RCTPaletteEntry must be 4 bytes to match the OpenRCT2 adapter ABI.");
+
             var initialize = Bind<InitializeDelegate>("rct3d_openrct2_initialize");
             _loadPark = Bind<LoadParkDelegate>("rct3d_openrct2_load_park");
             _getMapDimensions = Bind<GetMapDimensionsDelegate>("rct3d_openrct2_get_map_dimensions");
             _copySurfaceData = Bind<CopySurfaceDataDelegate>("rct3d_openrct2_copy_surface_data");
             _getPathCount = Bind<GetPathCountDelegate>("rct3d_openrct2_get_path_count");
             _copyPathData = Bind<CopyPathDataDelegate>("rct3d_openrct2_copy_path_data");
+            _getTrackCount = Bind<GetTrackCountDelegate>("rct3d_openrct2_get_track_count");
+            _copyTrackData = Bind<CopyTrackDataDelegate>("rct3d_openrct2_copy_track_data");
+            _copyPaletteData = Bind<CopyPaletteDataDelegate>("rct3d_openrct2_copy_palette_data");
             _advanceSimulation = Bind<AdvanceSimulationDelegate>("rct3d_openrct2_advance_simulation");
             _getTimeOfDayHours = Bind<GetTimeOfDayHoursDelegate>("rct3d_openrct2_get_time_of_day_hours");
             _getVehicleCount = Bind<GetVehicleCountDelegate>("rct3d_openrct2_get_vehicle_count");
@@ -104,10 +125,12 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 
             var openRCT2PathUtf8 = Encoding.UTF8.GetBytes(openRCT2Path + '\0');
             var rct2PathUtf8 = Encoding.UTF8.GetBytes(rct2Path + '\0');
+            var rct1PathUtf8 = Encoding.UTF8.GetBytes(rct1Path + '\0');
 
             fixed (byte* openRCT2PathPointer = openRCT2PathUtf8)
-            fixed (byte* rct2PathPointer = rct2PathUtf8) {
-                var status = initialize(openRCT2PathPointer, rct2PathPointer, out var context);
+            fixed (byte* rct2PathPointer = rct2PathUtf8)
+            fixed (byte* rct1PathPointer = rct1PathUtf8) {
+                var status = initialize(openRCT2PathPointer, rct2PathPointer, rct1PathPointer, out var context);
                 ThrowIfFailed(status);
                 _context = context;
             }
@@ -150,6 +173,24 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     {
         fixed (RCTTilePathData* pointer = output)
             ThrowIfFailed(_copyPathData(_context, pointer, (ulong)output.Length));
+    }
+
+    public ulong GetTrackCount()
+    {
+        ThrowIfFailed(_getTrackCount(_context, out var count));
+        return count;
+    }
+
+    public void CopyTrackData(Span<RCTTrackElementData> output)
+    {
+        fixed (RCTTrackElementData* pointer = output)
+            ThrowIfFailed(_copyTrackData(_context, pointer, (ulong)output.Length));
+    }
+
+    public void CopyPaletteData(Span<RCTPaletteEntry> output)
+    {
+        fixed (RCTPaletteEntry* pointer = output)
+            ThrowIfFailed(_copyPaletteData(_context, pointer, (ulong)output.Length));
     }
 
     public void AdvanceSimulation() => ThrowIfFailed(_advanceSimulation(_context));

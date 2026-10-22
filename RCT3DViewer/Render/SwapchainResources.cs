@@ -1,7 +1,7 @@
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed unsafe class SwapchainResources(VulkanDeviceContext context, IWindow window) : IDisposable
 {

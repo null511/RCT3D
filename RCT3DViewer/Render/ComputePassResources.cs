@@ -1,9 +1,9 @@
-using Silk.NET.Vulkan;
-using Silk.NET.Maths;
 using System.Runtime.InteropServices;
-using RCT3DViewer.Render.Shaders;
+using RCT3D.Render.Shaders;
+using Silk.NET.Maths;
+using Silk.NET.Vulkan;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed unsafe class ComputePassResources : IDisposable
 {

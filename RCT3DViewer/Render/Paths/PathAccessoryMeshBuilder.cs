@@ -1,8 +1,8 @@
-using RCT3DViewer.Interop;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using RCT3D.Interop;
 
-namespace RCT3DViewer.Render.Paths;
+namespace RCT3D.Render.Paths;
 
 internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
 {

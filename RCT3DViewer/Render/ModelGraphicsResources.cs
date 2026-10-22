@@ -1,10 +1,10 @@
-using RCT3DViewer.Render.Paths;
-using RCT3DViewer.Render.Paths.Meshing;
-using RCT3DViewer.Render.Terrain;
+using RCT3D.Render.Paths;
+using RCT3D.Render.Paths.Meshing;
+using RCT3D.Render.Terrain;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed unsafe class ModelGraphicsResources : IDisposable
 {

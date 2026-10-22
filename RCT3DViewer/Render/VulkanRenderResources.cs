@@ -1,14 +1,15 @@
-using RCT3DViewer.Render.Buffers;
-using RCT3DViewer.Render.Paths;
-using RCT3DViewer.Render.Paths.Meshing;
-using RCT3DViewer.Render.Terrain;
+using RCT3D.Interop;
+using RCT3D.Render.Buffers;
+using RCT3D.Render.Paths;
+using RCT3D.Render.Paths.Meshing;
+using RCT3D.Render.Terrain;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 using Buffer = Silk.NET.Vulkan.Buffer;
 using Semaphore = Silk.NET.Vulkan.Semaphore;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed unsafe class VulkanRenderResources : IDisposable
 {
@@ -24,6 +25,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
     public UniformBufferResources? UniformBufferResources { get; private set; }
     public TerrainGraphicsResources? TerrainGraphicsResources { get; private set; }
     public TerrainGraphicsResources? PathGraphicsResources { get; private set; }
+    public TerrainGraphicsResources? TrackGraphicsResources { get; private set; }
     public WaterGraphicsResources? WaterGraphicsResources { get; private set; }
     public ModelGraphicsResources[] VehicleCubeGraphicsResources { get; private set; } = Array.Empty<ModelGraphicsResources>();
     public TerrainMaterialLibrary? TerrainMaterials { get; private set; }
@@ -111,6 +113,40 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
 
         ImGuiRenderer = new ImGuiVulkanRenderer(Vk!, DeviceContext.PhysicalDevice, LogicalDevice, GraphicsQueue, RenderPass, CommandPool,
             Path.Combine(AppContext.BaseDirectory, "Shaders"), SwapchainImages.Length);
+    }
+
+    public void CreateTrackGraphicsResources(RCTPaletteEntry[] palette)
+    {
+        if (palette.Length != 256)
+            throw new ArgumentException("The OpenRCT2 palette must contain 256 entries.", nameof(palette));
+
+        TrackGraphicsResources?.Dispose();
+        TrackGraphicsResources = null;
+
+        var pixels = new byte[256 * 4];
+        for (var i = 0; i < palette.Length; i++) {
+            var offset = i * 4;
+            pixels[offset] = palette[i].Red;
+            pixels[offset + 1] = palette[i].Green;
+            pixels[offset + 2] = palette[i].Blue;
+            pixels[offset + 3] = palette[i].Alpha;
+        }
+
+        var trackMaterials = TerrainMaterialLibrary.FromPaletteLut(pixels);
+        var trackResources = new TerrainGraphicsResources(
+            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, trackMaterials,
+            shaderNameOverride: Path.Combine("defer", "deferredTrack"), createWireframePipeline: true, colorAttachmentCount: 3,
+            usePaletteLut: true);
+
+        try {
+            trackResources.CreatePipeline();
+            trackResources.CreateTextureResources(CommandPool);
+            TrackGraphicsResources = trackResources;
+        }
+        catch {
+            trackResources.Dispose();
+            throw;
+        }
     }
 
     private void InitializeSkyTextures()
@@ -340,6 +376,10 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         var waterResources = WaterGraphicsResources;
         WaterGraphicsResources = null;
         waterResources?.Dispose();
+
+        var trackResources = TrackGraphicsResources;
+        TrackGraphicsResources = null;
+        trackResources?.Dispose();
 
         var pathResources = PathGraphicsResources;
         PathGraphicsResources = null;

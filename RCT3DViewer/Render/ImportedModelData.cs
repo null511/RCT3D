@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct ImportedModelVertex

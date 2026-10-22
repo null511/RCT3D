@@ -1,8 +1,8 @@
+using System.Diagnostics;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
-using System.Diagnostics;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed unsafe class FrameCoordinator(IWindow window, VulkanRenderResources resources)
 {

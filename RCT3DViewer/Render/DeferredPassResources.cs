@@ -1,7 +1,7 @@
-using RCT3DViewer.Render.Buffers;
+using RCT3D.Render.Buffers;
 using Silk.NET.Vulkan;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed class DeferredPassResources : IDisposable
 {

@@ -1,11 +1,11 @@
-using RCT3DViewer.Render.Paths;
-using RCT3DViewer.Render.Paths.Meshing;
-using RCT3DViewer.Render.Terrain;
-using RCT3DViewer.Simulation;
+using RCT3D.Render.Paths;
+using RCT3D.Render.Paths.Meshing;
+using RCT3D.Render.Terrain;
+using RCT3D.Simulation;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 public sealed class Renderer : IDisposable
 {
@@ -28,6 +28,7 @@ public sealed class Renderer : IDisposable
     public string? LibraryPath { get; set; }
     public string? OpenRCT2Path { get; set; }
     public string? Rct2Path { get; set; }
+    public string? Rct1Path { get; set; }
     public string? StartupParkPath { get; set; }
     public float TerrainSkirtFloor { get; set; } = -24.0f;
 
@@ -66,6 +67,9 @@ public sealed class Renderer : IDisposable
 
         if (string.IsNullOrEmpty(Rct2Path))
             throw new InvalidOperationException("Rct2Path is undefined!");
+
+        if (string.IsNullOrEmpty(Rct1Path))
+            throw new InvalidOperationException("Rct1Path is undefined! Set RCT3DVIEWER_RCT1_DATA to the RCT1 data directory.");
         
         if (string.IsNullOrEmpty(LibraryPath))
             throw new InvalidOperationException("LibraryPath is undefined!");
@@ -78,7 +82,7 @@ public sealed class Renderer : IDisposable
             if (!Path.IsPathRooted(OpenRCT2Path))
                 OpenRCT2Path = Path.Combine(AppContext.BaseDirectory, OpenRCT2Path);
 
-            simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path);
+            simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path, Rct1Path);
             var textureRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Textures");
             var missingTexturePath = Path.Combine(textureRoot, "missing.png");
             terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(textureRoot, "Terrain"), null, missingTexturePath);
@@ -141,7 +145,8 @@ public sealed class Renderer : IDisposable
                 ui.BuildFrameUi(deltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours,
                     parkPath => parkScene.LoadPark(parkPath, TerrainSkirtFloor), () => exitRequested = true, deviceContext!.SupportsWireframe);
             },
-            (commandBuffer, imageIndex, currentFrame) => frameRenderer!.Record(commandBuffer, imageIndex, currentFrame, parkScene.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh),
+            (commandBuffer, imageIndex, currentFrame) => frameRenderer!.Record(commandBuffer, imageIndex, currentFrame,
+                parkScene.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh),
             () => frameRenderer!.FrameSubmitted(),
             extentChanged => frameRenderer!.ResetForSwapchain(extentChanged));
     }

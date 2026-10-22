@@ -1,42 +1,42 @@
-using RCT3DViewer.Interop;
+using RCT3D.Interop;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
-namespace RCT3DViewer.Simulation;
+namespace RCT3D.Simulation;
 
 public sealed class SimulationBridge : IDisposable
 {
-    private readonly BlockingCollection<Action<LibOpenRCT2>> _requests = new();
-    private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly Lock _sync = new();
-    private readonly Thread _worker;
+    private readonly BlockingCollection<Action<LibOpenRCT2>> requests = new();
+    private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly Lock sync = new();
+    private readonly Thread worker;
 
-    private bool _disposed;
-    private Exception? _shutdownException;
-    private Exception? _simulationFailure;
-    private bool _parkLoaded;
-    private float _gameTimeOfDayHours;
-    private VehicleSnapshotPair? _vehicleSnapshots;
+    private bool isDisposed;
+    private Exception? shutdownException;
+    private Exception? simulationFailure;
+    private bool parkLoaded;
+    private float gameTimeOfDayHours;
+    private VehicleSnapshotPair? vehicleSnapshots;
 
-    public VehicleSnapshotPair? VehicleSnapshots => Volatile.Read(ref _vehicleSnapshots);
-    public float? GameTimeOfDayHours => Volatile.Read(ref _parkLoaded) ? Volatile.Read(ref _gameTimeOfDayHours) : null;
-    public Exception? SimulationFailure => Volatile.Read(ref _simulationFailure);
+    public VehicleSnapshotPair? VehicleSnapshots => Volatile.Read(ref vehicleSnapshots);
+    public float? GameTimeOfDayHours => Volatile.Read(ref parkLoaded) ? Volatile.Read(ref gameTimeOfDayHours) : null;
+    public Exception? SimulationFailure => Volatile.Read(ref simulationFailure);
 
 
-    public SimulationBridge(string libraryPath, string openRCT2Path, string rct2Path)
+    public SimulationBridge(string libraryPath, string openRCT2Path, string rct2Path, string rct1Path)
     {
-        _worker = new Thread(() => WorkerLoop(libraryPath, openRCT2Path, rct2Path)) {
+        worker = new Thread(() => WorkerLoop(libraryPath, openRCT2Path, rct2Path, rct1Path)) {
             Name = "OpenRCT2 worker",
             IsBackground = true,
         };
 
-        _worker.Start();
+        worker.Start();
 
         try {
-            _started.Task.GetAwaiter().GetResult();
+            started.Task.GetAwaiter().GetResult();
         }
         catch {
-            _worker.Join();
+            worker.Join();
             throw;
         }
     }
@@ -45,15 +45,15 @@ public sealed class SimulationBridge : IDisposable
     {
         var completion = new TaskCompletionSource<ParkSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        lock (_sync) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (sync) {
+            ObjectDisposedException.ThrowIf(isDisposed, this);
 
-            _requests.Add(openRCT2 => {
+            requests.Add(openRCT2 => {
                 try {
                     reportProgress("Loading park file...");
-                    Volatile.Write(ref _parkLoaded, false);
-                    Volatile.Write(ref _vehicleSnapshots, null);
-                    Volatile.Write(ref _simulationFailure, null);
+                    Volatile.Write(ref parkLoaded, false);
+                    Volatile.Write(ref vehicleSnapshots, null);
+                    Volatile.Write(ref simulationFailure, null);
                     openRCT2.LoadPark(savePath);
 
                     reportProgress("Reading park surface data...");
@@ -71,10 +71,21 @@ public sealed class SimulationBridge : IDisposable
 
                     var pathData = new RCTTilePathData[(int)pathCount];
                     openRCT2.CopyPathData(pathData);
-                    Volatile.Write(ref _gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
-                    Volatile.Write(ref _vehicleSnapshots, new VehicleSnapshotPair(null, ReadVehicleSnapshot(openRCT2)));
-                    Volatile.Write(ref _parkLoaded, true);
-                    completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData));
+
+                    reportProgress("Reading monorail track and palette data...");
+                    var trackCount = openRCT2.GetTrackCount();
+                    if (trackCount > int.MaxValue)
+                        throw new InvalidOperationException($"OpenRCT2 returned too many monorail track elements: {trackCount}.");
+
+                    var trackData = new RCTTrackElementData[(int)trackCount];
+                    openRCT2.CopyTrackData(trackData);
+                    var paletteData = new RCTPaletteEntry[256];
+                    openRCT2.CopyPaletteData(paletteData);
+
+                    Volatile.Write(ref gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
+                    Volatile.Write(ref vehicleSnapshots, new VehicleSnapshotPair(null, ReadVehicleSnapshot(openRCT2)));
+                    Volatile.Write(ref parkLoaded, true);
+                    completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData, trackData, paletteData));
                 }
                 catch (Exception ex) {
                     completion.TrySetException(ex);
@@ -85,31 +96,31 @@ public sealed class SimulationBridge : IDisposable
         return completion.Task;
     }
 
-    private void WorkerLoop(string libraryPath, string openRCT2Path, string rct2Path)
+    private void WorkerLoop(string libraryPath, string openRCT2Path, string rct2Path, string rct1Path)
     {
         LibOpenRCT2? openRCT2 = null;
 
         try {
-            openRCT2 = new LibOpenRCT2(libraryPath, openRCT2Path, rct2Path);
+            openRCT2 = new LibOpenRCT2(libraryPath, openRCT2Path, rct2Path, rct1Path);
 
-            _started.TrySetResult();
+            started.TrySetResult();
             var updateInterval = Math.Max(1L, Stopwatch.Frequency / 40);
             long nextUpdate = 0;
             while (true) {
                 var timeoutMilliseconds = Timeout.Infinite;
-                if (Volatile.Read(ref _parkLoaded)) {
+                if (Volatile.Read(ref parkLoaded)) {
                     var remaining = nextUpdate - Stopwatch.GetTimestamp();
                     timeoutMilliseconds = remaining <= 0
                         ? 0
                         : Math.Clamp((int)Math.Ceiling(remaining * 1000.0 / Stopwatch.Frequency), 1, 25);
                 }
 
-                if (_requests.TryTake(out var request, timeoutMilliseconds))
+                if (requests.TryTake(out var request, timeoutMilliseconds))
                     request(openRCT2);
-                else if (_requests.IsCompleted)
+                else if (requests.IsCompleted)
                     break;
 
-                if (!Volatile.Read(ref _parkLoaded)) {
+                if (!Volatile.Read(ref parkLoaded)) {
                     nextUpdate = 0;
                     continue;
                 }
@@ -121,39 +132,39 @@ public sealed class SimulationBridge : IDisposable
                 else if (now >= nextUpdate) {
                     try {
                         openRCT2.AdvanceSimulation();
-                        Volatile.Write(ref _gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
+                        Volatile.Write(ref gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                         PublishVehicleSnapshot(openRCT2);
                         nextUpdate += updateInterval;
                         if (now - nextUpdate > updateInterval * 4)
                             nextUpdate = now + updateInterval;
                     }
                     catch (Exception ex) {
-                        Volatile.Write(ref _simulationFailure, ex);
-                        Volatile.Write(ref _vehicleSnapshots, null);
-                        Volatile.Write(ref _parkLoaded, false);
+                        Volatile.Write(ref simulationFailure, ex);
+                        Volatile.Write(ref vehicleSnapshots, null);
+                        Volatile.Write(ref parkLoaded, false);
                         nextUpdate = 0;
                     }
                 }
             }
         }
         catch (Exception ex) {
-            _started.TrySetException(ex);
+            started.TrySetException(ex);
         }
         finally {
             try {
                 openRCT2?.Dispose();
             }
             catch (Exception ex) {
-                _shutdownException = ex;
+                shutdownException = ex;
             }
         }
     }
 
     private void PublishVehicleSnapshot(LibOpenRCT2 openRCT2)
     {
-        var previous = Volatile.Read(ref _vehicleSnapshots)?.Current;
+        var previous = Volatile.Read(ref vehicleSnapshots)?.Current;
         var current = ReadVehicleSnapshot(openRCT2);
-        Volatile.Write(ref _vehicleSnapshots, new VehicleSnapshotPair(previous, current));
+        Volatile.Write(ref vehicleSnapshots, new VehicleSnapshotPair(previous, current));
     }
 
     private static VehicleSnapshot ReadVehicleSnapshot(LibOpenRCT2 openRCT2)
@@ -169,21 +180,27 @@ public sealed class SimulationBridge : IDisposable
 
     public void Dispose()
     {
-        lock (_sync) {
-            if (_disposed) return;
+        lock (sync) {
+            if (isDisposed) return;
 
-            _disposed = true;
-            _requests.CompleteAdding();
+            isDisposed = true;
+            requests.CompleteAdding();
         }
 
-        _worker.Join();
-        _requests.Dispose();
-        if (_shutdownException is not null)
-            throw new InvalidOperationException("Failed to shut down OpenRCT2 on its worker thread.", _shutdownException);
+        worker.Join();
+        requests.Dispose();
+        if (shutdownException is not null)
+            throw new InvalidOperationException("Failed to shut down OpenRCT2 on its worker thread.", shutdownException);
     }
 }
 
-public sealed record ParkSnapshot(int Width, int Height, RCTTileSurfaceData[] SurfaceData, RCTTilePathData[] PathData);
+public sealed record ParkSnapshot(
+    int Width,
+    int Height,
+    RCTTileSurfaceData[] SurfaceData,
+    RCTTilePathData[] PathData,
+    RCTTrackElementData[] TrackData,
+    RCTPaletteEntry[] PaletteData);
 
 public sealed record VehicleSnapshot(long Timestamp, ReadOnlyMemory<RCTVehicleData> Vehicles);
 

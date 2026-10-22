@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed unsafe class SkyRenderTargets : IDisposable
 {

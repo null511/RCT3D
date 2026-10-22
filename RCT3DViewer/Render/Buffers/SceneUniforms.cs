@@ -1,8 +1,8 @@
-﻿using Silk.NET.Maths;
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.InteropServices;
+using Silk.NET.Maths;
 
-namespace RCT3DViewer.Render.Buffers;
+namespace RCT3D.Render.Buffers;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct SceneUniforms

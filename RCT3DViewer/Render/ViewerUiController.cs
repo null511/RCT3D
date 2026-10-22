@@ -1,8 +1,8 @@
+using System.Numerics;
 using ImGuiNET;
 using NativeFileDialogSharp;
-using System.Numerics;
 
-namespace RCT3DViewer.Render;
+namespace RCT3D.Render;
 
 internal sealed class ViewerUiController
 {

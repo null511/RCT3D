@@ -1,0 +1,88 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <OpenRCT2AdapterDll Condition="'$(OpenRCT2AdapterDll)' == ''">$(MSBuildProjectDirectory)\..\OpenRCT2\bin\x64\libopenrct2.dll</OpenRCT2AdapterDll>
+    <RootNamespace>RCT3D</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Shaders\ShaderLoader.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Vulkan" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Input" Version="2.23.0" />
+    <PackageReference Include="Slangc.NET" Version="2026.14.1" />
+    <PackageReference Include="SharpGLTF.Toolkit" Version="1.0.5" />
+    <PackageReference Include="StbImageSharp" Version="2.30.15" />
+    <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
+    <PackageReference Include="NativeFileDialogSharp" Version="0.5.0" />
+  </ItemGroup>
+
+  <Target Name="CompileShadersAtBuildTime" BeforeTargets="BeforeBuild">
+    <Message Importance="High" Text="Executing Build-Time Shader Compilation via ShaderCompiler project..." />
+
+    <!-- 1. Force-build the compiler utility project first -->
+    <MSBuild Projects="../ShaderCompiler/ShaderCompiler.csproj" Targets="Build" />
+
+    <!-- 2. Run tool WITH explicit WorkingDirectory pointing to the tool folder. -->
+    <!-- Pass the Shaders folder and the output Shaders folder; the tool will enumerate all .slang files. -->
+    <Exec Command="dotnet run -c Debug -- ../RCT3DViewer/Shaders $(ProjectDir)$(OutDir)Shaders" WorkingDirectory="../ShaderCompiler" ContinueOnError="WarnAndContinue" />
+  </Target>
+
+  <Target Name="ValidateOpenRCT2AdapterDll" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(OpenRCT2AdapterDll)')" Text="OpenRCT2 adapter DLL not found at '$(OpenRCT2AdapterDll)'. Build the OpenRCT2 RCT3DViewer adapter or set OpenRCT2AdapterDll to its ABI-compatible DLL path." />
+  </Target>
+
+  <Target Name="BuildOpenRCT2Adapter" BeforeTargets="ValidateOpenRCT2AdapterDll">
+    <Exec Command="&quot;$(MSBuildBinPath)\MSBuild.exe&quot; &quot;$(MSBuildProjectDirectory)\..\OpenRCT2\src\openrct2\libopenrct2.vcxproj&quot; /t:Build /p:Configuration=$(Configuration) /p:Platform=x64 /p:OutDir=&quot;$(MSBuildProjectDirectory)\..\OpenRCT2\bin\x64/&quot; /m" />
+  </Target>
+
+  <ItemGroup>
+    <None Include="$(OpenRCT2AdapterDll)" Link="libopenrct2.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="RCT3DViewer.csproj" />
+    <None Update="$(OpenRCT2AdapterDll)" TargetPath="libopenrct2.dll" />
+    <None Include="$([System.IO.Path]::ChangeExtension('$(OpenRCT2AdapterDll)', '.pdb'))" Link="libopenrct2.pdb">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="$([System.IO.Path]::ChangeExtension('$(OpenRCT2AdapterDll)', '.pdb'))" TargetPath="libopenrct2.pdb" />
+    <Content Include="Assets\Textures\missing.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Textures\Terrain\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Textures\Paths\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Models\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="CopyOpenRCT2RuntimeData" AfterTargets="Build">
+    <ItemGroup>
+      <OpenRCT2Language Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\language\**\*" />
+      <OpenRCT2ScenarioPatches Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\scenario_patches\**\*" />
+      <OpenRCT2Shaders Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\shaders\**\*" />
+      <OpenRCT2Objects Include="$(MSBuildProjectDirectory)\..\OpenRCT2\bin-adapter\data\object\**\*" />
+      <OpenRCT2Sequences Include="$(MSBuildProjectDirectory)\..\OpenRCT2\bin-adapter\data\sequence\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(OpenRCT2Language)" DestinationFiles="@(OpenRCT2Language->'$(OutDir)openrct2-data\language\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OpenRCT2ScenarioPatches)" DestinationFiles="@(OpenRCT2ScenarioPatches->'$(OutDir)openrct2-data\scenario_patches\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OpenRCT2Shaders)" DestinationFiles="@(OpenRCT2Shaders->'$(OutDir)openrct2-data\shaders\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OpenRCT2Objects)" DestinationFiles="@(OpenRCT2Objects->'$(OutDir)openrct2-data\object\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OpenRCT2Sequences)" DestinationFiles="@(OpenRCT2Sequences->'$(OutDir)openrct2-data\sequence\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

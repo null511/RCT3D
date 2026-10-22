@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace RCT3DViewer.Interop
+namespace RCT3D.Interop
 {
     internal static class NativeLoader
     {

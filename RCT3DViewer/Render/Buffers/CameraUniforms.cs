@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using System.Runtime.InteropServices;
 
-namespace RCT3DViewer.Render.Buffers;
+namespace RCT3D.Render.Buffers;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct CameraUniforms

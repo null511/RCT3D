@@ -1,8 +1,8 @@
 using System.Text;
-using StbImageSharp;
 using System.Text.Json;
+using StbImageSharp;
 
-namespace RCT3DViewer.Render.Terrain;
+namespace RCT3D.Render.Terrain;
 
 public sealed class TerrainMaterialLibrary
 {
@@ -96,6 +96,22 @@ public sealed class TerrainMaterialLibrary
             CreateSolidPixels(width, height, 128, 128, 255, 255),
             CreateSolidPixels(width, height, 255, 0, 0, 0),
             new Dictionary<uint, uint>(), new Dictionary<uint, GrassTextureLayers>(), 0);
+    }
+
+    internal static TerrainMaterialLibrary FromPaletteLut(byte[] pixels)
+    {
+        if (pixels.Length != 256 * 4)
+            throw new ArgumentException("An OpenRCT2 palette LUT must contain 256 RGBA entries.", nameof(pixels));
+
+        return new TerrainMaterialLibrary(
+            256,
+            1,
+            pixels,
+            CreateSolidPixels(256, 1, 128, 128, 255, 255),
+            CreateSolidPixels(256, 1, 255, 0, 0, 0),
+            new Dictionary<uint, uint>(),
+            new Dictionary<uint, GrassTextureLayers>(),
+            0);
     }
 
     private static byte[] CreateSolidPixels(int width, int height, byte red, byte green, byte blue, byte alpha)

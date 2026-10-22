@@ -1,10 +1,9 @@
-using Silk.NET.Vulkan;
-using RCT3DViewer.Render;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-namespace RCT3DViewer.Render.Terrain;
+namespace RCT3D.Render.Terrain;
 
 internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout, SkyRenderTargets skyTargets) : IDisposable
 {

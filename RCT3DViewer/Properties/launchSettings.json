@@ -4,9 +4,13 @@
       "commandName": "Project",
       "environmentVariables": {
         "VK_INSTANCE_LAYERS": "VK_LAYER_KHRONOS_validation",
-        "RCT3D_PARK": "C:\\Users\\null5\\Documents\\OpenRCT2\\save\\Leafy Lake Test.SV4.park"
+        "RCT3D_PARK": "C:\\Users\\null5\\Documents\\OpenRCT2\\save\\Leafy Lake Test.SV4.park",
+        "RCT3D_RCT1_PATH": "Z:\\SteamLibrary\\steamapps\\common\\RollerCoaster Tycoon Deluxe",
+        "RCT3D_RCT2_PATH": "Z:\\SteamLibrary\\steamapps\\common\\Rollercoaster Tycoon 2",
+        "RCT3D_OPENRCT2_DATA": "C:\\Program Files\\OpenRCT2\\data"
       },
-      "hotReloadEnabled": false
+      "hotReloadEnabled": false,
+      "debugEngines": "managed,native"
     }
   }
 }
