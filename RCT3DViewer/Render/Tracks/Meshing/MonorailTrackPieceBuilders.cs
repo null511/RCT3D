@@ -13,12 +13,12 @@ internal sealed class MonorailTrackBuilderResolver
         Register(new MonorailEndStationBuilder());
         Register(new MonorailBeginStationBuilder());
         Register(new MonorailMiddleStationBuilder());
-        Register(new MonorailUp25Builder());
-        Register(new MonorailFlatToUp25Builder());
-        Register(new MonorailUp25ToFlatBuilder());
-        Register(new MonorailDown25Builder());
-        Register(new MonorailFlatToDown25Builder());
-        Register(new MonorailDown25ToFlatBuilder());
+        Register(new MonorailSlopeTrackPieceBuilder(RCTTrackElementType.Up25, false, false));
+        Register(new MonorailSlopeTrackPieceBuilder(RCTTrackElementType.FlatToUp25, true, false));
+        Register(new MonorailSlopeTrackPieceBuilder(RCTTrackElementType.Up25ToFlat, false, true));
+        Register(new MonorailSlopeTrackPieceBuilder(RCTTrackElementType.Down25, false, false));
+        Register(new MonorailSlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown25, true, false));
+        Register(new MonorailSlopeTrackPieceBuilder(RCTTrackElementType.Down25ToFlat, false, true));
         Register(new MonorailLeftQuarterTurn5Builder());
         Register(new MonorailRightQuarterTurn5Builder());
         Register(new MonorailSBendLeftBuilder());
@@ -100,12 +100,39 @@ internal sealed class MonorailFlatBuilder() : MonorailStraightTrackPieceBuilder(
 internal sealed class MonorailEndStationBuilder() : MonorailStraightTrackPieceBuilder(RCTTrackElementType.EndStation, 0.0f) { }
 internal sealed class MonorailBeginStationBuilder() : MonorailStraightTrackPieceBuilder(RCTTrackElementType.BeginStation, 0.0f) { }
 internal sealed class MonorailMiddleStationBuilder() : MonorailStraightTrackPieceBuilder(RCTTrackElementType.MiddleStation, 0.0f) { }
-internal sealed class MonorailUp25Builder() : MonorailStraightTrackPieceBuilder(RCTTrackElementType.Up25, 1.5f) { }
-internal sealed class MonorailFlatToUp25Builder() : MonorailStraightTrackPieceBuilder(RCTTrackElementType.FlatToUp25, 0.75f) { }
-internal sealed class MonorailUp25ToFlatBuilder() : MonorailStraightTrackPieceBuilder(RCTTrackElementType.Up25ToFlat, 0.75f) { }
-internal sealed class MonorailDown25Builder() : MonorailStraightTrackPieceBuilder(RCTTrackElementType.Down25, -1.5f) { }
-internal sealed class MonorailFlatToDown25Builder() : MonorailStraightTrackPieceBuilder(RCTTrackElementType.FlatToDown25, -0.75f) { }
-internal sealed class MonorailDown25ToFlatBuilder() : MonorailStraightTrackPieceBuilder(RCTTrackElementType.Down25ToFlat, -0.75f) { }
+internal sealed class MonorailSlopeTrackPieceBuilder(
+    RCTTrackElementType pieceType,
+    bool beginsFlat,
+    bool endsFlat) : TrackPieceMeshBuilder(pieceType)
+{
+    public override void Add(in RCTTrackElementData track, TrackMeshGeometry geometry)
+    {
+        var direction = MonorailTrackGeometry.GetDirection(track.Direction);
+        var center = MonorailTrackGeometry.GetTileCenter(track);
+        var halfTile = MonorailTrackGeometry.TileSize * 0.5f;
+        var start = center - direction * halfTile;
+        var end = center + direction * halfTile;
+        start.Y = (track.BaseHeight + track.SplineZBegin) * MonorailTrackGeometry.HeightPerBaseUnit;
+        end.Y = (track.BaseHeight + track.SplineZEnd) * MonorailTrackGeometry.HeightPerBaseUnit;
+
+        Vector3[] points;
+        if (beginsFlat || endsFlat) {
+            var risePerRun = MathF.Sign(end.Y - start.Y)
+                * (2.0f * MonorailTrackGeometry.HeightPerBaseUnit / MonorailTrackGeometry.TileSize);
+            var slopeDirection = Vector3.Normalize(direction + Vector3.UnitY * risePerRun);
+            var startDirection = beginsFlat ? direction : slopeDirection;
+            var endDirection = endsFlat ? direction : slopeDirection;
+            points = MonorailTrackGeometry.CreateCubicCurvePoints(
+                start, end, startDirection, endDirection, MonorailTrackGeometry.TileSize / 3.0f,
+                MonorailTrackGeometry.CurveSubdivisionsPerTile);
+        }
+        else {
+            points = new[] { start, end };
+        }
+
+        MonorailTrackGeometry.AddTrackParts(track, geometry, points);
+    }
+}
 internal sealed class MonorailLeftQuarterTurn5Builder() : MonorailCurveTrackPieceBuilder(RCTTrackElementType.LeftQuarterTurn5Tiles) { }
 internal sealed class MonorailRightQuarterTurn5Builder() : MonorailCurveTrackPieceBuilder(RCTTrackElementType.RightQuarterTurn5Tiles) { }
 internal sealed class MonorailSBendLeftBuilder() : MonorailCurveTrackPieceBuilder(RCTTrackElementType.SBendLeft) { }

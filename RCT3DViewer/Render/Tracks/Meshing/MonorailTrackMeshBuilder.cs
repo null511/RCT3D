@@ -51,8 +51,9 @@ internal sealed class MonorailTrackMeshBuilder
             if (!_resolver.TryResolve(key.TrackType, out var builder))
                 continue;
 
-            if (builder is MonorailCurveTrackPieceBuilder)
+            if (builder is MonorailCurveTrackPieceBuilder or MonorailSlopeTrackPieceBuilder) {
                 ValidatePieceSequences(key, pieceElements);
+            }
 
             var region = new RenderRegionCoordinate(
                 Math.Clamp(key.OriginTileX / RenderRegionLayout.RegionSizeInTiles, 0, Math.Max(0, RenderRegionLayout.GetRegionCount(mapWidth) - 1)),

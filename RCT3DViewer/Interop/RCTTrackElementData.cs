@@ -52,6 +52,8 @@ public struct RCTTrackElementData
     public sbyte SequenceOffsetZ;
     public sbyte RotationBegin;
     public sbyte RotationEnd;
+    public sbyte SplineZBegin;
+    public sbyte SplineZEnd;
     public ushort RideId;
 }
 
