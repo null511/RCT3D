@@ -29,7 +29,7 @@ internal abstract class TrackPieceMeshBuilder(RCTTrackElementType pieceType) : I
 
 internal interface ITrackPartGenerator
 {
-    void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette);
+    void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd);
 }
 
 internal enum TrackRailSwatch : byte
@@ -58,14 +58,16 @@ internal sealed record TrackRailProfile(TrackRailProfileShape[] Shapes);
 
 internal sealed class SweptRailProfileGenerator(TrackRailProfile profile) : ITrackPartGenerator
 {
-    public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette) =>
+    public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd) =>
         TrackMeshPartGenerator.AddSweptProfile(
             geometry,
             centerline,
             profile,
             track.MainPaletteIndex,
             track.AdditionalPaletteIndex,
-            palette);
+            palette,
+            rollBegin,
+            rollEnd);
 }
 
 internal static class TrackMeshPartGenerator
@@ -76,7 +78,9 @@ internal static class TrackMeshPartGenerator
         TrackRailProfile profile,
         byte mainPaletteIndex,
         byte alternatePaletteIndex,
-        ReadOnlySpan<RCTPaletteEntry> palette)
+        ReadOnlySpan<RCTPaletteEntry> palette,
+        float rollBegin,
+        float rollEnd)
     {
         if (centerline.Length < 2) return;
 
@@ -112,6 +116,12 @@ internal static class TrackMeshPartGenerator
                     ? Vector3.UnitX : Vector3.Normalize(side);
 
                 var up = Vector3.Normalize(Vector3.Cross(tangent, side));
+                var roll = rollBegin + (rollEnd - rollBegin) * station / (centerline.Length - 1);
+                if (roll != 0.0f) {
+                    var rotation = Quaternion.CreateFromAxisAngle(tangent, roll);
+                    side = Vector3.Transform(side, rotation);
+                    up = Vector3.Transform(up, rotation);
+                }
                 stationTangents[station] = tangent;
                 stationSides[station] = side;
                 stationUps[station] = up;

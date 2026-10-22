@@ -50,7 +50,7 @@ internal class MiniatureRailway
             ], false)
         {
             Color = new TrackRgba8(187, 200, 209, 255),
-            Specular = new TrackRailSpecularData(80, 200),
+            Specular = new TrackRailSpecularData(80, 255),
         };
     }
 

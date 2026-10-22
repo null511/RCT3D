@@ -23,6 +23,7 @@ internal static class TrackRideConfigurations
     private static readonly TrackRideConfiguration[] Configurations = [
         Monorail.Build(),
         MiniatureRailway.Build(),
+        ClassicMiniRollerCoaster.Build(),
     ];
 
     public static IReadOnlyList<TrackRideConfiguration> All => Configurations;
