@@ -4,14 +4,13 @@ using System.Runtime.InteropServices;
 namespace RCT3D.Render.Tracks.Meshing;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-internal struct TrackVertex(Vector3 position, Vector3 normal, byte paletteIndex, byte roughness, byte metalness, bool untinted)
+internal struct TrackVertex(Vector3 position, Vector3 normal, TrackRgba8 color, byte roughness, byte metalness)
 {
     public Vector3 Position = position;
     public Vector3 Normal = normal;
-    public byte PaletteIndex = paletteIndex;
+    public TrackRgba8 Color = color;
     public byte Roughness = roughness;
     public byte Metalness = metalness;
-    public byte Untinted = untinted ? (byte)1 : (byte)0;
 }
 
 internal sealed record TrackMeshData(TrackVertex[] Vertices, uint[] Indices, RenderRegionIndexRange[] Regions);

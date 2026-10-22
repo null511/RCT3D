@@ -1,6 +1,6 @@
+using StbImageSharp;
 using System.Text;
 using System.Text.Json;
-using StbImageSharp;
 
 namespace RCT3D.Render.Terrain;
 
@@ -47,7 +47,7 @@ public sealed class TerrainMaterialLibrary
             var hash = objectIdHash
                 ^ ((uint)tileX * 0x9E3779B9u)
                 ^ ((uint)tileY * 0x85EBCA6Bu)
-                ^ ((uint)grassState * 0xC2B2AE35u);
+                ^ (grassState * 0xC2B2AE35u);
 
             hash ^= hash >> 16;
             hash *= 0x7FEB352Du;
@@ -82,7 +82,7 @@ public sealed class TerrainMaterialLibrary
         var texture = material.BaseColorTexture;
         var width = texture?.Width ?? 1;
         var height = texture?.Height ?? 1;
-        var pixels = texture?.Pixels.ToArray() ?? new byte[] { 255, 255, 255, 255 };
+        var pixels = texture?.Pixels.ToArray() ?? [255, 255, 255, 255];
         var factor = material.BaseColorFactor;
 
         for (var pixel = 0; pixel < pixels.Length; pixel += 4) {
@@ -96,22 +96,6 @@ public sealed class TerrainMaterialLibrary
             CreateSolidPixels(width, height, 128, 128, 255, 255),
             CreateSolidPixels(width, height, 255, 0, 0, 0),
             new Dictionary<uint, uint>(), new Dictionary<uint, GrassTextureLayers>(), 0);
-    }
-
-    internal static TerrainMaterialLibrary FromPaletteLut(byte[] pixels)
-    {
-        if (pixels.Length != 256 * 4)
-            throw new ArgumentException("An OpenRCT2 palette LUT must contain 256 RGBA entries.", nameof(pixels));
-
-        return new TerrainMaterialLibrary(
-            256,
-            1,
-            pixels,
-            CreateSolidPixels(256, 1, 128, 128, 255, 255),
-            CreateSolidPixels(256, 1, 255, 0, 0, 0),
-            new Dictionary<uint, uint>(),
-            new Dictionary<uint, GrassTextureLayers>(),
-            0);
     }
 
     private static byte[] CreateSolidPixels(int width, int height, byte red, byte green, byte blue, byte alpha)

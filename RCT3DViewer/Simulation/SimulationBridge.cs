@@ -72,7 +72,7 @@ public sealed class SimulationBridge : IDisposable
                     var pathData = new RCTTilePathData[(int)pathCount];
                     openRCT2.CopyPathData(pathData);
 
-                    reportProgress("Reading monorail track and palette data...");
+                    reportProgress("Reading ride track and palette data...");
                     var trackCount = openRCT2.GetTrackCount();
                     if (trackCount > int.MaxValue)
                         throw new InvalidOperationException($"OpenRCT2 returned too many monorail track elements: {trackCount}.");

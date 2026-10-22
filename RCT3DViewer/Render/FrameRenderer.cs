@@ -172,11 +172,17 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             var trackPipeline = ui.WireframeEnabled ? trackResources.WireframePipeline : trackResources.Pipeline;
             Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, trackPipeline);
 
-            var trackDescriptorSets = stackalloc DescriptorSet[2];
-            trackDescriptorSets[0] = uniformDescriptorSet;
-            trackDescriptorSets[1] = trackResources.DescriptorSet;
-            Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, trackResources.PipelineLayout,
-                0, 2, trackDescriptorSets, 0, null);
+            if (trackResources.UsesTrackVertexColor) {
+                Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, trackResources.PipelineLayout,
+                    0, 1, &uniformDescriptorSet, 0, null);
+            }
+            else {
+                var trackDescriptorSets = stackalloc DescriptorSet[2];
+                trackDescriptorSets[0] = uniformDescriptorSet;
+                trackDescriptorSets[1] = trackResources.DescriptorSet;
+                Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, trackResources.PipelineLayout,
+                    0, 2, trackDescriptorSets, 0, null);
+            }
 
             var trackVertexBuffer = trackResources.VertexBuffer;
             Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in trackVertexBuffer, in offset);

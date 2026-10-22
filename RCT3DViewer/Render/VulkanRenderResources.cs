@@ -1,4 +1,3 @@
-using RCT3D.Interop;
 using RCT3D.Render.Buffers;
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
@@ -115,28 +114,15 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
             Path.Combine(AppContext.BaseDirectory, "Shaders"), SwapchainImages.Length);
     }
 
-    public void CreateTrackGraphicsResources(RCTPaletteEntry[] palette)
+    public void CreateTrackGraphicsResources()
     {
-        if (palette.Length != 256)
-            throw new ArgumentException("The OpenRCT2 palette must contain 256 entries.", nameof(palette));
-
         TrackGraphicsResources?.Dispose();
         TrackGraphicsResources = null;
 
-        var pixels = new byte[256 * 4];
-        for (var i = 0; i < palette.Length; i++) {
-            var offset = i * 4;
-            pixels[offset] = palette[i].Red;
-            pixels[offset + 1] = palette[i].Green;
-            pixels[offset + 2] = palette[i].Blue;
-            pixels[offset + 3] = palette[i].Alpha;
-        }
-
-        var trackMaterials = TerrainMaterialLibrary.FromPaletteLut(pixels);
         var trackResources = new TerrainGraphicsResources(
-            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, trackMaterials,
+            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, TerrainMaterials!,
             shaderNameOverride: Path.Combine("defer", "deferredTrack"), createWireframePipeline: true, colorAttachmentCount: 3,
-            usePaletteLut: true);
+            useTrackVertexColor: true);
 
         try {
             trackResources.CreatePipeline();
@@ -165,8 +151,9 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         try {
             var beginInfo = new CommandBufferBeginInfo {
                 SType = StructureType.CommandBufferBeginInfo,
-                Flags = CommandBufferUsageFlags.OneTimeSubmitBit
+                Flags = CommandBufferUsageFlags.OneTimeSubmitBit,
             };
+
             if (Vk.BeginCommandBuffer(commandBuffer, in beginInfo) != Result.Success)
                 throw new InvalidOperationException("Failed to begin the sky initialization command buffer.");
 
@@ -178,7 +165,9 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
                 ImageLayout.Undefined, ImageLayout.General,
                 PipelineStageFlags.TopOfPipeBit, AccessFlags.None,
                 PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+
             skyPasses.SkyTransmit.Dispatch(commandBuffer, 0, uniformDescriptorSet, new Vector2D<uint>(256, 64));
+
             RecordSkyImageBarrier(commandBuffer, skyTargets.SkyTransmitImage,
                 ImageLayout.General, ImageLayout.ShaderReadOnlyOptimal,
                 PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
@@ -188,7 +177,9 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
                 ImageLayout.Undefined, ImageLayout.General,
                 PipelineStageFlags.TopOfPipeBit, AccessFlags.None,
                 PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+
             skyPasses.SkyMultiscatter.Dispatch(commandBuffer, 0, uniformDescriptorSet, new Vector2D<uint>(32, 32));
+
             RecordSkyImageBarrier(commandBuffer, skyTargets.SkyMultiscatterImage,
                 ImageLayout.General, ImageLayout.ShaderReadOnlyOptimal,
                 PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
@@ -200,10 +191,12 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
             var submitInfo = new SubmitInfo {
                 SType = StructureType.SubmitInfo,
                 CommandBufferCount = 1,
-                PCommandBuffers = &commandBuffer
+                PCommandBuffers = &commandBuffer,
             };
+
             if (Vk.QueueSubmit(GraphicsQueue, 1, in submitInfo, default) != Result.Success)
                 throw new InvalidOperationException("Failed to submit the sky initialization commands.");
+
             if (Vk.QueueWaitIdle(GraphicsQueue) != Result.Success)
                 throw new InvalidOperationException("Failed to wait for sky initialization commands.");
         }

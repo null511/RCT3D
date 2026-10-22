@@ -1,27 +1,35 @@
 using RCT3D.Interop;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace RCT3D.Render.Tracks.Meshing;
 
 internal interface ITrackPieceMeshBuilder
 {
     RCTTrackElementType PieceType { get; }
+    bool RequiresCompletePiece { get; }
 
-    void Add(in RCTTrackElementData track, TrackMeshGeometry geometry);
-    void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry);
+    void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> palette);
+    void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> palette);
 }
 
 internal abstract class TrackPieceMeshBuilder(RCTTrackElementType pieceType) : ITrackPieceMeshBuilder
 {
     public RCTTrackElementType PieceType { get; } = pieceType;
+    public virtual bool RequiresCompletePiece => false;
 
-    public abstract void Add(in RCTTrackElementData track, TrackMeshGeometry geometry);
+    public abstract void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> palette);
 
-    public virtual void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry)
+    public virtual void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> palette)
     {
         foreach (ref readonly var track in tracks)
-            Add(in track, geometry);
+            Add(in track, geometry, partGenerators, palette);
     }
+}
+
+internal interface ITrackPartGenerator
+{
+    void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette);
 }
 
 internal enum TrackRailSwatch : byte
@@ -33,13 +41,32 @@ internal enum TrackRailSwatch : byte
 
 internal readonly record struct TrackRailSpecularData(byte Roughness, byte Metalness);
 
-internal sealed record TrackRailProfileShape(
-    Vector2[] Vertices,
-    bool Closed,
-    TrackRailSwatch Swatch,
-    TrackRailSpecularData Specular);
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+internal readonly record struct TrackRgba8(byte Red, byte Green, byte Blue, byte Alpha)
+{
+    public static TrackRgba8 White => new(255, 255, 255, 255);
+}
+
+internal sealed record TrackRailProfileShape(Vector2[] Vertices, bool Closed)
+{
+    public TrackRailSwatch Swatch { get; init; } = TrackRailSwatch.None;
+    public TrackRgba8 Color { get; init; } = TrackRgba8.White;
+    public TrackRailSpecularData Specular { get; init; } = new(250, 0);
+}
 
 internal sealed record TrackRailProfile(TrackRailProfileShape[] Shapes);
+
+internal sealed class SweptRailProfileGenerator(TrackRailProfile profile) : ITrackPartGenerator
+{
+    public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette) =>
+        TrackMeshPartGenerator.AddSweptProfile(
+            geometry,
+            centerline,
+            profile,
+            track.MainPaletteIndex,
+            track.AdditionalPaletteIndex,
+            palette);
+}
 
 internal static class TrackMeshPartGenerator
 {
@@ -48,17 +75,18 @@ internal static class TrackMeshPartGenerator
         ReadOnlySpan<Vector3> centerline,
         TrackRailProfile profile,
         byte mainPaletteIndex,
-        byte alternatePaletteIndex)
+        byte alternatePaletteIndex,
+        ReadOnlySpan<RCTPaletteEntry> palette)
     {
         if (centerline.Length < 2) return;
 
         foreach (var shape in profile.Shapes) {
             if (shape.Vertices.Length < 2) continue;
 
-            var paletteIndex = shape.Swatch switch {
-                TrackRailSwatch.Main => mainPaletteIndex,
-                TrackRailSwatch.Alternate => alternatePaletteIndex,
-                TrackRailSwatch.None => (byte)0,
+            var color = shape.Swatch switch {
+                TrackRailSwatch.Main => GetPaletteColor(mainPaletteIndex, palette),
+                TrackRailSwatch.Alternate => GetPaletteColor(alternatePaletteIndex, palette),
+                TrackRailSwatch.None => shape.Color,
                 _ => throw new InvalidDataException($"Unknown rail swatch {shape.Swatch}.")
             };
 
@@ -117,9 +145,8 @@ internal static class TrackMeshPartGenerator
                     stationVertices[station, vertex] = geometry.AddIndexedVertex(
                         centerline[station] + side * point.X + up * point.Y,
                         normal,
-                        paletteIndex,
-                        shape.Specular,
-                        shape.Swatch == TrackRailSwatch.None);
+                        color,
+                        shape.Specular);
                 }
             }
 
@@ -139,5 +166,14 @@ internal static class TrackMeshPartGenerator
                 }
             }
         }
+    }
+
+    private static TrackRgba8 GetPaletteColor(byte paletteIndex, ReadOnlySpan<RCTPaletteEntry> palette)
+    {
+        if (paletteIndex >= palette.Length)
+            throw new InvalidDataException($"Track palette index {paletteIndex} is outside the {palette.Length}-entry palette.");
+
+        var entry = palette[paletteIndex];
+        return new TrackRgba8(entry.Red, entry.Green, entry.Blue, entry.Alpha);
     }
 }

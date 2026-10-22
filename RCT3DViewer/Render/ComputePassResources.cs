@@ -7,14 +7,14 @@ namespace RCT3D.Render;
 
 internal sealed unsafe class ComputePassResources : IDisposable
 {
-    private readonly VulkanDeviceContext _context;
+    private readonly VulkanDeviceContext context;
     private readonly DescriptorSetLayout _descriptorSetLayout;
     private readonly DescriptorSetLayout _uniformDescriptorSetLayout;
 
-    private DescriptorPool _descriptorPool;
+    private DescriptorPool descriptorPool;
     private Sampler _sampler;
     private DescriptorSet[] _descriptorSets = Array.Empty<DescriptorSet>();
-    private bool _disposed;
+    private bool isDisposed;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline Pipeline { get; private set; }
@@ -25,7 +25,7 @@ internal sealed unsafe class ComputePassResources : IDisposable
 
     public ComputePassResources(VulkanDeviceContext context, string shaderName, DescriptorSetLayout uniformDescriptorSetLayout, ImageView[][] sampledImageSets, ImageView[][] storageImageSets, ImageLayout[][]? sampledImageLayouts = null)
     {
-        _context = context;
+        this.context = context;
         _uniformDescriptorSetLayout = uniformDescriptorSetLayout;
 
         if (sampledImageSets.Length == 0 || sampledImageSets.Length != storageImageSets.Length
@@ -88,7 +88,7 @@ internal sealed unsafe class ComputePassResources : IDisposable
                 PBindings = bindingPointer
             };
 
-            if (_context.Api.CreateDescriptorSetLayout(_context.LogicalDevice, in createInfo, null, out var layout) != Result.Success)
+            if (context.Api.CreateDescriptorSetLayout(context.LogicalDevice, in createInfo, null, out var layout) != Result.Success)
                 throw new Exception("Failed to create compute-pass descriptor-set layout.");
 
             return layout;
@@ -97,8 +97,8 @@ internal sealed unsafe class ComputePassResources : IDisposable
 
     private void CreateDescriptors(ImageView[][] sampledImageSets, ImageView[][] storageImageSets, ImageLayout[][]? sampledImageLayouts)
     {
-        var vk = _context.Api;
-        var device = _context.LogicalDevice;
+        var vk = context.Api;
+        var device = context.LogicalDevice;
         var sampledImageCount = sampledImageSets[0].Length;
         var storageImageCount = storageImageSets[0].Length;
         var setCount = sampledImageSets.Length;
@@ -138,7 +138,7 @@ internal sealed unsafe class ComputePassResources : IDisposable
                 PPoolSizes = poolSizePointer
             };
 
-            if (vk.CreateDescriptorPool(device, in poolInfo, null, out _descriptorPool) != Result.Success)
+            if (vk.CreateDescriptorPool(device, in poolInfo, null, out descriptorPool) != Result.Success)
                 throw new Exception("Failed to create compute-pass descriptor pool.");
         }
 
@@ -149,7 +149,7 @@ internal sealed unsafe class ComputePassResources : IDisposable
         fixed (DescriptorSet* descriptorPointer = _descriptorSets) {
             var allocateInfo = new DescriptorSetAllocateInfo {
                 SType = StructureType.DescriptorSetAllocateInfo,
-                DescriptorPool = _descriptorPool,
+                DescriptorPool = descriptorPool,
                 DescriptorSetCount = (uint)setCount,
                 PSetLayouts = layoutPointer
             };
@@ -214,8 +214,8 @@ internal sealed unsafe class ComputePassResources : IDisposable
 
     private void CreatePipeline(string shaderName)
     {
-        var vk = _context.Api;
-        var device = _context.LogicalDevice;
+        var vk = context.Api;
+        var device = context.LogicalDevice;
 
         var shaderPath = ShaderFile.Get(shaderName, "comp");
 
@@ -283,7 +283,7 @@ internal sealed unsafe class ComputePassResources : IDisposable
         if ((uint)descriptorSetIndex >= _descriptorSets.Length)
             throw new ArgumentOutOfRangeException(nameof(descriptorSetIndex));
 
-        var vk = _context.Api;
+        var vk = context.Api;
         vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Compute, Pipeline);
 
         var descriptorSets = stackalloc DescriptorSet[2];
@@ -298,21 +298,21 @@ internal sealed unsafe class ComputePassResources : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (isDisposed) return;
+        isDisposed = true;
 
-        var vk = _context.Api;
-        var device = _context.LogicalDevice;
+        var vk = context.Api;
+        var device = context.LogicalDevice;
 
         if (Pipeline.Handle != 0) vk.DestroyPipeline(device, Pipeline, null);
         if (PipelineLayout.Handle != 0) vk.DestroyPipelineLayout(device, PipelineLayout, null);
-        if (_descriptorPool.Handle != 0) vk.DestroyDescriptorPool(device, _descriptorPool, null);
+        if (descriptorPool.Handle != 0) vk.DestroyDescriptorPool(device, descriptorPool, null);
         if (_sampler.Handle != 0) vk.DestroySampler(device, _sampler, null);
         if (_descriptorSetLayout.Handle != 0) vk.DestroyDescriptorSetLayout(device, _descriptorSetLayout, null);
 
         Pipeline = default;
         PipelineLayout = default;
-        _descriptorPool = default;
+        descriptorPool = default;
         _sampler = default;
         _descriptorSets = Array.Empty<DescriptorSet>();
     }

@@ -2,6 +2,12 @@ using System.Runtime.InteropServices;
 
 namespace RCT3D.Interop;
 
+public enum RCTRideType : ushort
+{
+    MiniatureRailway = 5,
+    Monorail = 6
+}
+
 public enum RCTTrackElementType : ushort
 {
     Flat = 0,
@@ -26,6 +32,10 @@ public enum RCTTrackElementType : ushort
     RightEighthToDiag = 134,
     LeftEighthToOrthogonal = 135,
     RightEighthToOrthogonal = 136,
+    LeftEighthBankToDiag = 137,
+    RightEighthBankToDiag = 138,
+    LeftEighthBankToOrthogonal = 139,
+    RightEighthBankToOrthogonal = 140,
     DiagFlat = 141,
     LeftQuarterTurn5TilesCovered = 81,
     RightQuarterTurn5TilesCovered = 82,
@@ -55,6 +65,7 @@ public struct RCTTrackElementData
     public sbyte SplineZBegin;
     public sbyte SplineZEnd;
     public ushort RideId;
+    public RCTRideType RideType;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]

@@ -36,10 +36,10 @@ internal sealed class TrackMeshGeometry
 
     public TrackMeshData Build() => new(_vertices.ToArray(), _indices.ToArray(), _regions.ToArray());
 
-    public uint AddIndexedVertex(Vector3 position, Vector3 normal, byte paletteIndex, TrackRailSpecularData specular, bool untinted = false)
+    public uint AddIndexedVertex(Vector3 position, Vector3 normal, TrackRgba8 color, TrackRailSpecularData specular)
     {
         var index = (uint)_vertices.Count;
-        _vertices.Add(new TrackVertex(position, Vector3.Normalize(normal), paletteIndex, specular.Roughness, specular.Metalness, untinted));
+        _vertices.Add(new TrackVertex(position, Vector3.Normalize(normal), color, specular.Roughness, specular.Metalness));
         return index;
     }
 

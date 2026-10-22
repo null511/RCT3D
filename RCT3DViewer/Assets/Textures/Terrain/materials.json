@@ -2,6 +2,7 @@
   "materials": [
     { "objectId": "rct2.terrain_surface.dirt", "texture": "dirt.png" },
     { "objectId": "rct2.terrain_surface.grass", "texture": "grass.png" },
-    { "objectId": "rct2.terrain_surface.rock", "texture": "rock.png" }
+    { "objectId": "rct2.terrain_surface.rock", "texture": "rock.png" },
+    { "objectId": "rct2.terrain_surface.sand", "texture": "sand.png" }
   ]
 }
