@@ -113,7 +113,9 @@ internal sealed unsafe class TerrainGraphicsResources(
             ? new List<VertexInputAttributeDescription> {
                 new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.Position)) },
                 new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.Normal)) },
-                new() { Binding = 0, Location = 2, Format = Format.R8Uint, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.PaletteIndex)) }
+                new() { Binding = 0, Location = 2, Format = Format.R8Uint, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.PaletteIndex)) },
+                new() { Binding = 0, Location = 3, Format = Format.R8G8Unorm, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.Roughness)) },
+                new() { Binding = 0, Location = 4, Format = Format.R8Unorm, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.Untinted)) }
             }
             : new List<VertexInputAttributeDescription> {
                 new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TerrainVertex>(nameof(TerrainVertex.Position)) },

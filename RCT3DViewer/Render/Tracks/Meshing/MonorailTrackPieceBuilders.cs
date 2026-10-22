@@ -174,9 +174,38 @@ internal static class MonorailTrackGeometry
     public const float HeightPerBaseUnit = 0.75f;
     public const int CurveSubdivisionsPerTile = 8;
 
-    private static readonly TrackPartProfile DeckProfile = new(0.9f, 0.22f);
-    private static readonly TrackPartProfile RailProfile = new(0.08f, 0.18f);
-    private static readonly TrackPartProfile TieProfile = new(0.08f, 0.12f);
+    private static readonly TrackRailProfile MonorailRailProfile = new([
+        new TrackRailProfileShape([
+                new Vector2(-0.20f, 0.05f),
+                new Vector2(-0.20f, 0.15f),
+                new Vector2(-0.20f, 0.20f),
+                new Vector2(-0.15f, 0.25f),
+                new Vector2(-0.10f, 0.25f),
+                new Vector2( 0.10f, 0.25f),
+                new Vector2( 0.15f, 0.25f),
+                new Vector2( 0.20f, 0.20f),
+                new Vector2( 0.20f, 0.15f),
+                new Vector2( 0.20f, 0.05f),
+            ],
+            false,
+            TrackRailSwatch.Main,
+            new TrackRailSpecularData(200, 0)),
+        new TrackRailProfileShape([
+                new Vector2( 0.20f,  0.05f),
+                new Vector2( 0.20f, -0.26f),
+                new Vector2( 0.20f, -0.28f),
+                new Vector2( 0.18f, -0.30f),
+                new Vector2( 0.16f, -0.30f),
+                new Vector2(-0.16f, -0.30f),
+                new Vector2(-0.18f, -0.30f),
+                new Vector2(-0.20f, -0.28f),
+                new Vector2(-0.20f, -0.26f),
+                new Vector2(-0.20f,  0.05f),
+            ],
+            false,
+            TrackRailSwatch.Alternate,
+            new TrackRailSpecularData(120, 255))
+    ]);
 
     public static Vector3 GetDirection(byte direction) => direction switch {
         0 => -Vector3.UnitX,
@@ -230,65 +259,11 @@ internal static class MonorailTrackGeometry
 
     public static void AddTrackParts(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline)
     {
-        TrackMeshPartGenerator.AddSweptPrism(geometry, centerline, DeckProfile, track.MainPaletteIndex);
-
-        if (centerline.Length < 2)
-            return;
-
-        var tieCount = centerline.Length <= 2
-            ? 1
-            : Math.Max(1, (int)MathF.Ceiling(GetLength(centerline) / 0.75f));
-        for (var tie = 0; tie <= tieCount; tie++) {
-            var t = tie / (float)tieCount;
-            var distance = GetLength(centerline) * t;
-            var position = SampleByDistance(centerline, distance);
-            var tangent = Vector3.Normalize(
-                SampleByDistance(centerline, MathF.Min(distance + 0.05f, GetLength(centerline)))
-                - SampleByDistance(centerline, MathF.Max(distance - 0.05f, 0.0f)));
-            var side = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, tangent));
-            Span<Vector3> tieLine = stackalloc Vector3[2] {
-                position - side * 0.58f - Vector3.UnitY * 0.16f,
-                position + side * 0.58f - Vector3.UnitY * 0.16f,
-            };
-            TrackMeshPartGenerator.AddSweptPrism(geometry, tieLine, TieProfile, track.AdditionalPaletteIndex);
-        }
-
-        var leftRail = Offset(centerline, 0.37f);
-        var rightRail = Offset(centerline, -0.37f);
-        TrackMeshPartGenerator.AddSweptPrism(geometry, leftRail, RailProfile, track.AdditionalPaletteIndex);
-        TrackMeshPartGenerator.AddSweptPrism(geometry, rightRail, RailProfile, track.AdditionalPaletteIndex);
-    }
-
-    private static Vector3[] Offset(ReadOnlySpan<Vector3> centerline, float amount)
-    {
-        var points = new Vector3[centerline.Length];
-        for (var i = 0; i < centerline.Length; i++) {
-            var before = centerline[Math.Max(0, i - 1)];
-            var after = centerline[Math.Min(centerline.Length - 1, i + 1)];
-            var tangent = Vector3.Normalize(after - before);
-            var side = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, tangent));
-            points[i] = centerline[i] + side * amount;
-        }
-        return points;
-    }
-
-    private static float GetLength(ReadOnlySpan<Vector3> points)
-    {
-        var length = 0.0f;
-        for (var i = 0; i < points.Length - 1; i++)
-            length += Vector3.Distance(points[i], points[i + 1]);
-        return length;
-    }
-
-    private static Vector3 SampleByDistance(ReadOnlySpan<Vector3> points, float distance)
-    {
-        for (var i = 0; i < points.Length - 1; i++) {
-            var segmentLength = Vector3.Distance(points[i], points[i + 1]);
-            if (distance <= segmentLength || i == points.Length - 2)
-                return Vector3.Lerp(points[i], points[i + 1], segmentLength <= float.Epsilon ? 0.0f : distance / segmentLength);
-            distance -= segmentLength;
-        }
-
-        return points[^1];
+        TrackMeshPartGenerator.AddSweptProfile(
+            geometry,
+            centerline,
+            MonorailRailProfile,
+            track.MainPaletteIndex,
+            track.AdditionalPaletteIndex);
     }
 }
