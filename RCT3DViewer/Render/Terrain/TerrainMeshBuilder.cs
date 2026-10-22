@@ -5,7 +5,7 @@ namespace RCT3D.Render.Terrain;
 
 internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 {
-    private const float TileSize = 3.0f;
+    internal const float TileSize = 3.0f;
     private const float BaseHeightScale = 0.75f;
     private const float CornerHeightScale = 1.5f;
     private const float NormalInterpolationBoundaryFraction = 1.0f / 8.0f;

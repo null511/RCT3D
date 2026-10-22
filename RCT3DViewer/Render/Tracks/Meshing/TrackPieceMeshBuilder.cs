@@ -29,7 +29,7 @@ internal abstract class TrackPieceMeshBuilder(RCTTrackElementType pieceType) : I
 
 internal interface ITrackPartGenerator
 {
-    void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd);
+    void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd, Vector3? startTangent, Vector3? endTangent);
 }
 
 internal enum TrackRailSwatch : byte
@@ -58,7 +58,7 @@ internal sealed record TrackRailProfile(TrackRailProfileShape[] Shapes);
 
 internal sealed class SweptRailProfileGenerator(TrackRailProfile profile) : ITrackPartGenerator
 {
-    public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd) =>
+    public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd, Vector3? startTangent, Vector3? endTangent) =>
         TrackMeshPartGenerator.AddSweptProfile(
             geometry,
             centerline,
@@ -67,7 +67,9 @@ internal sealed class SweptRailProfileGenerator(TrackRailProfile profile) : ITra
             track.AdditionalPaletteIndex,
             palette,
             rollBegin,
-            rollEnd);
+            rollEnd,
+            startTangent,
+            endTangent);
 }
 
 internal static class TrackMeshPartGenerator
@@ -80,7 +82,9 @@ internal static class TrackMeshPartGenerator
         byte alternatePaletteIndex,
         ReadOnlySpan<RCTPaletteEntry> palette,
         float rollBegin,
-        float rollEnd)
+        float rollEnd,
+        Vector3? startTangent = null,
+        Vector3? endTangent = null)
     {
         if (centerline.Length < 2) return;
 
@@ -103,7 +107,11 @@ internal static class TrackMeshPartGenerator
             for (var station = 0; station < centerline.Length; station++) {
                 var previous = centerline[Math.Max(0, station - 1)];
                 var next = centerline[Math.Min(centerline.Length - 1, station + 1)];
-                var tangent = next - previous;
+                var tangent = station == 0 && startTangent.HasValue
+                    ? startTangent.Value
+                    : station == centerline.Length - 1 && endTangent.HasValue
+                        ? endTangent.Value
+                        : next - previous;
 
                 if (tangent.LengthSquared() <= float.Epsilon)
                     tangent = station + 1 < centerline.Length ? next - centerline[station] : centerline[station] - previous;

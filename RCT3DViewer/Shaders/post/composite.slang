@@ -68,6 +68,8 @@ void main(ComputeInput input) {
         float wrappedNdotL = saturate((nDotL + sss) / (1.0 + sss));
         float diffuseNdotL = lerp(nDotL, wrappedNdotL, sss);
 
+        specular *= lerp(1.0, albedo, metalness);
+
         float3 sunLight = SunLux * getValFromTLUT(sky_transmit, linearSampler, sky_viewPos, sunDir);
         float3 ambientLight = getValFromSkyLUT(sky_view, linearSampler, texNormal, sunDir);
 

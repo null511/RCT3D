@@ -6,6 +6,7 @@
 - Do not add or implement tests unless the user explicitly asks. For this feature, the user will manually verify behavior; limit validation to builds and static checks.
 - Execute code implementation requests in Agent mode, not left as a registered plan; the user is using Agent mode rather than Plan mode.
 - For RCT3DViewer integration, use the app's own OpenRCT2 config rather than assuming the main game's settings carry over, as the embedded OpenRCT2 instance is isolated from the main game's config/data location.
+- When implementing a requested fix, verify the actual workspace diff and report concrete files/changes; do not claim the issue is fixed based only on a small speculative code edit and successful compilation.
 
 ## Rendering Guidelines
 - Request source-derived terrain direction reasoning rather than guess-and-test; validate rendering hypotheses before making further geometry changes.

@@ -1,6 +1,7 @@
 using System.Numerics;
 using ImGuiNET;
 using NativeFileDialogSharp;
+using RCT3D.Interop;
 
 namespace RCT3D.Render;
 
@@ -13,6 +14,7 @@ internal sealed class ViewerUiController
     private bool _isParkLoading;
     private bool _showSkyModal;
     private bool _showGraphicsOptions;
+    private bool _showDebug;
     private bool _showParkLoadError;
     private bool _useGameTime = false;
     private float _timeOfDayHours = 9.0f;
@@ -81,7 +83,8 @@ internal sealed class ViewerUiController
     //    _showParkLoadError = false;
     //}
 
-    public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, Action<string> loadPark, Action requestExit, bool wireframeAvailable = true)
+    public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, int cameraTileX, int cameraTileY,
+        IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action requestExit, bool wireframeAvailable = true)
     {
         _gameTimeOfDayHours = gameTimeOfDayHours;
         var instantFps = deltaTime > 0.0 ? (float)(1.0 / deltaTime) : 0.0f;
@@ -103,6 +106,7 @@ internal sealed class ViewerUiController
 
             if (ImGui.BeginMenu("View")) {
                 ImGui.MenuItem("Graphics Options", string.Empty, ref _showGraphicsOptions);
+                ImGui.MenuItem("Debug", string.Empty, ref _showDebug);
                 ImGui.EndMenu();
             }
 
@@ -140,6 +144,9 @@ internal sealed class ViewerUiController
             ImGui.EndMainMenuBar();
         }
 
+        if (_showDebug)
+            DrawDebugOverlay(cameraTileX, cameraTileY, cameraTileTrackElements);
+
         if (_showParkLoadError) {
             var errorWindowVisible = ImGui.Begin("Park load error", ref _showParkLoadError, ImGuiWindowFlags.AlwaysAutoResize);
             if (errorWindowVisible) {
@@ -165,6 +172,28 @@ internal sealed class ViewerUiController
 
         if (_isParkLoading)
             DrawParkLoadingPanel();
+    }
+
+    private static void DrawDebugOverlay(int tileX, int tileY, IReadOnlyList<RCTTrackElementData> trackElements)
+    {
+        var viewport = ImGui.GetMainViewport();
+        ImGui.SetNextWindowPos(viewport.WorkPos + new Vector2(10.0f, 10.0f), ImGuiCond.Always);
+        ImGui.SetNextWindowBgAlpha(0.75f);
+
+        var flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings
+            | ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.AlwaysAutoResize;
+        if (ImGui.Begin("Debug overlay", flags)) {
+            ImGui.TextUnformatted($"Tile: {tileX}, {tileY}");
+            if (trackElements.Count == 0) {
+                ImGui.TextUnformatted("No ride track at this tile");
+            }
+            else {
+                foreach (var track in trackElements) {
+                    ImGui.TextUnformatted($"{track.TrackType} | sequence {track.Sequence}/{track.SequenceCount} | direction {track.Direction} | height {track.BaseHeight} | ride {track.RideId} ({track.RideType})");
+                }
+            }
+        }
+        ImGui.End();
     }
 
     private void DrawParkLoadingPanel()

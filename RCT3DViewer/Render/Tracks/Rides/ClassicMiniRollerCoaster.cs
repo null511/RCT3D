@@ -45,22 +45,24 @@ internal static class ClassicMiniRollerCoaster
         registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.BeginStation, 0.0f));
         registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.MiddleStation, 0.0f));
 
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToUp25, true, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25ToUp60, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60ToUp25, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25ToFlat, false, true));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown25, true, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25ToDown60, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60ToDown25, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25ToFlat, false, true));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToUp60, true, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60ToFlat, false, true));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown60, true, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60ToFlat, false, true));
+        const float pitch25 = 0.4663077f;
+        const float pitch60 = 1.7320508f;
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25, pitch25, pitch25));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60, pitch60, pitch60));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToUp25, 0.0f, pitch25));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25ToUp60, pitch25, pitch60));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60ToUp25, pitch60, pitch25));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25ToFlat, pitch25, 0.0f));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25, -pitch25, -pitch25));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60, -pitch60, -pitch60));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown25, 0.0f, -pitch25));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25ToDown60, -pitch25, -pitch60));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60ToDown25, -pitch60, -pitch25));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25ToFlat, -pitch25, 0.0f));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToUp60, 0.0f, pitch60));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60ToFlat, pitch60, 0.0f));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown60, 0.0f, -pitch60));
+        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60ToFlat, -pitch60, 0.0f));
 
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftQuarterTurn5Tiles));
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightQuarterTurn5Tiles));
@@ -70,6 +72,8 @@ internal static class ClassicMiniRollerCoaster
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightQuarterTurn3Tiles));
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftQuarterTurn1Tile));
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightQuarterTurn1Tile));
+
+        // up variants include curved powered lift hills
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftQuarterTurn5TilesUp25));
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightQuarterTurn5TilesUp25));
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftQuarterTurn5TilesDown25));
@@ -79,27 +83,29 @@ internal static class ClassicMiniRollerCoaster
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftQuarterTurn3TilesDown25));
         registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightQuarterTurn3TilesDown25));
 
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.FlatToLeftBank, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.FlatToRightBank, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.LeftBankToFlat, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.RightBankToFlat, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.LeftBankToUp25, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.RightBankToUp25, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.Up25ToLeftBank, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.Up25ToRightBank, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.LeftBankToDown25, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.RightBankToDown25, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.Down25ToLeftBank, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.Down25ToRightBank, 0.0f));
         registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.LeftBank, 0.0f));
         registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.RightBank, 0.0f));
+
+        registry.Register(new BankedCurveTrackPieceBuilder(RCTTrackElementType.FlatToLeftBank));
+        registry.Register(new BankedCurveTrackPieceBuilder(RCTTrackElementType.FlatToRightBank));
+        registry.Register(new BankedCurveTrackPieceBuilder(RCTTrackElementType.LeftBankToFlat));
+        registry.Register(new BankedCurveTrackPieceBuilder(RCTTrackElementType.RightBankToFlat));
+        registry.Register(new BankedSlopeTrackPieceBuilder(RCTTrackElementType.LeftBankToUp25));
+        registry.Register(new BankedSlopeTrackPieceBuilder(RCTTrackElementType.RightBankToUp25));
+        registry.Register(new BankedSlopeTrackPieceBuilder(RCTTrackElementType.Up25ToLeftBank));
+        registry.Register(new BankedSlopeTrackPieceBuilder(RCTTrackElementType.Up25ToRightBank));
+        registry.Register(new BankedSlopeTrackPieceBuilder(RCTTrackElementType.LeftBankToDown25));
+        registry.Register(new BankedSlopeTrackPieceBuilder(RCTTrackElementType.RightBankToDown25));
+        registry.Register(new BankedSlopeTrackPieceBuilder(RCTTrackElementType.Down25ToLeftBank));
+        registry.Register(new BankedSlopeTrackPieceBuilder(RCTTrackElementType.Down25ToRightBank));
         registry.Register(new BankedCurveTrackPieceBuilder(RCTTrackElementType.BankedLeftQuarterTurn5Tiles));
         registry.Register(new BankedCurveTrackPieceBuilder(RCTTrackElementType.BankedRightQuarterTurn5Tiles));
         registry.Register(new BankedCurveTrackPieceBuilder(RCTTrackElementType.LeftBankedQuarterTurn3Tiles));
         registry.Register(new BankedCurveTrackPieceBuilder(RCTTrackElementType.RightBankedQuarterTurn3Tiles));
 
-        registry.Register(new CurvedLiftHillTrackPieceBuilder(RCTTrackElementType.LeftCurvedLiftHill));
-        registry.Register(new CurvedLiftHillTrackPieceBuilder(RCTTrackElementType.RightCurvedLiftHill));
+        // Temporarily disabled to verify which builder handles curved lift hill track in the viewer.
+        // registry.Register(new CurvedLiftHillTrackPieceBuilder(RCTTrackElementType.LeftCurvedLiftHill));
+        // registry.Register(new CurvedLiftHillTrackPieceBuilder(RCTTrackElementType.RightCurvedLiftHill));
 
         registry.Register(new HelixTrackPieceBuilder(RCTTrackElementType.LeftHalfBankedHelixUpSmall));
         registry.Register(new HelixTrackPieceBuilder(RCTTrackElementType.RightHalfBankedHelixUpSmall));
@@ -167,6 +173,24 @@ internal static class ClassicMiniRollerCoaster
             RCTTrackElementType.RightEighthBankToOrthogonalDown25,
         }) {
             registry.Register(new BankedCurveTrackPieceBuilder(pieceType));
+        }
+        foreach (var pieceType in new[] {
+            RCTTrackElementType.DiagFlatToLeftBank,
+            RCTTrackElementType.DiagFlatToRightBank,
+            RCTTrackElementType.DiagLeftBankToFlat,
+            RCTTrackElementType.DiagRightBankToFlat,
+            RCTTrackElementType.DiagLeftBankToUp25,
+            RCTTrackElementType.DiagRightBankToUp25,
+            RCTTrackElementType.DiagUp25ToLeftBank,
+            RCTTrackElementType.DiagUp25ToRightBank,
+            RCTTrackElementType.DiagLeftBankToDown25,
+            RCTTrackElementType.DiagRightBankToDown25,
+            RCTTrackElementType.DiagDown25ToLeftBank,
+            RCTTrackElementType.DiagDown25ToRightBank,
+            RCTTrackElementType.DiagLeftBank,
+            RCTTrackElementType.DiagRightBank,
+        }) {
+            registry.Register(new DiagonalTrackPieceBuilder(pieceType));
         }
 
         return registry;

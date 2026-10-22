@@ -3,6 +3,7 @@ using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Terrain;
 using RCT3D.Render.Tracks.Meshing;
 using RCT3D.Simulation;
+using RCT3D.Interop;
 using System.Numerics;
 
 namespace RCT3D.Render;
@@ -24,6 +25,7 @@ internal sealed class ParkSceneController(
     private string parkLoadProgress = string.Empty;
     private int loadedMapWidth;
     private int loadedMapHeight;
+    private Dictionary<(int TileX, int TileY), RCTTrackElementData[]> trackElementsByTile = new();
     private bool isDisposed;
 
     public TerrainMeshData? TerrainMesh { get; private set; }
@@ -31,6 +33,9 @@ internal sealed class ParkSceneController(
     public WaterMeshData? WaterMesh { get; private set; }
     public TrackMeshData? TrackMesh { get; private set; }
     public float? GameTimeOfDayHours => simulation.GameTimeOfDayHours;
+
+    public IReadOnlyList<RCTTrackElementData> GetTrackElementsAtTile(int tileX, int tileY) =>
+        trackElementsByTile.TryGetValue((tileX, tileY), out var elements) ? elements : Array.Empty<RCTTrackElementData>();
 
 
     public void LoadPark(string parkPath, float terrainSkirtFloor)
@@ -57,7 +62,7 @@ internal sealed class ParkSceneController(
             return new ParkLoadResult(
                 parkPath, snapshot.Width, snapshot.Height,
                 meshData.Terrain.Terrain, meshData.Terrain.Water, meshData.Paths, meshData.PathAccessories,
-                meshData.Tracks);
+                meshData.Tracks, snapshot.TrackData);
         }
         catch (Exception ex) {
             throw new InvalidOperationException($"Failed to load '{parkPath}': {ex.Message}", ex);
@@ -116,6 +121,9 @@ internal sealed class ParkSceneController(
                 PathMesh = result.Paths;
                 WaterMesh = result.Water;
                 TrackMesh = result.Tracks;
+                trackElementsByTile = result.TrackElements
+                    .GroupBy(track => (track.TileX, track.TileY))
+                    .ToDictionary(group => group.Key, group => group.ToArray());
                 loadedMapWidth = result.Width;
                 loadedMapHeight = result.Height;
 
@@ -142,6 +150,7 @@ internal sealed class ParkSceneController(
         PathMesh = null;
         WaterMesh = null;
         TrackMesh = null;
+        trackElementsByTile.Clear();
         loadedMapWidth = 0;
         loadedMapHeight = 0;
         frameRenderer.InvalidateHistory();
@@ -219,5 +228,5 @@ internal sealed class ParkSceneController(
 
     private sealed record ParkLoadResult(
         string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water, PathMeshData Paths,
-        PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks);
+        PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks, RCTTrackElementData[] TrackElements);
 }
