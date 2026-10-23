@@ -24,7 +24,7 @@ internal sealed class ViewerUiController
     private float _displayedFps;
     private double _displayedFrameTimeMilliseconds;
     private bool _wireframeEnabled;
-    private bool _taaEnabled = true;
+    private bool _taaEnabled = false;
     private float _sharpening = 0.5f;
     private float _mipBias = -1.0f;
 

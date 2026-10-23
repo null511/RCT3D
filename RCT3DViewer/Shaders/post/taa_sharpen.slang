@@ -67,6 +67,8 @@ void main(ComputeInput input) {
         float3 weight_inv = rcp(1.0 + 4.0 * w);
         float3 color = ((b + d + f + h) * w + e) * weight_inv;
 
+        color = e;
+
         sceneOutput.Store(input.globalPos, float4(color, 1.0));
         taaHistory.Store(input.globalPos, float4(e, 1.0));
     }

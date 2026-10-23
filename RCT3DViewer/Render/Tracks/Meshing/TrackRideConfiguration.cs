@@ -14,8 +14,6 @@ internal class TrackRideConfiguration(
     public IReadOnlyList<ITrackPartGenerator> PartGenerators { get; } = partGenerators;
 
     public bool TryResolvePiece(RCTTrackElementType type, out ITrackPieceMeshBuilder builder) => builders.TryGetValue(type, out builder!);
-
-    //public IReadOnlyCollection<ITrackPieceMeshBuilder> PieceBuilders => builders.Values;
 }
 
 internal static class TrackRideConfigurations

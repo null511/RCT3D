@@ -18,8 +18,8 @@ struct ComputeInput {
 [[vk::binding(3, 1)]] SamplerState linearSampler;
 [[vk::binding(4, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> resolvedOutput;
 
-extern static const float TAA_RejectionStrength = 0.1;
-extern static const int TAA_MaxAccumFrames = 8;
+//extern static const float TAA_RejectionStrength = 0.1;
+extern static const int TAA_MaxAccumFrames = 16;
 
 static const uint sharedBufferRes = 18;
 static const uint sharedBufferSize = sharedBufferRes * sharedBufferRes;
@@ -53,14 +53,25 @@ void main(ComputeInput input) {
         float2 texcoord = (input.globalPos + 0.5) / sceneUniforms.renderDimensions;
         float depth = defer_depth.Load(int3(input.globalPos, 0));
 
+        depth = input.globalPos.y / float(sceneUniforms.renderDimensions.y);
+
         float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
 
-        float3 localPos = mul_project(clipPos, cameraUniforms.viewProjectionInverse);
-        float3 clipPosLast = mul_project(localPos, temporalUniforms.viewProjectionLast);
+        // float3 localPos = mul_project(clipPos, cameraUniforms.viewProjectionInverse);
+        // float3 clipPosLast = mul_project(localPos, temporalUniforms.viewProjectionLast);
+        float4 localPos = mul(float4(clipPos, 1.0), cameraUniforms.viewProjectionInverse);
+        //localPos.xyz /= localPos.w;
+        //localPos.w = 1.0;
+
+        float4 clipPosLast = mul(localPos, temporalUniforms.viewProjectionLast);
+        //float4 clipPosLast = mul(localPos, cameraUniforms.viewProjection);
+        clipPosLast.xyz /= clipPosLast.w;
+
         float2 uv_prev = clipPosLast.xy;
         uv_prev = uv_prev * 0.5 + 0.5;
 
         float4 lastColor = taaHistory.SampleLevel(linearSampler, uv_prev, 0);
+        //float4 lastColor = taaHistory.Load(int3(uv_prev * sceneUniforms.renderDimensions, 0));
 
         float mixRate = TAA_MaxAccumFrames; // clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
         if (!all(saturate(uv_prev) == uv_prev)) mixRate = 0.0;
@@ -82,7 +93,11 @@ void main(ComputeInput input) {
 
         if (sceneUniforms.frameCounter == 0) colorFinal = in0;
 
-        colorFinal = clamp(colorFinal, color_min, color_max);
+        //colorFinal = clamp(colorFinal, color_min, color_max);
+
+        if (input.globalPos.x > sceneUniforms.renderDimensions.x / 2) {
+            colorFinal = float3(abs(texcoord - uv_prev) * sceneUniforms.renderDimensions, 0.0);
+        }
 
         colorFinal = clamp(colorFinal, 0.0, 65504.0);
 

@@ -68,7 +68,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             ViewProjectionInverse = inverseViewProjection,
         };
 
-        var taaJitter = ui.TaaEnabled ? GetR2Jitter(taaFrameIndex + 1) : Vector2.Zero;
+        var taaJitter = Vector2.Zero;// ui.TaaEnabled ? GetR2Jitter(taaFrameIndex + 1) : Vector2.Zero;
         TemporalUniforms temporalUniforms = new() {
             CameraPositionLast = new Vector4(frameCounter == 0 ? cameraPosition : cameraPositionLast, 1.0f),
             ViewProjectionLast = frameCounter == 0 ? viewProjection : viewProjectionLast,

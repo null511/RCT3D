@@ -58,10 +58,11 @@ internal class MiniatureRailway
     {
         var registry = new TrackPieceBuilderRegistry();
 
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.Flat, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.EndStation, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.BeginStation, 0.0f));
-        registry.Register(new StraightTrackPieceBuilder(RCTTrackElementType.MiddleStation, 0.0f));
+        registry.RegisterMany(type => new StraightTrackPieceBuilder(type, 0.0f),
+            RCTTrackElementType.Flat,
+            RCTTrackElementType.EndStation,
+            RCTTrackElementType.BeginStation,
+            RCTTrackElementType.MiddleStation);
 
         registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25, false, false));
         registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToUp25, true, false));
@@ -69,22 +70,23 @@ internal class MiniatureRailway
         registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25, false, false));
         registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown25, true, false));
         registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25ToFlat, false, true));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftQuarterTurn5Tiles));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightQuarterTurn5Tiles));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.SBendLeft));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.SBendRight));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftQuarterTurn3Tiles));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightQuarterTurn3Tiles));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftQuarterTurn1Tile));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightQuarterTurn1Tile));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftEighthToDiag));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightEighthToDiag));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftEighthToOrthogonal));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightEighthToOrthogonal));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftEighthBankToDiag));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightEighthBankToDiag));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.LeftEighthBankToOrthogonal));
-        registry.Register(new CurveTrackPieceBuilder(RCTTrackElementType.RightEighthBankToOrthogonal));
+        registry.RegisterMany(type => new CurveTrackPieceBuilder(type),
+            RCTTrackElementType.LeftQuarterTurn5Tiles,
+            RCTTrackElementType.RightQuarterTurn5Tiles,
+            RCTTrackElementType.SBendLeft,
+            RCTTrackElementType.SBendRight,
+            RCTTrackElementType.LeftQuarterTurn3Tiles,
+            RCTTrackElementType.RightQuarterTurn3Tiles,
+            RCTTrackElementType.LeftQuarterTurn1Tile,
+            RCTTrackElementType.RightQuarterTurn1Tile,
+            RCTTrackElementType.LeftEighthToDiag,
+            RCTTrackElementType.RightEighthToDiag,
+            RCTTrackElementType.LeftEighthToOrthogonal,
+            RCTTrackElementType.RightEighthToOrthogonal,
+            RCTTrackElementType.LeftEighthBankToDiag,
+            RCTTrackElementType.RightEighthBankToDiag,
+            RCTTrackElementType.LeftEighthBankToOrthogonal,
+            RCTTrackElementType.RightEighthBankToOrthogonal);
 
         return registry;
     }
