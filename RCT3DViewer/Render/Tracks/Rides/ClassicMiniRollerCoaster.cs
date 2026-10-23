@@ -22,7 +22,7 @@ internal static class ClassicMiniRollerCoaster
     private static TrackRailProfileShape CreateCircularRail(float centerX)
     {
         const float radius = 0.075f;
-        const float centerY = 0.08f;
+        const float centerY = 0.20f;
 
         return new TrackRailProfileShape([
             new Vector2(centerX, centerY + radius),

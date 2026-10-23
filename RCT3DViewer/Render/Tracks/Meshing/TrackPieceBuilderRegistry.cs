@@ -187,8 +187,8 @@ internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveT
         var endHeading = TrackCenterlineGeometry.CombineDirection(first.Direction, first.RotationEnd);
         var startDirection = TrackCenterlineGeometry.GetTrackDirection(startHeading);
         var endDirection = TrackCenterlineGeometry.GetTrackDirection(endHeading);
-        var start = TrackCenterlineGeometry.GetTileCenter(first) - startDirection * TrackCenterlineGeometry.TileSize * 0.5f;
-        var end = TrackCenterlineGeometry.GetTileCenter(last) + endDirection * TrackCenterlineGeometry.TileSize * 0.5f;
+        var start = TrackCenterlineGeometry.GetTileCenter(first);
+        var end = TrackCenterlineGeometry.GetTileCenter(last);
         var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * TrackCenterlineGeometry.HeightPerBaseUnit;
         start.Y = originHeight + first.SplineZBegin * TrackCenterlineGeometry.HeightPerBaseUnit;
         end.Y = originHeight + first.SplineZEnd * TrackCenterlineGeometry.HeightPerBaseUnit;
@@ -261,6 +261,7 @@ internal sealed class HelixTrackPieceBuilder : CurveTrackPieceBuilder
             or RCTTrackElementType.LeftHalfBankedHelixDownSmall
             or RCTTrackElementType.LeftHalfBankedHelixUpLarge
             or RCTTrackElementType.LeftHalfBankedHelixDownLarge;
+
         var centerline = TrackCenterlineGeometry.CreateSemicirclePoints(
             start, end, startDirection, endDirection, turnLeft, tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
 

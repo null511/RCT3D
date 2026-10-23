@@ -8,6 +8,11 @@
 - For RCT3DViewer integration, use the app's own OpenRCT2 config rather than assuming the main game's settings carry over, as the embedded OpenRCT2 instance is isolated from the main game's config/data location.
 - When implementing a requested fix, verify the actual workspace diff and report concrete files/changes; do not claim the issue is fixed based only on a small speculative code edit and successful compilation.
 
+## Geometry Guidelines
+- For wooden path-support geometry, infer the structure from the in-game reference: longitudinal trusses follow the railing-bearing sides, with repeated transverse support frames under the path and diagonal bracing between frames; verify the intended member layout before changing geometry when the reference is ambiguous.
+- When interpreting topology diagrams, map and validate the explicit vertex/edge connectivity before claiming understanding; if the graph cannot be reliably inferred, ask for concrete connectivity rather than guess.
+- For geometry issues where a track part has the wrong shape, length, or placement, treat the task as source-grounded geometry investigation: compare the specific part builder with the exact OpenRCT2 track descriptors/data. Do not route this to the debugger agent unless it is actually a runtime failure.
+
 ## Rendering Guidelines
 - Request source-derived terrain direction reasoning rather than guess-and-test; validate rendering hypotheses before making further geometry changes.
 - For RCT3DViewer, the long-term rendering target is high-quality meshes with PBR textures and likely tessellation. Plan for hierarchical quadtree spatial chunks and finer sections to support frustum culling and future LOD rather than assuming only coarse flat-terrain chunks.
@@ -18,10 +23,6 @@
 
 ## Structural Guidelines
 - For wooden path supports, place horizontal side crossmembers between vertical support sections rather than at each section's midpoint; half-frequency means at every other section boundary, using normal beam thickness.
-
-## Geometry Guidelines
-- For wooden path-support geometry, infer the structure from the in-game reference: longitudinal trusses follow the railing-bearing sides, with repeated transverse support frames under the path and diagonal bracing between frames; verify the intended member layout before changing geometry when the reference is ambiguous.
-- When interpreting topology diagrams, map and validate the explicit vertex/edge connectivity before claiming understanding; if the graph cannot be reliably inferred, ask for concrete connectivity rather than guess.
 
 ## Uniform Block Organization
 - When organizing custom uniform blocks, group fields by their commented type/category (Camera, Temporal, Scene), not by usage. Follow this preference rather than reorganizing fields based on usage.
