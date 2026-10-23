@@ -1,7 +1,7 @@
-using System.Diagnostics;
-using System.Numerics;
 using RCT3D.Render.Paths;
 using RCT3D.Simulation;
+using System.Diagnostics;
+using System.Numerics;
 
 namespace RCT3D.Render;
 
@@ -10,12 +10,16 @@ internal static class VehicleCubeRenderer
     private const float TileSize = 3.0f;
     private const float UnitsPerTile = 32.0f;
     private const float HeightPerStep = 0.75f;
-    private const float CubeHalfSize = 0.35f;
+    private const float CubeSize = 0.7f;
+    private const float CubeHalfSize = CubeSize * 0.5f;
 
     private const float CubeBoundsHalfSize = CubeHalfSize * 1.7320508f;
+    private static readonly Vector3 CubeOffset = new(0.0f, 0.5f, 0.0f);
 
 
-    public static ImportedModelMesh CreateMesh()
+    public static ImportedModelMesh CreateMesh() => CreateCubeMesh(CubeOffset, CubeSize);
+
+    private static ImportedModelMesh CreateCubeMesh(Vector3 offset, float size)
     {
         var faces = new (Vector3 Normal, Vector3 A, Vector3 B, Vector3 C, Vector3 D)[] {
             (Vector3.UnitY, new(-0.5f, 0.5f, -0.5f), new(0.5f, 0.5f, -0.5f), new(0.5f, 0.5f, 0.5f), new(-0.5f, 0.5f, 0.5f)),
@@ -33,10 +37,10 @@ internal static class VehicleCubeRenderer
             var face = faces[faceIndex];
             var vertexIndex = faceIndex * 4;
 
-            vertices[vertexIndex] = new ImportedModelVertex(face.A, face.Normal, Vector2.Zero);
-            vertices[vertexIndex + 1] = new ImportedModelVertex(face.B, face.Normal, Vector2.UnitX);
-            vertices[vertexIndex + 2] = new ImportedModelVertex(face.C, face.Normal, Vector2.One);
-            vertices[vertexIndex + 3] = new ImportedModelVertex(face.D, face.Normal, Vector2.UnitY);
+            vertices[vertexIndex] = new ImportedModelVertex(offset + face.A * size, face.Normal, Vector2.Zero);
+            vertices[vertexIndex + 1] = new ImportedModelVertex(offset + face.B * size, face.Normal, Vector2.UnitX);
+            vertices[vertexIndex + 2] = new ImportedModelVertex(offset + face.C * size, face.Normal, Vector2.One);
+            vertices[vertexIndex + 3] = new ImportedModelVertex(offset + face.D * size, face.Normal, Vector2.UnitY);
 
             var index = faceIndex * 6;
             indices[index] = (uint)vertexIndex;
@@ -102,15 +106,16 @@ internal static class VehicleCubeRenderer
 
             var position = new Vector3(x * TileSize / UnitsPerTile, z * HeightPerStep / 8.0f, y * TileSize / UnitsPerTile);
 
-            var transform = Matrix4x4.CreateScale(0.7f)
-                * Matrix4x4.CreateRotationZ(roll)
+            var rotation = Matrix4x4.CreateRotationZ(roll)
                 * Matrix4x4.CreateRotationX(-pitch)
-                * Matrix4x4.CreateRotationY(yaw)
-                * Matrix4x4.CreateTranslation(position);
+                * Matrix4x4.CreateRotationY(yaw);
+
+            var transform = rotation * Matrix4x4.CreateTranslation(position);
+            var boundsPosition = position + Vector3.TransformNormal(CubeOffset, rotation);
 
             var bounds = new AxisAlignedBounds(
-                position - new Vector3(CubeBoundsHalfSize),
-                position + new Vector3(CubeBoundsHalfSize));
+                boundsPosition - new Vector3(CubeBoundsHalfSize),
+                boundsPosition + new Vector3(CubeBoundsHalfSize));
 
             var region = new RenderRegionCoordinate(
                 tileX / RenderRegionLayout.RegionSizeInTiles,

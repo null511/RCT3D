@@ -207,36 +207,35 @@ internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveT
 
 internal sealed class DiagonalFlatTrackPieceBuilder() : DiagonalTrackPieceBuilder(RCTTrackElementType.DiagFlat);
 
-internal sealed class CurvedLiftHillTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
+//internal sealed class CurvedLiftHillTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
+//{
+//    public override void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries)
+//    {
+//        if (tracks.IsEmpty) return;
+
+//        var first = tracks[0];
+//        var last = tracks[^1];
+//        var startDirection = TrackCenterlineGeometry.GetDirection(first.Direction);
+//        var endDirection = TrackCenterlineGeometry.GetDirection((byte)((first.Direction + first.RotationEnd) & 3));
+//        var start = TrackCenterlineGeometry.GetTileCenter(first) - startDirection * TrackCenterlineGeometry.TileSize * 0.5f;
+//        var end = TrackCenterlineGeometry.GetTileCenter(last) + endDirection * TrackCenterlineGeometry.TileSize * 0.5f;
+//        var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * TrackCenterlineGeometry.HeightPerBaseUnit;
+//        start.Y = originHeight + first.SplineZBegin * TrackCenterlineGeometry.HeightPerBaseUnit;
+//        end.Y = originHeight + first.SplineZEnd * TrackCenterlineGeometry.HeightPerBaseUnit;
+//        var pitchedStartDirection = Vector3.Normalize(startDirection + Vector3.UnitY * TrackCenterlineGeometry.Pitch25Slope);
+//        var pitchedEndDirection = Vector3.Normalize(endDirection + Vector3.UnitY * TrackCenterlineGeometry.Pitch25Slope);
+//        var points = TrackCenterlineGeometry.CreateCubicCurvePoints(start, end, pitchedStartDirection, pitchedEndDirection,
+//            Vector3.Distance(start, end) * 0.4f, tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
+
+//        TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, paletteEntries,
+//            startTangent: pitchedStartDirection, endTangent: pitchedEndDirection);
+//    }
+//}
+
+internal sealed class HelixTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
 {
-    public override void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries)
-    {
-        if (tracks.IsEmpty) return;
+    private readonly RCTTrackElementType pieceType = pieceType;
 
-        var first = tracks[0];
-        var last = tracks[^1];
-        var startDirection = TrackCenterlineGeometry.GetDirection(first.Direction);
-        var endDirection = TrackCenterlineGeometry.GetDirection((byte)((first.Direction + first.RotationEnd) & 3));
-        var start = TrackCenterlineGeometry.GetTileCenter(first) - startDirection * TrackCenterlineGeometry.TileSize * 0.5f;
-        var end = TrackCenterlineGeometry.GetTileCenter(last) + endDirection * TrackCenterlineGeometry.TileSize * 0.5f;
-        var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * TrackCenterlineGeometry.HeightPerBaseUnit;
-        start.Y = originHeight + first.SplineZBegin * TrackCenterlineGeometry.HeightPerBaseUnit;
-        end.Y = originHeight + first.SplineZEnd * TrackCenterlineGeometry.HeightPerBaseUnit;
-        var pitchedStartDirection = Vector3.Normalize(startDirection + Vector3.UnitY * TrackCenterlineGeometry.Pitch25Slope);
-        var pitchedEndDirection = Vector3.Normalize(endDirection + Vector3.UnitY * TrackCenterlineGeometry.Pitch25Slope);
-        var points = TrackCenterlineGeometry.CreateCubicCurvePoints(start, end, pitchedStartDirection, pitchedEndDirection,
-            Vector3.Distance(start, end) * 0.4f, tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
-
-        TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, paletteEntries,
-            startTangent: pitchedStartDirection, endTangent: pitchedEndDirection);
-    }
-}
-
-internal sealed class HelixTrackPieceBuilder : CurveTrackPieceBuilder
-{
-    private readonly RCTTrackElementType pieceType;
-
-    public HelixTrackPieceBuilder(RCTTrackElementType pieceType) : base(pieceType) => this.pieceType = pieceType;
 
     public override void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries)
     {
@@ -323,6 +322,7 @@ internal static class TrackCenterlineGeometry
             or RCTTrackElementType.DiagRightBankToUp25
             or RCTTrackElementType.DiagUp25ToLeftBank
             or RCTTrackElementType.DiagUp25ToRightBank;
+
         var isDownTransition = pieceType is RCTTrackElementType.LeftBankToDown25
             or RCTTrackElementType.RightBankToDown25
             or RCTTrackElementType.Down25ToLeftBank
@@ -331,6 +331,7 @@ internal static class TrackCenterlineGeometry
             or RCTTrackElementType.DiagRightBankToDown25
             or RCTTrackElementType.DiagDown25ToLeftBank
             or RCTTrackElementType.DiagDown25ToRightBank;
+
         if (!isUpTransition && !isDownTransition) return 0.0f;
 
         var isSlopeAtStart = pieceType is RCTTrackElementType.Up25ToLeftBank
@@ -341,6 +342,7 @@ internal static class TrackCenterlineGeometry
             or RCTTrackElementType.Down25ToRightBank
             or RCTTrackElementType.DiagDown25ToLeftBank
             or RCTTrackElementType.DiagDown25ToRightBank;
+
         if (atStart != isSlopeAtStart) return 0.0f;
 
         return isUpTransition ? Pitch25Slope : -Pitch25Slope;

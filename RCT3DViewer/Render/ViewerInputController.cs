@@ -1,7 +1,7 @@
-using System.Numerics;
 using ImGuiNET;
 using Silk.NET.Input;
 using Silk.NET.Windowing;
+using System.Numerics;
 
 namespace RCT3D.Render;
 
@@ -18,6 +18,16 @@ internal sealed class ViewerInputController : IDisposable
         inputContext = window.CreateInput();
 
         foreach (var mouse in inputContext.Mice) {
+            mouse.MouseDown += (_, button) => {
+                if (button == MouseButton.Right)
+                    this.camera.ResetMouseTracking();
+            };
+
+            mouse.MouseUp += (_, button) => {
+                if (button == MouseButton.Right)
+                    this.camera.ResetMouseTracking();
+            };
+
             mouse.MouseMove += (m, pos) => {
                 if (m.IsButtonPressed(MouseButton.Right) && !wantCaptureMouse()) {
                     this.camera.HandleMouse(new Vector2(pos.X, pos.Y));
