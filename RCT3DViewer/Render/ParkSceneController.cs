@@ -32,7 +32,11 @@ internal sealed class ParkSceneController(
     public PathMeshData? PathMesh { get; private set; }
     public WaterMeshData? WaterMesh { get; private set; }
     public TrackMeshData? TrackMesh { get; private set; }
+    public RideSupportMeshData? RideSupportMesh { get; private set; }
     public float? GameTimeOfDayHours => simulation.GameTimeOfDayHours;
+    public bool? IsPaused => simulation.IsPaused;
+
+    public void TogglePause() => simulation.TogglePause();
 
     public IReadOnlyList<RCTTrackElementData> GetTrackElementsAtTile(int tileX, int tileY) =>
         trackElementsByTile.TryGetValue((tileX, tileY), out var elements) ? elements : Array.Empty<RCTTrackElementData>();
@@ -51,18 +55,18 @@ internal sealed class ParkSceneController(
     {
         try {
             var snapshot = await simulation.LoadParkAsync(parkPath, progress => Volatile.Write(ref parkLoadProgress, progress));
-            Volatile.Write(ref parkLoadProgress, "Generating terrain, water, path, accessory, and monorail track meshes...");
+            Volatile.Write(ref parkLoadProgress, "Generating terrain, water, path, accessory, track, and ride support meshes...");
 
             var meshData = await Task.Run(() => (
                 Terrain: terrainMeshBuilder.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height, terrainSkirtFloor),
                 Paths: pathMeshBuilder.Build(snapshot.PathData, snapshot.SurfaceData, snapshot.Width, snapshot.Height),
                 PathAccessories: pathAccessoryMeshBuilder.Build(snapshot.PathData, snapshot.Width, snapshot.Height),
-                Tracks: trackMeshBuilder.Build(snapshot.TrackData, snapshot.Width, snapshot.Height, snapshot.PaletteData)));
+                Tracks: trackMeshBuilder.Build(snapshot.TrackData, snapshot.SurfaceData, snapshot.Width, snapshot.Height, snapshot.PaletteData)));
 
             return new ParkLoadResult(
                 parkPath, snapshot.Width, snapshot.Height,
                 meshData.Terrain.Terrain, meshData.Terrain.Water, meshData.Paths, meshData.PathAccessories,
-                meshData.Tracks, snapshot.TrackData);
+                meshData.Tracks.Tracks, meshData.Tracks.RideSupports, snapshot.TrackData);
         }
         catch (Exception ex) {
             throw new InvalidOperationException($"Failed to load '{parkPath}': {ex.Message}", ex);
@@ -78,7 +82,7 @@ internal sealed class ParkSceneController(
 
             try {
                 pendingParkLoadResult = completedTask.GetAwaiter().GetResult();
-                ui.SetParkLoadStatus("Uploading terrain, water, path, accessory, and monorail track meshes...");
+                ui.SetParkLoadStatus("Uploading terrain, water, path, accessory, track, and ride support meshes...");
                 loadCompletedThisFrame = true;
             }
             catch (Exception ex) {
@@ -98,6 +102,8 @@ internal sealed class ParkSceneController(
                 resources.WaterGraphicsResources!.UploadMesh(result.Water);
                 resources.CreateTrackGraphicsResources();
                 resources.TrackGraphicsResources!.UploadMesh(result.Tracks);
+                resources.CreateRideSupportGraphicsResources();
+                resources.RideSupportGraphicsResources!.UploadMesh(result.RideSupports);
                 DisposePathAccessoryResources();
 
                 foreach (var batch in result.PathAccessories) {
@@ -121,6 +127,7 @@ internal sealed class ParkSceneController(
                 PathMesh = result.Paths;
                 WaterMesh = result.Water;
                 TrackMesh = result.Tracks;
+                RideSupportMesh = result.RideSupports;
                 trackElementsByTile = result.TrackElements
                     .GroupBy(track => (track.TileX, track.TileY))
                     .ToDictionary(group => group.Key, group => group.ToArray());
@@ -150,6 +157,7 @@ internal sealed class ParkSceneController(
         PathMesh = null;
         WaterMesh = null;
         TrackMesh = null;
+        RideSupportMesh = null;
         trackElementsByTile.Clear();
         loadedMapWidth = 0;
         loadedMapHeight = 0;
@@ -167,6 +175,7 @@ internal sealed class ParkSceneController(
                 resources.PathGraphicsResources?.ClearMesh();
                 resources.WaterGraphicsResources?.ClearMesh();
                 resources.TrackGraphicsResources?.ClearMesh();
+                resources.RideSupportGraphicsResources?.ClearMesh();
                 ClearVehicleCubeInstances();
             }
         }
@@ -228,5 +237,5 @@ internal sealed class ParkSceneController(
 
     private sealed record ParkLoadResult(
         string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water, PathMeshData Paths,
-        PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks, RCTTrackElementData[] TrackElements);
+        PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks, RideSupportMeshData RideSupports, RCTTrackElementData[] TrackElements);
 }

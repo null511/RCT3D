@@ -33,7 +33,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         TerrainMeshData? terrainMesh,
         PathMeshData? pathMesh,
         WaterMeshData? waterMesh,
-        TrackMeshData? trackMesh)
+        TrackMeshData? trackMesh,
+        RideSupportMeshData? rideSupportMesh)
     {
         if (taaEnabledLastFrame != ui.TaaEnabled) {
             taaHistoryValid = false;
@@ -162,6 +163,23 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in vertexBuffer, in offset);
             Vk.CmdBindIndexBuffer(commandBuffer, resources.IndexBuffer, 0, IndexType.Uint32);
             foreach (var region in terrainMesh.Regions) {
+                if (viewFrustum.Intersects(region.Bounds))
+                    Vk.CmdDrawIndexed(commandBuffer, region.IndexCount, 1, region.FirstIndex, 0, 0);
+            }
+        }
+
+        if (rideSupportMesh is { Vertices.Length: > 0, Indices.Length: > 0 }
+            && resources.RideSupportGraphicsResources is { IndexCount: > 0 } supportResources) {
+            var supportPipeline = ui.WireframeEnabled ? supportResources.WireframePipeline : supportResources.Pipeline;
+            Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, supportPipeline);
+            Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, supportResources.PipelineLayout,
+                0, 1, &uniformDescriptorSet, 0, null);
+
+            var supportVertexBuffer = supportResources.VertexBuffer;
+            Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in supportVertexBuffer, in offset);
+            Vk.CmdBindIndexBuffer(commandBuffer, supportResources.IndexBuffer, 0, IndexType.Uint32);
+
+            foreach (var region in rideSupportMesh.Regions) {
                 if (viewFrustum.Intersects(region.Bounds))
                     Vk.CmdDrawIndexed(commandBuffer, region.IndexCount, 1, region.FirstIndex, 0, 0);
             }

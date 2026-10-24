@@ -22,10 +22,18 @@ internal sealed class TrackMeshBuilder
         byte Direction,
         int OriginBaseHeight);
 
-    public TrackMeshData Build(ReadOnlySpan<RCTTrackElementData> trackElements, int mapWidth, int mapHeight, ReadOnlySpan<RCTPaletteEntry> palette)
+    public TrackMeshBuildData Build(
+        ReadOnlySpan<RCTTrackElementData> trackElements,
+        ReadOnlySpan<RCTTileSurfaceData> surfaces,
+        int mapWidth,
+        int mapHeight,
+        ReadOnlySpan<RCTPaletteEntry> palette)
     {
         if (mapWidth < 0 || mapHeight < 0)
             throw new ArgumentOutOfRangeException(nameof(mapWidth));
+
+        if (surfaces.Length < checked(mapWidth * mapHeight))
+            throw new InvalidDataException("OpenRCT2 returned fewer terrain surfaces than the map dimensions require.");
 
         var pieces = new Dictionary<TrackPieceKey, List<RCTTrackElementData>>();
 
@@ -62,6 +70,7 @@ internal sealed class TrackMeshBuilder
         }
 
         var geometry = new TrackMeshGeometry();
+        var supportGeometry = new RideSupportMeshGeometry();
         var piecesByRegion = new Dictionary<RenderRegionCoordinate, List<(TrackRideConfiguration Configuration, List<RCTTrackElementData> Elements)>>();
         
         foreach (var (key, pieceElements) in pieces) {
@@ -88,17 +97,32 @@ internal sealed class TrackMeshBuilder
             if (!piecesByRegion.TryGetValue(region, out var regionPieces)) continue;
 
             geometry.BeginRegion(region);
+            supportGeometry.BeginRegion(region);
 
             foreach (var (configuration, piece) in regionPieces) {
                 var track = piece[0];
                 configuration.TryResolvePiece(track.TrackType, out var pieceBuilder);
-                pieceBuilder.AddPiece(CollectionsMarshal.AsSpan(piece), geometry, configuration.PartGenerators, palette);
+                var pieceSpan = CollectionsMarshal.AsSpan(piece);
+                pieceBuilder.AddPiece(pieceSpan, geometry, configuration.PartGenerators, palette);
+                if (configuration.SupportMeshBuilder is { } supportMeshBuilder
+                    && configuration.SupportPlacementMap is { } placementMap) {
+                    var placements = new List<TrackSupportPlacement>();
+                    foreach (ref readonly var supportTrack in pieceSpan) {
+                        placementMap.GetPlacements(supportTrack, placements);
+                        var surfaceIndex = checked(supportTrack.TileY * mapWidth + supportTrack.TileX);
+                        var surface = surfaces[surfaceIndex];
+                        var supportColor = GetPaletteColor(supportTrack.SupportPaletteIndex, palette);
+                        foreach (var placement in placements)
+                            supportMeshBuilder.AddSupport(supportTrack, placement, supportGeometry, surface, supportColor);
+                    }
+                }
             }
 
             geometry.EndRegion();
+            supportGeometry.EndRegion();
         }
 
-        return geometry.Build();
+        return new TrackMeshBuildData(geometry.Build(), supportGeometry.Build());
     }
 
     private static (int X, int Y) RotateSequenceOffset(int x, int y, byte direction) => direction switch {
@@ -108,6 +132,15 @@ internal sealed class TrackMeshBuilder
         3 => (-y, x),
         _ => throw new InvalidDataException($"OpenRCT2 returned invalid track direction {direction}.")
     };
+
+    private static TrackRgba8 GetPaletteColor(byte paletteIndex, ReadOnlySpan<RCTPaletteEntry> palette)
+    {
+        if (paletteIndex >= palette.Length)
+            throw new InvalidDataException($"OpenRCT2 returned invalid support palette index {paletteIndex}.");
+
+        var entry = palette[paletteIndex];
+        return new TrackRgba8(entry.Red, entry.Green, entry.Blue, entry.Alpha);
+    }
 
     private static void ValidatePieceSequences(TrackPieceKey key, List<RCTTrackElementData> elements)
     {

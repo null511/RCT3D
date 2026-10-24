@@ -3,53 +3,54 @@ using RCT3D.Render.Terrain;
 
 namespace RCT3D.Render.Paths.Meshing;
 
-internal sealed class PathMeshBuilder
+internal sealed class PathMeshBuilder(PathMaterialLibrary materials)
 {
-    private readonly PathMaterialLibrary _materials;
-    private readonly Dictionary<uint, PathTypeGeometryBuilder> _buildersByRailingIdHash = new();
+    private readonly Dictionary<uint, PathTypeGeometryBuilder> buildersByRailingIdHash = new();
 
-    public PathMeshBuilder(PathMaterialLibrary materials)
-    {
-        _materials = materials;
-    }
 
-    public PathMeshData Build(
-        ReadOnlySpan<RCTTilePathData> paths, ReadOnlySpan<RCTTileSurfaceData> surfaces, int mapWidth, int mapHeight)
+    public PathMeshData Build(ReadOnlySpan<RCTTilePathData> paths, ReadOnlySpan<RCTTileSurfaceData> surfaces, int mapWidth, int mapHeight)
     {
         if (surfaces.Length < checked(mapWidth * mapHeight))
             throw new InvalidDataException("OpenRCT2 returned fewer terrain surfaces than the map dimensions require.");
 
         var pathsByRegion = new Dictionary<RenderRegionCoordinate, List<RCTTilePathData>>();
+
         foreach (var path in paths) {
             if ((uint)path.TileX >= (uint)mapWidth || (uint)path.TileY >= (uint)mapHeight)
                 throw new InvalidDataException($"OpenRCT2 returned a path outside the {mapWidth}x{mapHeight} map.");
-            if (path.IsSloped && path.SlopeDirection > 3)
+
+            if (path is { IsSloped: true, SlopeDirection: > 3 })
                 throw new InvalidDataException($"OpenRCT2 returned an invalid slope direction for the path at ({path.TileX}, {path.TileY}).");
 
             var region = new RenderRegionCoordinate(
                 path.TileX / RenderRegionLayout.RegionSizeInTiles,
                 path.TileY / RenderRegionLayout.RegionSizeInTiles);
+
             if (!pathsByRegion.TryGetValue(region, out var regionPaths)) {
                 regionPaths = new List<RCTTilePathData>();
                 pathsByRegion.Add(region, regionPaths);
             }
+
             regionPaths.Add(path);
         }
 
         var geometry = new PathMeshGeometry();
         var supportStations = new PathSupportStationRegistry();
+
         foreach (var region in RenderRegionLayout.Enumerate(mapWidth, mapHeight)) {
-            if (!pathsByRegion.TryGetValue(region, out var regionPaths))
-                continue;
+            if (!pathsByRegion.TryGetValue(region, out var regionPaths)) continue;
 
             geometry.BeginRegion(region);
+
             foreach (var path in regionPaths) {
-                if (!_buildersByRailingIdHash.TryGetValue(path.RailingsIdHash, out var builder)) {
-                    builder = PathGeometryBuilderResolver.Resolve(_materials, path.RailingsIdHash);
-                    _buildersByRailingIdHash.Add(path.RailingsIdHash, builder);
+                if (!buildersByRailingIdHash.TryGetValue(path.RailingsIdHash, out var builder)) {
+                    builder = PathGeometryBuilderResolver.Resolve(materials, path.RailingsIdHash);
+                    buildersByRailingIdHash.Add(path.RailingsIdHash, builder);
                 }
+
                 builder.AddPath(path, surfaces[path.TileY * mapWidth + path.TileX], geometry, supportStations);
             }
+
             geometry.EndRegion();
         }
 
@@ -72,7 +73,5 @@ internal sealed class PathSupportStationRegistry
 internal sealed record PathMeshData(TerrainVertex[] Vertices, uint[] Indices, RenderRegionIndexRange[] Regions)
 {
     public PathMeshData(TerrainVertex[] vertices, uint[] indices)
-        : this(vertices, indices, Array.Empty<RenderRegionIndexRange>())
-    {
-    }
+        : this(vertices, indices, Array.Empty<RenderRegionIndexRange>()) {}
 }

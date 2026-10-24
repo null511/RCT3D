@@ -111,7 +111,7 @@ public sealed class Renderer : IDisposable
         SetupInputs();
 
         Console.WriteLine("\n=== Vulkan Engine Pipeline Fully Operational ===");
-        Console.WriteLine("Hold down RIGHT-MOUSE BUTTON to look around. Use W,A,S,D to fly.");
+        Console.WriteLine("Hold down RIGHT-MOUSE BUTTON to look around. Use W,A,S,D to fly. Press F9 to toggle simulation pause.");
 
         var startupParkPath = StartupParkPath;
         if (!string.IsNullOrWhiteSpace(startupParkPath))
@@ -120,7 +120,8 @@ public sealed class Renderer : IDisposable
 
     private void SetupInputs()
     {
-        inputController = new ViewerInputController(window!, camera, () => imguiRenderer?.WantCaptureMouse ?? false);
+        inputController = new ViewerInputController(window!, camera,
+            () => imguiRenderer?.WantCaptureMouse ?? false, () => parkScene?.TogglePause(), ui.ToggleDebug);
     }
 
     private void OnUpdateFrame(double deltaTime)
@@ -144,12 +145,13 @@ public sealed class Renderer : IDisposable
                 parkScene!.Update(frameCoordinator!.CurrentFrame);
                 var cameraTileX = (int)MathF.Floor(camera.Position.X / TerrainMeshBuilder.TileSize);
                 var cameraTileY = (int)MathF.Floor(camera.Position.Z / TerrainMeshBuilder.TileSize);
-                ui.BuildFrameUi(deltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours,
+                ui.BuildFrameUi(deltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours, parkScene.IsPaused,
                     cameraTileX, cameraTileY, parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
-                    parkPath => parkScene.LoadPark(parkPath, TerrainSkirtFloor), () => exitRequested = true, deviceContext!.SupportsWireframe);
+                    parkPath => parkScene.LoadPark(parkPath, TerrainSkirtFloor), parkScene.TogglePause,
+                    () => exitRequested = true, deviceContext!.SupportsWireframe);
             },
             (commandBuffer, imageIndex, currentFrame) => frameRenderer!.Record(commandBuffer, imageIndex, currentFrame,
-                parkScene.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh),
+                parkScene.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh, parkScene.RideSupportMesh),
             () => frameRenderer!.FrameSubmitted(),
             extentChanged => frameRenderer!.ResetForSwapchain(extentChanged));
     }

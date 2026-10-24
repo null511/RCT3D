@@ -1,46 +1,49 @@
-using System.Numerics;
 using RCT3D.Render.Terrain;
+using System.Numerics;
 
 namespace RCT3D.Render.Paths.Meshing;
 
 internal sealed class PathMeshGeometry
 {
-    private readonly List<TerrainVertex> _vertices = new();
-    private readonly List<uint> _indices = new();
-    private readonly List<RenderRegionIndexRange> _regions = new();
+    private readonly List<RenderRegionIndexRange> regions = new();
+    private readonly List<TerrainVertex> vertices = new();
+    private readonly List<uint> indices = new();
+
     private RenderRegionCoordinate _region;
-    private int _firstVertex;
+    private int firstVertex;
     private int _firstIndex;
+
 
     public void BeginRegion(RenderRegionCoordinate region)
     {
         _region = region;
-        _firstVertex = _vertices.Count;
-        _firstIndex = _indices.Count;
+        firstVertex = vertices.Count;
+        _firstIndex = indices.Count;
     }
 
     public void EndRegion()
     {
-        if (_indices.Count > _firstIndex)
-            _regions.Add(RenderRegionMeshRanges.Create(_region, _vertices, _indices, _firstVertex, _firstIndex));
+        if (indices.Count > _firstIndex)
+            regions.Add(RenderRegionMeshRanges.Create(_region, vertices, indices, firstVertex, _firstIndex));
     }
 
-    public PathMeshData Build() => new(_vertices.ToArray(), _indices.ToArray(), _regions.ToArray());
+    public PathMeshData Build() => new(vertices.ToArray(), indices.ToArray(), regions.ToArray());
 
-    public void AddTriangle(
-        Vector3 a, Vector2 uvA, Vector3 b, Vector2 uvB, Vector3 c, Vector2 uvC, uint material, Vector3? expectedNormal = null)
+    public void AddTriangle(Vector3 a, Vector2 uvA, Vector3 b, Vector2 uvB, Vector3 c, Vector2 uvC, uint material, Vector3? expectedNormal = null)
     {
         var normal = expectedNormal ?? Vector3.Normalize(Vector3.Cross(b - a, c - a));
         if (Vector3.Dot(Vector3.Cross(b - a, c - a), normal) < 0.0f)
             (b, c, uvB, uvC) = (c, b, uvC, uvB);
 
-        var firstIndex = (uint)_vertices.Count;
-        _vertices.Add(new TerrainVertex(a, normal, uvA, material));
-        _vertices.Add(new TerrainVertex(b, normal, uvB, material));
-        _vertices.Add(new TerrainVertex(c, normal, uvC, material));
-        _indices.Add(firstIndex);
-        _indices.Add(firstIndex + 1);
-        _indices.Add(firstIndex + 2);
+        var firstIndex = (uint)vertices.Count;
+
+        vertices.Add(new TerrainVertex(a, normal, uvA, material));
+        vertices.Add(new TerrainVertex(b, normal, uvB, material));
+        vertices.Add(new TerrainVertex(c, normal, uvC, material));
+
+        indices.Add(firstIndex);
+        indices.Add(firstIndex + 1);
+        indices.Add(firstIndex + 2);
     }
 
     public void AddPrismFace(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 prismCenter, uint material)

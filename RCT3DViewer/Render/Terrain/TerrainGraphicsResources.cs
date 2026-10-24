@@ -512,6 +512,11 @@ internal sealed unsafe class TerrainGraphicsResources(
         UploadMesh(mesh.Vertices, mesh.Indices);
     }
 
+    public void UploadMesh(RideSupportMeshData mesh)
+    {
+        UploadMesh(mesh.Vertices, mesh.Indices);
+    }
+
     public void UploadInstances(ModelInstance[] instances)
     {
         if (!useInstances)

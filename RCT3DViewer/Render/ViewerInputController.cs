@@ -9,11 +9,17 @@ internal sealed class ViewerInputController : IDisposable
 {
     private readonly IInputContext inputContext;
     private readonly FlightCamera camera;
+    private readonly Action togglePause;
+    private readonly Action toggleDebug;
+    private bool f9WasPressed;
+    private bool f3WasPressed;
 
 
-    public ViewerInputController(IWindow window, FlightCamera camera, Func<bool> wantCaptureMouse)
+    public ViewerInputController(IWindow window, FlightCamera camera, Func<bool> wantCaptureMouse, Action togglePause, Action toggleDebug)
     {
         this.camera = camera;
+        this.togglePause = togglePause;
+        this.toggleDebug = toggleDebug;
 
         inputContext = window.CreateInput();
 
@@ -47,6 +53,19 @@ internal sealed class ViewerInputController : IDisposable
 
     public void Update(double deltaTime, ImGuiVulkanRenderer? imguiRenderer)
     {
+        if (inputContext.Keyboards.Count > 0) {
+            var keyboard = inputContext.Keyboards[0];
+            var f9Pressed = keyboard.IsKeyPressed(Key.F9);
+            if (f9Pressed && !f9WasPressed)
+                togglePause();
+            f9WasPressed = f9Pressed;
+
+            var f3Pressed = keyboard.IsKeyPressed(Key.F3);
+            if (f3Pressed && !f3WasPressed)
+                toggleDebug();
+            f3WasPressed = f3Pressed;
+        }
+
         if (imguiRenderer is not null) {
             var io = ImGui.GetIO();
 

@@ -15,11 +15,13 @@ public sealed class SimulationBridge : IDisposable
     private Exception? shutdownException;
     private Exception? simulationFailure;
     private bool parkLoaded;
+    private bool isPaused;
     private float gameTimeOfDayHours;
     private VehicleSnapshotPair? vehicleSnapshots;
 
     public VehicleSnapshotPair? VehicleSnapshots => Volatile.Read(ref vehicleSnapshots);
     public float? GameTimeOfDayHours => Volatile.Read(ref parkLoaded) ? Volatile.Read(ref gameTimeOfDayHours) : null;
+    public bool? IsPaused => Volatile.Read(ref parkLoaded) ? Volatile.Read(ref isPaused) : null;
     public Exception? SimulationFailure => Volatile.Read(ref simulationFailure);
 
 
@@ -82,6 +84,7 @@ public sealed class SimulationBridge : IDisposable
                     var paletteData = new RCTPaletteEntry[256];
                     openRCT2.CopyPaletteData(paletteData);
 
+                    Volatile.Write(ref isPaused, openRCT2.GetPauseState());
                     Volatile.Write(ref gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                     Volatile.Write(ref vehicleSnapshots, new VehicleSnapshotPair(null, ReadVehicleSnapshot(openRCT2)));
                     Volatile.Write(ref parkLoaded, true);
@@ -94,6 +97,23 @@ public sealed class SimulationBridge : IDisposable
         }
 
         return completion.Task;
+    }
+
+    public void TogglePause()
+    {
+        lock (sync) {
+            ObjectDisposedException.ThrowIf(isDisposed, this);
+            if (!Volatile.Read(ref parkLoaded)) return;
+
+            requests.Add(openRCT2 => {
+                try {
+                    Volatile.Write(ref isPaused, openRCT2.TogglePause());
+                }
+                catch (Exception ex) {
+                    Volatile.Write(ref simulationFailure, ex);
+                }
+            });
+        }
     }
 
     private void WorkerLoop(string libraryPath, string openRCT2Path, string rct2Path, string rct1Path)

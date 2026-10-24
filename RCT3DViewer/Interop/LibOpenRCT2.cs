@@ -6,7 +6,7 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 18;
+    private const uint ExpectedAbiVersion = 20;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -42,6 +42,9 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private delegate int AdvanceSimulationDelegate(IntPtr context);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int PauseStateDelegate(IntPtr context, int* isPaused);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int GetTimeOfDayHoursDelegate(IntPtr context, float* hours);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -66,6 +69,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private readonly CopyTrackDataDelegate _copyTrackData;
     private readonly CopyPaletteDataDelegate _copyPaletteData;
     private readonly AdvanceSimulationDelegate _advanceSimulation;
+    private readonly PauseStateDelegate _getPauseState;
+    private readonly PauseStateDelegate _togglePause;
     private readonly GetTimeOfDayHoursDelegate _getTimeOfDayHours;
     private readonly GetVehicleCountDelegate _getVehicleCount;
     private readonly CopyVehicleDataDelegate _copyVehicleData;
@@ -101,8 +106,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (Marshal.SizeOf<RCTVehicleData>() != 28)
                 throw new InvalidOperationException("RCTVehicleData must be 28 bytes to match the OpenRCT2 adapter ABI.");
 
-            if (Marshal.SizeOf<RCTTrackElementData>() != 29)
-                throw new InvalidOperationException("RCTTrackElementData must be 29 bytes to match the OpenRCT2 adapter ABI.");
+            if (Marshal.SizeOf<RCTTrackElementData>() != 30)
+                throw new InvalidOperationException("RCTTrackElementData must be 30 bytes to match the OpenRCT2 adapter ABI.");
 
             if (Marshal.SizeOf<RCTPaletteEntry>() != 4)
                 throw new InvalidOperationException("RCTPaletteEntry must be 4 bytes to match the OpenRCT2 adapter ABI.");
@@ -117,6 +122,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             _copyTrackData = Bind<CopyTrackDataDelegate>("rct3d_openrct2_copy_track_data");
             _copyPaletteData = Bind<CopyPaletteDataDelegate>("rct3d_openrct2_copy_palette_data");
             _advanceSimulation = Bind<AdvanceSimulationDelegate>("rct3d_openrct2_advance_simulation");
+            _getPauseState = Bind<PauseStateDelegate>("rct3d_openrct2_get_pause_state");
+            _togglePause = Bind<PauseStateDelegate>("rct3d_openrct2_toggle_pause");
             _getTimeOfDayHours = Bind<GetTimeOfDayHoursDelegate>("rct3d_openrct2_get_time_of_day_hours");
             _getVehicleCount = Bind<GetVehicleCountDelegate>("rct3d_openrct2_get_vehicle_count");
             _copyVehicleData = Bind<CopyVehicleDataDelegate>("rct3d_openrct2_copy_vehicle_data");
@@ -194,6 +201,20 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     }
 
     public void AdvanceSimulation() => ThrowIfFailed(_advanceSimulation(_context));
+
+    public bool GetPauseState()
+    {
+        int isPaused = 0;
+        ThrowIfFailed(_getPauseState(_context, &isPaused));
+        return isPaused != 0;
+    }
+
+    public bool TogglePause()
+    {
+        int isPaused = 0;
+        ThrowIfFailed(_togglePause(_context, &isPaused));
+        return isPaused != 0;
+    }
 
     public float GetTimeOfDayHours()
     {

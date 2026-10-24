@@ -4,11 +4,13 @@ using System.Numerics;
 
 namespace RCT3D.Render.Tracks.Rides;
 
-internal class MiniatureRailway
+internal class MiniatureRailway() : RideDefinition(RCTRideType.MiniatureRailway)
 {
-    public static TrackRideConfiguration Build()
+    protected override RideSupportStyle SupportStyle => RideSupportStyle.WoodenTruss;
+
+    protected override TrackRailProfile CreateProfile()
     {
-        TrackRailProfile railProfile = new([
+        return new TrackRailProfile([
             CreateRailRectangle(-0.42f, 0.08f),
             CreateRailRectangle( 0.42f, 0.08f),
             new TrackRailProfileShape([
@@ -23,8 +25,6 @@ internal class MiniatureRailway
                 Color = new TrackRgba8(130, 113, 87, 255),
             },
         ]);
-
-        return new TrackRideConfiguration(RCTRideType.MiniatureRailway, CreateRegistry(), [new SweptRailProfileGenerator(railProfile)]);
     }
 
     private static TrackRailProfileShape CreateRailRectangle(float centerX, float baseY)
@@ -54,10 +54,8 @@ internal class MiniatureRailway
         };
     }
 
-    public static TrackPieceBuilderRegistry CreateRegistry()
+    protected override void BuildRegistry(TrackPieceBuilderRegistry registry)
     {
-        var registry = new TrackPieceBuilderRegistry();
-
         registry.RegisterMany(type => new StraightTrackPieceBuilder(type, 0.0f),
             RCTTrackElementType.Flat,
             RCTTrackElementType.EndStation,
@@ -87,7 +85,5 @@ internal class MiniatureRailway
             RCTTrackElementType.RightEighthBankToDiag,
             RCTTrackElementType.LeftEighthBankToOrthogonal,
             RCTTrackElementType.RightEighthBankToOrthogonal);
-
-        return registry;
     }
 }

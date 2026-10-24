@@ -8,8 +8,6 @@ internal static class TrackCenterlineGeometry
     public const float Pitch25Slope = 0.4663077f;
     public const float Pitch60Slope = 1.7320508f;
 
-    public const float TileSize = 3.0f;
-    public const float HeightPerBaseUnit = 0.75f;
     public const int CurveSubdivisionsPerTile = 8;
 
     public static Vector3 GetDirection(byte direction) => direction switch {
@@ -36,16 +34,28 @@ internal static class TrackCenterlineGeometry
     };
 
     public static Vector3 GetTileCenter(in RCTTrackElementData track) =>
-        new((track.TileX + 0.5f) * TileSize, 0.0f, (track.TileY + 0.5f) * TileSize);
+        new((track.TileX + 0.5f) * WorldUnits.TileSize, 0.0f, (track.TileY + 0.5f) * WorldUnits.TileSize);
 
     public static float GetPitchSlope(RCTTrackElementType pieceType, bool atStart)
     {
+        if (pieceType is RCTTrackElementType.LeftQuarterTurn1TileUp60
+            or RCTTrackElementType.RightQuarterTurn1TileUp60)
+            return Pitch60Slope;
+
+        if (pieceType is RCTTrackElementType.LeftQuarterTurn1TileDown60
+            or RCTTrackElementType.RightQuarterTurn1TileDown60)
+            return -Pitch60Slope;
+
         if (pieceType is RCTTrackElementType.LeftQuarterTurn3TilesUp25
-            or RCTTrackElementType.RightQuarterTurn3TilesUp25)
+            or RCTTrackElementType.RightQuarterTurn3TilesUp25
+            or RCTTrackElementType.LeftQuarterTurn5TilesUp25
+            or RCTTrackElementType.RightQuarterTurn5TilesUp25)
             return Pitch25Slope;
 
         if (pieceType is RCTTrackElementType.LeftQuarterTurn3TilesDown25
-            or RCTTrackElementType.RightQuarterTurn3TilesDown25)
+            or RCTTrackElementType.RightQuarterTurn3TilesDown25
+            or RCTTrackElementType.LeftQuarterTurn5TilesDown25
+            or RCTTrackElementType.RightQuarterTurn5TilesDown25)
             return -Pitch25Slope;
 
         var isUpTransition = pieceType is RCTTrackElementType.LeftBankToUp25
@@ -155,9 +165,9 @@ internal static class TrackCenterlineGeometry
         < 0 => -MathF.PI / 8.0f,
     };
 
-    public static void AddParts(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries, float rollBegin = 0.0f, float rollEnd = 0.0f, Vector3? startTangent = null, Vector3? endTangent = null)
+    public static void AddParts(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries, float rollBegin = 0.0f, float rollEnd = 0.0f, Vector3? startTangent = null, Vector3? endTangent = null, Vector3? preferredSide = null, bool smoothRollTransition = false)
     {
         foreach (var partGenerator in partGenerators)
-            partGenerator.Add(in track, geometry, centerline, paletteEntries, rollBegin, rollEnd, startTangent, endTangent);
+            partGenerator.Add(in track, geometry, centerline, paletteEntries, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
     }
 }

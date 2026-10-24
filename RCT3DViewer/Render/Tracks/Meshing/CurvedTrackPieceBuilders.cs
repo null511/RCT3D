@@ -12,6 +12,8 @@ internal class CurveTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPiec
 
     protected virtual float GetRollBegin(in RCTTrackElementData track) => 0.0f;
     protected virtual float GetRollEnd(in RCTTrackElementData track) => 0.0f;
+    protected virtual float GetControlLength(Vector3 start, Vector3 end) => Vector3.Distance(start, end) * 0.4f;
+    protected virtual int GetSubdivisions(int trackCount) => trackCount * TrackCenterlineGeometry.CurveSubdivisionsPerTile;
 
     public override void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries)
     {
@@ -26,27 +28,32 @@ internal class CurveTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPiec
         var endDirection = TrackCenterlineGeometry.GetTrackDirection(endHeading);
         var startCenter = TrackCenterlineGeometry.GetTileCenter(first);
         var endCenter = TrackCenterlineGeometry.GetTileCenter(last);
-        var halfTile = TrackCenterlineGeometry.TileSize * 0.5f;
+        var halfTile = WorldUnits.TileSize * 0.5f;
         var startOffset = (startHeading & 4) != 0 ? Vector3.Zero : startDirection * halfTile;
         var endOffset = (endHeading & 4) != 0 ? Vector3.Zero : endDirection * halfTile;
         var start = startCenter - startOffset;
         var end = endCenter + endOffset;
-        var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * TrackCenterlineGeometry.HeightPerBaseUnit;
-        start.Y = originHeight + first.SplineZBegin * TrackCenterlineGeometry.HeightPerBaseUnit;
-        end.Y = originHeight + first.SplineZEnd * TrackCenterlineGeometry.HeightPerBaseUnit;
+        var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * WorldUnits.HeightPerBaseUnit;
+        start.Y = originHeight + first.SplineZBegin * WorldUnits.HeightPerBaseUnit;
+        end.Y = originHeight + first.SplineZEnd * WorldUnits.HeightPerBaseUnit;
 
-        var controlLength = Vector3.Distance(start, end) * 0.4f;
         var startPitch = TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: true);
         var endPitch = TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: false);
         var pitchedStartDirection = Vector3.Normalize(startDirection + Vector3.UnitY * startPitch);
         var pitchedEndDirection = Vector3.Normalize(endDirection + Vector3.UnitY * endPitch);
         var points = TrackCenterlineGeometry.CreateCubicCurvePoints(start, end, pitchedStartDirection, pitchedEndDirection,
-            controlLength, tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
+            GetControlLength(start, end), GetSubdivisions(tracks.Length));
 
         TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, paletteEntries,
             GetRollBegin(first), GetRollEnd(first),
             startTangent: pitchedStartDirection, endTangent: pitchedEndDirection);
     }
+}
+
+internal sealed class SteepQuarterTurnTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
+{
+    protected override int GetSubdivisions(int trackCount) =>
+        Math.Max(trackCount * TrackCenterlineGeometry.CurveSubdivisionsPerTile, 32);
 }
 
 internal sealed class BankedCurveTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
@@ -73,19 +80,24 @@ internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveT
         var endDirection = TrackCenterlineGeometry.GetTrackDirection(endHeading);
         var start = TrackCenterlineGeometry.GetTileCenter(first);
         var end = TrackCenterlineGeometry.GetTileCenter(last);
-        var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * TrackCenterlineGeometry.HeightPerBaseUnit;
-        start.Y = originHeight + first.SplineZBegin * TrackCenterlineGeometry.HeightPerBaseUnit;
-        end.Y = originHeight + first.SplineZEnd * TrackCenterlineGeometry.HeightPerBaseUnit;
+        var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * WorldUnits.HeightPerBaseUnit;
+        start.Y = originHeight + first.SplineZBegin * WorldUnits.HeightPerBaseUnit;
+        end.Y = originHeight + first.SplineZEnd * WorldUnits.HeightPerBaseUnit;
+        var smoothTransition = PieceType is RCTTrackElementType.DiagRightBankToDown25
+            or RCTTrackElementType.DiagDown25ToLeftBank;
         var horizontalDistance = Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(end.X, end.Z));
         var risePerRun = horizontalDistance > float.Epsilon ? (end.Y - start.Y) / horizontalDistance : 0.0f;
-        var pitchedStartDirection = Vector3.Normalize(startDirection + Vector3.UnitY * risePerRun);
-        var pitchedEndDirection = Vector3.Normalize(endDirection + Vector3.UnitY * risePerRun);
+        var startPitch = smoothTransition ? TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: true) : risePerRun;
+        var endPitch = smoothTransition ? TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: false) : risePerRun;
+        var pitchedStartDirection = Vector3.Normalize(startDirection + Vector3.UnitY * startPitch);
+        var pitchedEndDirection = Vector3.Normalize(endDirection + Vector3.UnitY * endPitch);
         var points = TrackCenterlineGeometry.CreateCubicCurvePoints(start, end, pitchedStartDirection, pitchedEndDirection,
             Vector3.Distance(start, end) * 0.4f, tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
 
         TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, paletteEntries,
             TrackCenterlineGeometry.GetRollRadians(first.RollBegin), TrackCenterlineGeometry.GetRollRadians(first.RollEnd),
-            startTangent: pitchedStartDirection, endTangent: pitchedEndDirection);
+            startTangent: pitchedStartDirection, endTangent: pitchedEndDirection,
+            smoothRollTransition: smoothTransition);
     }
 }
 
@@ -105,14 +117,14 @@ internal sealed class HelixTrackPieceBuilder(RCTTrackElementType pieceType) : Cu
         var endHeading = TrackCenterlineGeometry.CombineDirection(first.Direction, first.RotationEnd);
         var startDirection = TrackCenterlineGeometry.GetTrackDirection(startHeading);
         var endDirection = TrackCenterlineGeometry.GetTrackDirection(endHeading);
-        var halfTile = TrackCenterlineGeometry.TileSize * 0.5f;
+        var halfTile = WorldUnits.TileSize * 0.5f;
         var startOffset = (startHeading & 4) != 0 ? Vector3.Zero : startDirection * halfTile;
         var endOffset = (endHeading & 4) != 0 ? Vector3.Zero : endDirection * halfTile;
         var start = TrackCenterlineGeometry.GetTileCenter(first) - startOffset;
         var end = TrackCenterlineGeometry.GetTileCenter(last) + endOffset;
-        var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * TrackCenterlineGeometry.HeightPerBaseUnit;
-        start.Y = originHeight + first.SplineZBegin * TrackCenterlineGeometry.HeightPerBaseUnit;
-        end.Y = originHeight + first.SplineZEnd * TrackCenterlineGeometry.HeightPerBaseUnit;
+        var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * WorldUnits.HeightPerBaseUnit;
+        start.Y = originHeight + first.SplineZBegin * WorldUnits.HeightPerBaseUnit;
+        end.Y = originHeight + first.SplineZEnd * WorldUnits.HeightPerBaseUnit;
 
         var turnLeft = pieceType is RCTTrackElementType.LeftHalfBankedHelixUpSmall
             or RCTTrackElementType.LeftHalfBankedHelixDownSmall

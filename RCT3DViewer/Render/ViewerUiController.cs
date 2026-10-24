@@ -1,7 +1,7 @@
-using System.Numerics;
 using ImGuiNET;
 using NativeFileDialogSharp;
 using RCT3D.Interop;
+using System.Numerics;
 
 namespace RCT3D.Render;
 
@@ -42,6 +42,7 @@ internal sealed class ViewerUiController
     //public bool HasParkLoadError => _parkLoadError is not null;
     public bool IsParkLoading => _isParkLoading;
 
+    public void ToggleDebug() => _showDebug = !_showDebug;
 
     public void BeginParkLoad(string parkPath)
     {
@@ -83,8 +84,8 @@ internal sealed class ViewerUiController
     //    _showParkLoadError = false;
     //}
 
-    public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, int cameraTileX, int cameraTileY,
-        IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action requestExit, bool wireframeAvailable = true)
+    public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, bool? isPaused, int cameraTileX, int cameraTileY,
+        IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit, bool wireframeAvailable = true)
     {
         _gameTimeOfDayHours = gameTimeOfDayHours;
         var instantFps = deltaTime > 0.0 ? (float)(1.0 / deltaTime) : 0.0f;
@@ -96,9 +97,11 @@ internal sealed class ViewerUiController
                 : _displayedFrameTimeMilliseconds + (activeFrameTimeMilliseconds - _displayedFrameTimeMilliseconds) * smoothing;
 
         if (ImGui.BeginMainMenuBar()) {
-            if (ImGui.BeginMenu("File")) {
+            if (ImGui.BeginMenu("Park")) {
                 if (ImGui.MenuItem("Load", string.Empty, false, !_isParkLoading))
                     OpenParkPicker(loadPark);
+                if (ImGui.MenuItem("Pause", string.Empty, isPaused == true, isPaused.HasValue))
+                    togglePause();
                 if (ImGui.MenuItem("Exit"))
                     requestExit();
                 ImGui.EndMenu();

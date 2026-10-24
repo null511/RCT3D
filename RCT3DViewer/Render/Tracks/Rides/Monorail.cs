@@ -4,11 +4,15 @@ using System.Numerics;
 
 namespace RCT3D.Render.Tracks.Rides;
 
-internal class Monorail
+internal class Monorail() : RideDefinition(RCTRideType.Monorail)
 {
-    public static TrackRideConfiguration Build()
+    protected override RideSupportStyle SupportStyle => RideSupportStyle.MetalBoxed;
+
+    protected override ITrackSupportPlacementMap CreateSupportPlacementMap() => new MonorailTrackSupportPlacementMap();
+
+    protected override TrackRailProfile CreateProfile()
     {
-        TrackRailProfile railProfile = new([
+        return new TrackRailProfile([
             new TrackRailProfileShape([
                 new Vector2(-0.20f, 0.40f),
                 new Vector2(-0.20f, 0.50f),
@@ -40,14 +44,10 @@ internal class Monorail
                 Specular = new TrackRailSpecularData(120, 255),
             },
         ]);
-
-        return new TrackRideConfiguration(RCTRideType.Monorail, CreateRegistry(), [new SweptRailProfileGenerator(railProfile)]);
     }
 
-    public static TrackPieceBuilderRegistry CreateRegistry()
+    protected override void BuildRegistry(TrackPieceBuilderRegistry registry)
     {
-        var registry = new TrackPieceBuilderRegistry();
-
         registry.RegisterMany(type => new StraightTrackPieceBuilder(type, 0.0f),
             RCTTrackElementType.Flat,
             RCTTrackElementType.EndStation,
@@ -84,7 +84,5 @@ internal class Monorail
             RCTTrackElementType.SBendRightCovered,
             RCTTrackElementType.LeftQuarterTurn3TilesCovered,
             RCTTrackElementType.RightQuarterTurn3TilesCovered);
-
-        return registry;
     }
 }

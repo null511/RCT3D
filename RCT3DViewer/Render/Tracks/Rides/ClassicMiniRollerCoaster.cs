@@ -1,45 +1,28 @@
 using RCT3D.Interop;
 using RCT3D.Render.Tracks.Meshing;
-using System.Numerics;
 
 namespace RCT3D.Render.Tracks.Rides;
 
-internal static class ClassicMiniRollerCoaster
+internal class ClassicMiniRollerCoaster() : RideDefinition(RCTRideType.ClassicMiniRollerCoaster)
 {
-    public static TrackRideConfiguration Build()
+    protected override RideSupportStyle SupportStyle => RideSupportStyle.MetalFork;
+
+    protected override TrackRailProfile CreateProfile()
     {
-        var railProfile = new TrackRailProfile([
-            CreateCircularRail(-0.42f),
-            CreateCircularRail( 0.42f),
+        return new TrackRailProfile([
+            new TrackRailProfileShape(CreateCircle(0.075f, -0.42f, 0.28f, 5), true) {
+                Swatch = TrackRailSwatch.Main,
+                Specular = new TrackRailSpecularData(100, 100),
+            },
+            new TrackRailProfileShape(CreateCircle(0.075f,  0.42f, 0.28f, 5), true) {
+                Swatch = TrackRailSwatch.Main,
+                Specular = new TrackRailSpecularData(100, 100),
+            },
         ]);
-
-        return new TrackRideConfiguration(
-            RCTRideType.ClassicMiniRollerCoaster,
-            CreateRegistry(),
-            [new SweptRailProfileGenerator(railProfile)]);
     }
 
-    private static TrackRailProfileShape CreateCircularRail(float centerX)
+    protected override void BuildRegistry(TrackPieceBuilderRegistry registry)
     {
-        const float radius = 0.075f;
-        const float centerY = 0.28f;
-
-        return new TrackRailProfileShape([
-            new Vector2(centerX, centerY + radius),
-            new Vector2(centerX + radius * 0.95106f, centerY + radius * 0.30902f),
-            new Vector2(centerX + radius * 0.58779f, centerY - radius * 0.80902f),
-            new Vector2(centerX - radius * 0.58779f, centerY - radius * 0.80902f),
-            new Vector2(centerX - radius * 0.95106f, centerY + radius * 0.30902f),
-        ], true) {
-            Swatch = TrackRailSwatch.Main,
-            Specular = new TrackRailSpecularData(100, 100),
-        };
-    }
-
-    private static TrackPieceBuilderRegistry CreateRegistry()
-    {
-        var registry = new TrackPieceBuilderRegistry();
-
         registry.RegisterMany(type => new StraightTrackPieceBuilder(type, 0.0f),
             RCTTrackElementType.Flat,
             RCTTrackElementType.EndStation,
@@ -190,7 +173,5 @@ internal static class ClassicMiniRollerCoaster
             RCTTrackElementType.DiagDown25ToRightBank,
             RCTTrackElementType.DiagLeftBank,
             RCTTrackElementType.DiagRightBank);
-
-        return registry;
     }
 }

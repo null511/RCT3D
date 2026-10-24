@@ -1,6 +1,6 @@
-using System.Numerics;
 using RCT3D.Interop;
 using RCT3D.Render.Terrain;
+using System.Numerics;
 
 namespace RCT3D.Render.Paths.Meshing;
 
@@ -8,7 +8,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 {
     public const float TileSize = 3.0f;
     public const float BaseHeightScale = 0.75f;
-    private const float SurfaceBias = 0.08f;
+    private const float SurfaceBias = 0.004f;
     private const float RailHeight = 0.62f;
     private const float RailThickness = 0.045f;
     private const float RailPostHalfWidth = 0.055f;
@@ -27,13 +27,12 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
     public const byte DirectionEast = 2;
     public const byte DirectionSouth = 3;
 
-    private static readonly byte[] ExpectedSurfaceSlopeByPathDirection = { 12, 9, 3, 6 };
+    private static readonly byte[] expectedSurfaceSlopeByPathDirection = [12, 9, 3, 6];
 
     protected PathMaterialLibrary Materials {get;} = materials;
 
 
-    public void AddPath(
-        RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
+    public void AddPath(RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
     {
         AddSurface(path, geometry);
 
@@ -129,7 +128,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var north = (path.TileY + 1) * TileSize;
 
         var baseHeight = path.BaseZ * BaseHeightScale;
-        var topOffset = SurfaceBias - ElevatedPlatformTopOffset;
+        var topOffset = ElevatedPlatformTopOffset;
 
         var topSouthWest = new Vector3(west, GetPathCornerHeight(path, true, false, baseHeight) + topOffset, south);
         var topSouthEast = new Vector3(east, GetPathCornerHeight(path, false, false, baseHeight) + topOffset, south);
@@ -320,7 +319,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         if (surface.BaseZ > path.BaseZ) return false;
         if (!path.IsSloped) return surface.SlopeFlags != 0;
         
-        return path.SlopeDirection <= DirectionSouth && surface.SlopeFlags != ExpectedSurfaceSlopeByPathDirection[path.SlopeDirection];
+        return path.SlopeDirection <= DirectionSouth && surface.SlopeFlags != expectedSurfaceSlopeByPathDirection[path.SlopeDirection];
     }
 
     protected static float GetPathHeight(RCTTilePathData path, float worldX, float worldZ)

@@ -5,7 +5,7 @@ namespace RCT3D.Render.Tracks.Meshing;
 
 internal sealed class SweptRailProfileGenerator(TrackRailProfile profile) : ITrackPartGenerator
 {
-    public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd, Vector3? startTangent, Vector3? endTangent) =>
+    public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd, Vector3? startTangent, Vector3? endTangent, Vector3? preferredSide, bool smoothRollTransition) =>
         TrackMeshPartGenerator.AddSweptProfile(
             geometry,
             centerline,
@@ -16,7 +16,9 @@ internal sealed class SweptRailProfileGenerator(TrackRailProfile profile) : ITra
             rollBegin,
             rollEnd,
             startTangent,
-            endTangent);
+            endTangent,
+            preferredSide,
+            smoothRollTransition);
 }
 
 internal static class TrackMeshPartGenerator
@@ -31,7 +33,9 @@ internal static class TrackMeshPartGenerator
         float rollBegin,
         float rollEnd,
         Vector3? startTangent = null,
-        Vector3? endTangent = null)
+        Vector3? endTangent = null,
+        Vector3? preferredSide = null,
+        bool smoothRollTransition = false)
     {
         if (centerline.Length < 2) return;
 
@@ -66,12 +70,20 @@ internal static class TrackMeshPartGenerator
                 if (tangent.LengthSquared() <= float.Epsilon) return;
 
                 tangent = Vector3.Normalize(tangent);
-                var side = Vector3.Cross(Vector3.UnitY, tangent);
-                side = side.LengthSquared() <= float.Epsilon
-                    ? Vector3.UnitX : Vector3.Normalize(side);
+                var side = preferredSide.HasValue
+                    ? preferredSide.Value - tangent * Vector3.Dot(preferredSide.Value, tangent)
+                    : Vector3.Cross(Vector3.UnitY, tangent);
+                if (side.LengthSquared() <= float.Epsilon)
+                    side = Vector3.UnitX - tangent * Vector3.Dot(Vector3.UnitX, tangent);
+                if (side.LengthSquared() <= float.Epsilon)
+                    side = Vector3.UnitZ - tangent * Vector3.Dot(Vector3.UnitZ, tangent);
+                side = Vector3.Normalize(side);
 
                 var up = Vector3.Normalize(Vector3.Cross(tangent, side));
-                var roll = rollBegin + (rollEnd - rollBegin) * station / (centerline.Length - 1);
+                var rollProgress = station / (float)(centerline.Length - 1);
+                if (smoothRollTransition)
+                    rollProgress = rollProgress * rollProgress * (3.0f - 2.0f * rollProgress);
+                var roll = rollBegin + (rollEnd - rollBegin) * rollProgress;
                 if (roll != 0.0f) {
                     var rotation = Quaternion.CreateFromAxisAngle(tangent, roll);
                     side = Vector3.Transform(side, rotation);

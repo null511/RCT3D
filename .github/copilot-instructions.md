@@ -6,6 +6,9 @@
 - Do not add or implement tests unless the user explicitly asks. For this feature, the user will manually verify behavior; limit validation to builds and static checks.
 - Execute code implementation requests in Agent mode, not left as a registered plan; the user is using Agent mode rather than Plan mode.
 - For RCT3DViewer integration, use the app's own OpenRCT2 config rather than assuming the main game's settings carry over, as the embedded OpenRCT2 instance is isolated from the main game's config/data location.
+- For ride configurations, do not directly reuse another ride's registry; give each ride an independent registry so future changes to one ride do not propagate to another.
+- For ride-support meshing, define reusable support builders by OpenRCT2 support-style enum rather than by ride type; each RideDefinition selects the builder matching its support style. Keep track-piece-to-support-placement mappings separate from support-style geometry so they can be shared across rides where OpenRCT2 painters use the same mapping.
+- For the looping coaster, the entry/exit slope segments should be length-adjustable, extend inward from the existing fixed endpoints, and be used to broaden the bottom of the loop. Keep the main loop curve logic intact and avoid changing the established overall apex height if feasible.
 
 ## Rendering Guidelines
 - Request source-derived terrain direction reasoning rather than guess-and-test; validate rendering hypotheses before making further geometry changes.
@@ -14,7 +17,6 @@
 - Implement frustum-culling in RCT3DViewer using a single 8×8-tile region-size constant; pack terrain/path/water geometry into category-level GPU buffers and retain per-region AABBs/index ranges for visible-range draws. Extract one CPU frustum per frame using the row-vector view-projection and Vulkan 0..w clip-depth convention. Sort visible water regions back-to-front; batch repeated path accessories (currently path lamps) by region/model/material with shared model meshes and instanced transforms. Keep region data suitable for a future quadtree and larger objects; do not consider the quadtree or future ride/support/shop geometry implemented yet.
 - For terrain-normal smoothing, constrain interpolation to the configured boundary width; do not average the two tile-triangle normals at diagonal vertices in a way that spreads interpolation across the whole center quad. Use geometry/interpolation boundaries so only the intended band is blended. Ensure terrain mesh normals are continuous within a tile, allowing normal discontinuities only at tile boundaries when the neighboring tile has been raised or lowered; deduplicate/reuse within-tile vertices accordingly.
 - For terrain material textures, use three packed maps: base RGBA where RGB is albedo and A is opacity; normal RGBA where R/G encode tangent-space normal X/Y and B is AO; specular RGB where R=roughness, G=metalness, and B=scalar SSS amount (no SSS color).
-- For TAA reprojection debugging, apply jitter manually through `taa_jitter`, not embedded in current/previous view-projection matrices; previous clip W is not the cause of terrain ghosting.
 
 ## Structural Guidelines
 - For wooden path supports, place horizontal side crossmembers between vertical support sections rather than at each section's midpoint; half-frequency means at every other section boundary, using normal beam thickness.
@@ -24,4 +26,4 @@
 - When interpreting topology diagrams, map and validate the explicit vertex/edge connectivity before claiming understanding; if the graph cannot be reliably inferred, ask for concrete connectivity rather than guess.
 
 ## Uniform Block Organization
-- When organizing custom uniform blocks, group fields by their commented type/category (Camera, Temporal, Scene), not by usage. Follow this preference rather than reorganizing fields based on usage.- When organizing custom uniform blocks, group fields by their commented type/category (Camera, Temporal, Scene), not by usage. Follow this preference rather than reorganizing fields based on usage.
+- When organizing custom uniform blocks, group fields by their commented type/category (Camera, Temporal, Scene), not by usage. Follow this preference rather than reorganizing fields based on usage.

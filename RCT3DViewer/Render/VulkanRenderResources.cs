@@ -25,6 +25,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
     public TerrainGraphicsResources? TerrainGraphicsResources { get; private set; }
     public TerrainGraphicsResources? PathGraphicsResources { get; private set; }
     public TerrainGraphicsResources? TrackGraphicsResources { get; private set; }
+    public TerrainGraphicsResources? RideSupportGraphicsResources { get; private set; }
     public WaterGraphicsResources? WaterGraphicsResources { get; private set; }
     public ModelGraphicsResources[] VehicleCubeGraphicsResources { get; private set; } = Array.Empty<ModelGraphicsResources>();
     public TerrainMaterialLibrary? TerrainMaterials { get; private set; }
@@ -70,6 +71,27 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         }
         catch {
             Dispose();
+            throw;
+        }
+    }
+
+    public void CreateRideSupportGraphicsResources()
+    {
+        RideSupportGraphicsResources?.Dispose();
+        RideSupportGraphicsResources = null;
+
+        var supportResources = new TerrainGraphicsResources(
+            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, TerrainMaterials!,
+            shaderNameOverride: Path.Combine("defer", "deferredTrack"), createWireframePipeline: true, colorAttachmentCount: 3,
+            useTrackVertexColor: true);
+
+        try {
+            supportResources.CreatePipeline();
+            supportResources.CreateTextureResources(CommandPool);
+            RideSupportGraphicsResources = supportResources;
+        }
+        catch {
+            supportResources.Dispose();
             throw;
         }
     }
@@ -373,6 +395,10 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         var trackResources = TrackGraphicsResources;
         TrackGraphicsResources = null;
         trackResources?.Dispose();
+
+        var rideSupportResources = RideSupportGraphicsResources;
+        RideSupportGraphicsResources = null;
+        rideSupportResources?.Dispose();
 
         var pathResources = PathGraphicsResources;
         PathGraphicsResources = null;
