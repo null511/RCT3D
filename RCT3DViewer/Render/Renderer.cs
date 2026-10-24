@@ -143,8 +143,8 @@ public sealed class Renderer : IDisposable
             deltaTime,
             activeFrameTimeMilliseconds => {
                 parkScene!.Update(frameCoordinator!.CurrentFrame);
-                var cameraTileX = (int)MathF.Floor(camera.Position.X / TerrainMeshBuilder.TileSize);
-                var cameraTileY = (int)MathF.Floor(camera.Position.Z / TerrainMeshBuilder.TileSize);
+                var cameraTileX = (int)MathF.Floor(camera.Position.X / WorldUnits.TileSize);
+                var cameraTileY = (int)MathF.Floor(camera.Position.Z / WorldUnits.TileSize);
                 ui.BuildFrameUi(deltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours, parkScene.IsPaused,
                     cameraTileX, cameraTileY, parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
                     parkPath => parkScene.LoadPark(parkPath, TerrainSkirtFloor), parkScene.TogglePause,

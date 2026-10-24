@@ -82,9 +82,9 @@ internal sealed class DeferredPassResources : IDisposable
                     new[] { targets.SceneOutputView, targets.TaaHistoryView }
                 });
 
-            tonemap = new FullscreenPassResources(context, swapchainRenderPass, "post/tonemap",
+            tonemap = new FullscreenPassResources(context, swapchainRenderPass, "post/tonemap", uniformBuffers.DescriptorSetLayout,
                 new[] {
-                    new[] { targets.SceneOutputView }
+                    new[] { targets.SceneOutputView, targets.AlbedoView, targets.NormalsView }
                 });
 
             Composite = composite;

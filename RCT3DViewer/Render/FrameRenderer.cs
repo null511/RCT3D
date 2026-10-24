@@ -1,7 +1,8 @@
 using RCT3D.Render.Buffers;
 using RCT3D.Render.Paths.Meshing;
+using RCT3D.Render.Rides.Supports;
+using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Terrain;
-using RCT3D.Render.Tracks.Meshing;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using System.Numerics;
@@ -57,9 +58,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         if (!Matrix4x4.Invert(viewProjection, out var inverseViewProjection))
             throw new InvalidOperationException("The camera view-projection matrix is not invertible.");
 
-        CalculateSunDirection(out var sunElevation, out var sunDirection);
+        CalculateSunDirection(out _, out var sunDirection);
         var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
-        var ambientLight = 0.15f + 0.15f * MathF.Max(sunElevation, 0.0f);
         var cameraPosition = camera.Position;
         var renderDimensions = new Vector2D<uint>(extent.Width, extent.Height);
         var uniformDescriptorSet = resources.UniformBufferResources!.GetDescriptorSet(currentFrame);
@@ -79,11 +79,10 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             RenderDimensions = renderDimensions,
             TaaJitter = taaJitter,
             SunDirection = new Vector4(sunDirection, 0.0f),
-            Lighting = new Vector4(ambientLight, 1.25f, 0.0f, 0.0f),
             FrameCounter = frameCounter,
             TaaSharpen = ui.Sharpening,
             MipBias = ui.MipBias,
-            Padding = 0.0f,
+            DebugView = ui.DebugView,
         };
 
         resources.UniformBufferResources.Update(currentFrame, cameraUniforms, temporalUniforms, sceneUniforms);
@@ -326,7 +325,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         Vk.CmdBeginRenderPass(commandBuffer, in presentationRenderPassInfo, SubpassContents.Inline);
         Vk.CmdSetViewport(commandBuffer, 0, 1, &viewport);
         Vk.CmdSetScissor(commandBuffer, 0, 1, &scissor);
-        deferredPassResources.Tonemap.Draw(commandBuffer, 0);
+        deferredPassResources.Tonemap.Draw(commandBuffer, 0, uniformDescriptorSet);
         resources.ImGuiRenderer?.Render(commandBuffer, imageIndex);
         Vk.CmdEndRenderPass(commandBuffer);
         Vk.EndCommandBuffer(commandBuffer);

@@ -8,6 +8,7 @@ public sealed class TerrainMaterialLibrary
 {
     private readonly Dictionary<uint, uint> _layersByObjectIdHash;
     private readonly Dictionary<uint, GrassTextureLayers> _grassLayersByObjectIdHash;
+    private readonly Dictionary<uint, uint> _sidingLayersByEdgeObjectIdHash;
 
     private sealed record GrassTextureLayers(uint[] Mowed, uint[] Short, uint[] Long);
 
@@ -23,7 +24,8 @@ public sealed class TerrainMaterialLibrary
 
     private TerrainMaterialLibrary(
         int width, int height, byte[] pixels, byte[] normalPixels, byte[] specularPixels, Dictionary<uint, uint> layersByObjectIdHash,
-        Dictionary<uint, GrassTextureLayers> grassLayersByObjectIdHash, uint fallbackLayer)
+        Dictionary<uint, GrassTextureLayers> grassLayersByObjectIdHash, Dictionary<uint, uint> sidingLayersByEdgeObjectIdHash,
+        uint fallbackLayer)
     {
         Width = width;
         Height = height;
@@ -34,6 +36,12 @@ public sealed class TerrainMaterialLibrary
 
         _layersByObjectIdHash = layersByObjectIdHash;
         _grassLayersByObjectIdHash = grassLayersByObjectIdHash;
+        _sidingLayersByEdgeObjectIdHash = sidingLayersByEdgeObjectIdHash;
+    }
+
+    public uint GetSidingLayer(uint edgeObjectIdHash, uint fallbackLayer)
+    {
+        return _sidingLayersByEdgeObjectIdHash.TryGetValue(edgeObjectIdHash, out var layer) ? layer : fallbackLayer;
     }
 
     public uint GetLayer(uint objectIdHash)
@@ -95,7 +103,7 @@ public sealed class TerrainMaterialLibrary
         return new TerrainMaterialLibrary(width, height, pixels,
             CreateSolidPixels(width, height, 128, 128, 255, 255),
             CreateSolidPixels(width, height, 255, 0, 0, 0),
-            new Dictionary<uint, uint>(), new Dictionary<uint, GrassTextureLayers>(), 0);
+            new Dictionary<uint, uint>(), new Dictionary<uint, GrassTextureLayers>(), new Dictionary<uint, uint>(), 0);
     }
 
     private static byte[] CreateSolidPixels(int width, int height, byte red, byte green, byte blue, byte alpha)
@@ -129,23 +137,26 @@ public sealed class TerrainMaterialLibrary
     public static TerrainMaterialLibrary Load(string assetDirectory, string? additionalArrayProperty, string missingTexturePath)
     {
         var manifestPath = Path.Combine(assetDirectory, "materials.json");
+
         using var manifestStream = File.OpenRead(manifestPath);
         using var manifest = JsonDocument.Parse(manifestStream);
 
         var materials = manifest.RootElement.GetProperty("materials").EnumerateArray().ToList();
+
         if (additionalArrayProperty is not null && manifest.RootElement.TryGetProperty(additionalArrayProperty, out var additionalMaterials))
             materials.AddRange(additionalMaterials.EnumerateArray());
+
         if (materials.Count == 0) throw new InvalidDataException("Terrain material manifest has no materials.");
 
         var images = new List<(string ObjectId, byte[] Pixels, byte[] NormalPixels, byte[] SpecularPixels, int Width, int Height)>(materials.Count);
         var objectIds = new HashSet<string>(StringComparer.Ordinal);
         var layers = new Dictionary<uint, uint>();
         var grassLayers = new Dictionary<uint, GrassTextureLayers>();
+        var sidingLayers = new Dictionary<uint, uint>();
         int? width = null;
         int? height = null;
 
-        void AddImage(string objectId, string texture, string textureDirectory)
-        {
+        void AddImage(string objectId, string texture, string textureDirectory) {
             if (string.IsNullOrWhiteSpace(texture))
                 throw new InvalidDataException("Terrain material texture values must not be empty.");
 
@@ -159,11 +170,11 @@ public sealed class TerrainMaterialLibrary
             if (width.HasValue && (image.Width != width.Value || image.Height != height!.Value))
                 throw new InvalidDataException($"Terrain texture '{texture}' has dimensions {image.Width}x{image.Height}, expected {width}x{height}.");
 
-            byte[] LoadCompanion(string suffix, byte red, byte green, byte blue, byte alpha)
-            {
+            byte[] LoadCompanion(string suffix, byte red, byte green, byte blue, byte alpha) {
                 var companionPath = Path.Combine(
                     Path.GetDirectoryName(texturePath)!,
                     $"{Path.GetFileNameWithoutExtension(texturePath)}_{suffix}{Path.GetExtension(texturePath)}");
+
                 if (!File.Exists(companionPath))
                     return CreateSolidPixels(image.Width, image.Height, red, green, blue, alpha);
 
@@ -186,6 +197,7 @@ public sealed class TerrainMaterialLibrary
         var missingTextureFullPath = Path.GetFullPath(missingTexturePath);
         var missingTextureDirectory = Path.GetDirectoryName(missingTextureFullPath)
             ?? throw new InvalidDataException($"Missing texture path has no directory: {missingTexturePath}");
+
         var fallbackLayer = (uint)images.Count;
         AddImage(string.Empty, Path.GetFileName(missingTextureFullPath), missingTextureDirectory);
 
@@ -201,6 +213,25 @@ public sealed class TerrainMaterialLibrary
                 throw new InvalidDataException($"Terrain object identifier hash collision: {objectId}");
 
             AddImage(objectId, texture, assetDirectory);
+        }
+
+        var sidingPath = Path.Combine(assetDirectory, "Sides");
+
+        if (manifest.RootElement.TryGetProperty("sidingMaterials", out var sidingMaterials)) {
+            var sidingObjectIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var material in sidingMaterials.EnumerateArray()) {
+                var objectId = material.GetProperty("objectId").GetString();
+                var texture = material.GetProperty("texture").GetString();
+
+                if (string.IsNullOrWhiteSpace(objectId) || string.IsNullOrWhiteSpace(texture) || !sidingObjectIds.Add(objectId))
+                    throw new InvalidDataException("Siding materials must have unique non-empty objectId and texture values.");
+
+                var layer = (uint)images.Count;
+                if (!sidingLayers.TryAdd(HashObjectId(objectId), layer))
+                    throw new InvalidDataException($"Terrain edge object identifier hash collision: {objectId}");
+
+                AddImage(objectId, texture, sidingPath);
+            }
         }
 
         if (manifest.RootElement.TryGetProperty("grassVariants", out var grassVariantEntries)) {
@@ -248,13 +279,15 @@ public sealed class TerrainMaterialLibrary
             images[layer].SpecularPixels.CopyTo(specularPixels, layer * layerSize);
         }
 
-        return new TerrainMaterialLibrary(width.Value, height.Value, pixels, normalPixels, specularPixels, layers, grassLayers, fallbackLayer);
+        return new TerrainMaterialLibrary(width.Value, height.Value, pixels, normalPixels, specularPixels,
+            layers, grassLayers, sidingLayers, fallbackLayer);
     }
 
     private static string GetSharedMissingTexturePath(string assetDirectory)
     {
         var textureRoot = Directory.GetParent(Path.GetFullPath(assetDirectory))?.FullName
             ?? throw new InvalidDataException($"Texture asset directory has no parent: {assetDirectory}");
+
         return Path.Combine(textureRoot, "missing.png");
     }
 

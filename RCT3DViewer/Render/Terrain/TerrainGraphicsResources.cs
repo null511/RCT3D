@@ -1,9 +1,10 @@
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
-using RCT3D.Render.Tracks.Meshing;
+using RCT3D.Render.Rides.Supports;
 using Silk.NET.Vulkan;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using RCT3D.Render.Rides.Tracks;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace RCT3D.Render.Terrain;
@@ -174,7 +175,7 @@ internal sealed unsafe class TerrainGraphicsResources(
         var rasterizer = new PipelineRasterizationStateCreateInfo {
             SType = StructureType.PipelineRasterizationStateCreateInfo,
             PolygonMode = PolygonMode.Fill,
-            CullMode = CullModeFlags.None,
+            CullMode = CullModeFlags.BackBit,
             FrontFace = FrontFace.CounterClockwise,
             LineWidth = 1.0f,
         };

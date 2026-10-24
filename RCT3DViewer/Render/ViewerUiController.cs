@@ -25,10 +25,12 @@ internal sealed class ViewerUiController
     private double _displayedFrameTimeMilliseconds;
     private bool _wireframeEnabled;
     private bool _taaEnabled = false;
+    private int _debugView;
     private float _sharpening = 0.5f;
     private float _mipBias = -1.0f;
+    private static readonly string[] DebugViewOptions = { "None", "Albedo", "Geometry Normal", "Texture Normal" };
 
-    public float TimeOfDayHours => _timeOfDayHours;
+    //public float TimeOfDayHours => _timeOfDayHours;
     public float EffectiveTimeOfDayHours => _useGameTime && _gameTimeOfDayHours is float gameTime
         ? gameTime
         : _timeOfDayHours;
@@ -36,6 +38,7 @@ internal sealed class ViewerUiController
     public float ZenithDegrees => _zenithDegrees;
     public bool WireframeEnabled => _wireframeEnabled;
     public bool TaaEnabled => _taaEnabled;
+    public uint DebugView => (uint)_debugView;
     public float Sharpening => _sharpening;
     public float MipBias => _mipBias;
     //public string? LoadedParkPath => _loadedParkPath;
@@ -108,6 +111,8 @@ internal sealed class ViewerUiController
             }
 
             if (ImGui.BeginMenu("View")) {
+                if (ImGui.MenuItem("Wireframe", string.Empty, _wireframeEnabled, wireframeAvailable))
+                    _wireframeEnabled = !_wireframeEnabled;
                 ImGui.MenuItem("Graphics Options", string.Empty, ref _showGraphicsOptions);
                 ImGui.MenuItem("Debug", string.Empty, ref _showDebug);
                 ImGui.EndMenu();
@@ -163,10 +168,8 @@ internal sealed class ViewerUiController
         if (_showGraphicsOptions) {
             var graphicsOptionsVisible = ImGui.Begin("Graphics Options", ref _showGraphicsOptions, ImGuiWindowFlags.AlwaysAutoResize);
             if (graphicsOptionsVisible) {
-                ImGui.BeginDisabled(!wireframeAvailable);
-                ImGui.Checkbox("Wireframe", ref _wireframeEnabled);
-                ImGui.EndDisabled();
                 ImGui.Checkbox("TAA", ref _taaEnabled);
+                ImGui.Combo("Debug View", ref _debugView, DebugViewOptions, DebugViewOptions.Length);
                 ImGui.SliderFloat("Sharpening", ref _sharpening, 0.0f, 1.0f, "%.2f");
                 ImGui.SliderFloat("Mip Bias", ref _mipBias, -2.0f, 0.0f, "%.2f");
             }

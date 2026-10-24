@@ -6,7 +6,7 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 20;
+    private const uint ExpectedAbiVersion = 21;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -97,8 +97,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (version != ExpectedAbiVersion)
                 throw new InvalidOperationException($"Unsupported OpenRCT2 adapter ABI version {version}; expected {ExpectedAbiVersion}. Loaded library: '{_libraryPath}'.");
             
-            if (Marshal.SizeOf<RCTTileSurfaceData>() != 16)
-                throw new InvalidOperationException("RCTTileSurfaceData must be 16 bytes to match the OpenRCT2 adapter ABI.");
+            if (Marshal.SizeOf<RCTTileSurfaceData>() != 20)
+                throw new InvalidOperationException("RCTTileSurfaceData must be 20 bytes to match the OpenRCT2 adapter ABI.");
             
             if (Marshal.SizeOf<RCTTilePathData>() != 28)
                 throw new InvalidOperationException("RCTTilePathData must be 28 bytes to match the OpenRCT2 adapter ABI.");
@@ -272,6 +272,7 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 public struct RCTTileSurfaceData
 {
     public uint TerrainSurfaceIdHash;
+    public uint TerrainEdgeIdHash;
     public byte BaseZ;
     public byte SlopeFlags;
     public byte NorthCornerHeight;

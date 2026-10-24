@@ -4,5 +4,9 @@
     { "objectId": "rct2.terrain_surface.grass", "texture": "grass.png" },
     { "objectId": "rct2.terrain_surface.rock", "texture": "rock.png" },
     { "objectId": "rct2.terrain_surface.sand", "texture": "sand.png" }
+  ],
+  "sidingMaterials": [
+    { "objectId": "rct2.terrain_edge.wood_red", "texture": "wood_red.png" },
+    { "objectId": "rct2.terrain_edge.rock", "texture": "rock.png" }
   ]
 }

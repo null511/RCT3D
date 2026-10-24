@@ -1,23 +1,21 @@
-using System.Numerics;
 using RCT3D.Interop;
+using System.Numerics;
 
 namespace RCT3D.Render.Terrain;
 
 internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 {
-    internal const float TileSize = 3.0f;
-    private const float BaseHeightScale = 0.75f;
     private const float CornerHeightScale = 1.5f;
     private const float NormalInterpolationBoundaryFraction = 1.0f / 8.0f;
 
     private readonly List<TerrainVertex> _vertices = new();
     private readonly List<uint> _indices = new();
-    private readonly List<Vector3> _waterVertices = new();
-    private readonly List<uint> _waterIndices = new();
+    private readonly List<Vector3> waterVertices = new();
+    private readonly List<uint> waterIndices = new();
     private readonly List<RenderRegionIndexRange> _regions = new();
-    private readonly List<RenderRegionIndexRange> _waterRegions = new();
+    private readonly List<RenderRegionIndexRange> waterRegions = new();
 
-    private static readonly byte[] TileTriangleIndices = {
+    private static readonly byte[] tileTriangleIndices = [
         // top-left
         0, 12, 1,
         12, 0, 8,
@@ -50,7 +48,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         18, 9, 15,
 
         // right edge
-        10, 19, 14,
+        19, 10, 14,
         11, 10, 19,
         11, 19, 17,
 
@@ -64,8 +62,8 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         12, 19, 13,
         19, 12, 17,
         17, 12, 18,
-        17, 18, 16,
-    };
+        17, 18, 16
+    ];
 
     private int _skirtSections;
     private int _skirtTriangles;
@@ -76,39 +74,41 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
     {
         _vertices.Clear();
         _indices.Clear();
-        _waterVertices.Clear();
-        _waterIndices.Clear();
+        waterVertices.Clear();
+        waterIndices.Clear();
         _regions.Clear();
-        _waterRegions.Clear();
+        waterRegions.Clear();
 
         _skirtSections = 0;
         _skirtTriangles = 0;
         _flatEdgesSkipped = 0;
+
         foreach (var region in RenderRegionLayout.Enumerate(width, height)) {
             var tileBounds = RenderRegionLayout.GetTileBounds(region, width, height);
 
             var firstVertex = _vertices.Count;
             var firstIndex = _indices.Count;
-            var firstWaterVertex = _waterVertices.Count;
-            var firstWaterIndex = _waterIndices.Count;
+            var firstWaterVertex = waterVertices.Count;
+            var firstWaterIndex = waterIndices.Count;
 
             for (var y = tileBounds.TileY; y < tileBounds.TileY + tileBounds.Height; y++)
             for (var x = tileBounds.TileX; x < tileBounds.TileX + tileBounds.Width; x++) {
                 var surface = surfaces[y * width + x];
 
                 if (surface.WaterHeight > 0)
-                    AddWaterTile(x, y, surface.WaterHeight * (BaseHeightScale / 8.0f), TileSize);
+                    AddWaterTile(x, y, surface.WaterHeight * (WorldUnits.HeightPerBaseUnit / 8.0f), WorldUnits.TileSize);
 
                 GetCornerHeights(surface, out var north, out var east, out var south, out var west);
 
                 // OpenRCT2's corner flags map North/East/South/West to the tile's
                 // northeast/southeast/southwest/northwest vertices, respectively.
-                var cNorth = new Vector3((x + 1) * TileSize, north, (y + 1) * TileSize);
-                var cEast = new Vector3((x + 1) * TileSize, east, y * TileSize);
-                var cSouth = new Vector3(x * TileSize, south, y * TileSize);
-                var cWest = new Vector3(x * TileSize, west, (y + 1) * TileSize);
+                var cNorth = new Vector3((x + 1) * WorldUnits.TileSize, north, (y + 1) * WorldUnits.TileSize);
+                var cEast = new Vector3((x + 1) * WorldUnits.TileSize, east, y * WorldUnits.TileSize);
+                var cSouth = new Vector3(x * WorldUnits.TileSize, south, y * WorldUnits.TileSize);
+                var cWest = new Vector3(x * WorldUnits.TileSize, west, (y + 1) * WorldUnits.TileSize);
 
                 var materialId = GetMaterialLayer(surface, x, y);
+                var sidingMaterialId = GetSidingMaterialLayer(surface);
                 AddTerrainTile(x, y, width, height, surfaces, north, east, south, west, materialId);
 
                 var eastEdgeNormal = Vector3.UnitX;
@@ -118,11 +118,11 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                     GetCornerHeights(eastNeighbor, out _, out _, out var neighborSouth, out var neighborWest);
 
                     AddSkirtEdge(cEast, east, cNorth, north, neighborSouth, neighborWest,
-                        materialId, GetMaterialLayer(eastNeighbor, x + 1, y), eastEdgeNormal);
+                        sidingMaterialId, GetSidingMaterialLayer(eastNeighbor), eastEdgeNormal);
                 }
                 else {
                     AddSkirtEdge(cEast, east, cNorth, north, skirtFloor, skirtFloor,
-                        materialId, materialId, eastEdgeNormal);
+                        sidingMaterialId, sidingMaterialId, eastEdgeNormal);
                 }
 
                 var northEdgeNormal = Vector3.UnitZ;
@@ -132,25 +132,25 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                     GetCornerHeights(northNeighbor, out _, out var neighborEast, out var neighborSouth, out _);
 
                     AddSkirtEdge(cWest, west, cNorth, north, neighborSouth, neighborEast,
-                        materialId, GetMaterialLayer(northNeighbor, x, y + 1), northEdgeNormal);
+                        sidingMaterialId, GetSidingMaterialLayer(northNeighbor), northEdgeNormal);
                 }
                 else {
                     AddSkirtEdge(cWest, west, cNorth, north, skirtFloor, skirtFloor,
-                        materialId, materialId, northEdgeNormal);
+                        sidingMaterialId, sidingMaterialId, northEdgeNormal);
                 }
 
                 if (x == 0)
-                    AddSkirtEdge(cSouth, south, cWest, west, skirtFloor, skirtFloor, materialId, materialId, -Vector3.UnitX);
+                    AddSkirtEdge(cSouth, south, cWest, west, skirtFloor, skirtFloor, sidingMaterialId, sidingMaterialId, -Vector3.UnitX);
 
                 if (y == 0)
-                    AddSkirtEdge(cSouth, south, cEast, east, skirtFloor, skirtFloor, materialId, materialId, -Vector3.UnitZ);
+                    AddSkirtEdge(cSouth, south, cEast, east, skirtFloor, skirtFloor, sidingMaterialId, sidingMaterialId, -Vector3.UnitZ);
             }
 
             if (_indices.Count > firstIndex)
                 _regions.Add(RenderRegionMeshRanges.Create(region, _vertices, _indices, firstVertex, firstIndex));
 
-            if (_waterIndices.Count > firstWaterIndex)
-                _waterRegions.Add(RenderRegionMeshRanges.Create(region, _waterVertices, _waterIndices, firstWaterVertex, firstWaterIndex));
+            if (waterIndices.Count > firstWaterIndex)
+                waterRegions.Add(RenderRegionMeshRanges.Create(region, waterVertices, waterIndices, firstWaterVertex, firstWaterIndex));
         }
 
         return new TerrainMeshBuildData(
@@ -162,9 +162,9 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                 _flatEdgesSkipped,
                 _regions.ToArray()),
             new WaterMeshData(
-                _waterVertices.ToArray(),
-                _waterIndices.ToArray(),
-                _waterRegions.ToArray()));
+                waterVertices.ToArray(),
+                waterIndices.ToArray(),
+                waterRegions.ToArray()));
     }
 
     private uint GetMaterialLayer(RCTTileSurfaceData surface, int x, int y)
@@ -175,6 +175,11 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
             surface.CanGrowGrass != 0,
             x,
             y);
+    }
+
+    private uint GetSidingMaterialLayer(RCTTileSurfaceData surface)
+    {
+        return materials.GetSidingLayer(surface.TerrainEdgeIdHash, materials.FallbackLayer);
     }
 
     private void AddTerrainTile(
@@ -237,7 +242,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
             _vertices.Add(new TerrainVertex(point, normal, new Vector2(x + u, y + v), materialId));
         }
 
-        foreach (var index in TileTriangleIndices)
+        foreach (var index in tileTriangleIndices)
             _indices.Add(firstVertex + index);
     }
 
@@ -248,7 +253,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
             ? (north - west) * u + (north - east) * v + east - north + west
             : south + (east - south) * u + (west - south) * v;
 
-        return new Vector3((x + u) * TileSize, height, (y + v) * TileSize);
+        return new Vector3((x + u) * WorldUnits.TileSize, height, (y + v) * WorldUnits.TileSize);
     }
 
     private Vector3 GetInterpolatedNormal(
@@ -316,8 +321,8 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 
     private static Vector3 GetDiagonalAdjustedNormal(Vector3 facetNormal, Vector3 diagonalNormal, float u, float v)
     {
-        var distanceFromDiagonal = MathF.Abs(u + v - 1.0f) * TileSize / MathF.Sqrt(2.0f);
-        var boundaryWidth = TileSize * NormalInterpolationBoundaryFraction;
+        var distanceFromDiagonal = MathF.Abs(u + v - 1.0f) * WorldUnits.TileSize / MathF.Sqrt(2.0f);
+        var boundaryWidth = WorldUnits.TileSize * NormalInterpolationBoundaryFraction;
         var blend = Math.Clamp(1.0f - distanceFromDiagonal / boundaryWidth, 0.0f, 1.0f);
         return blend > 0.0f
             ? Vector3.Normalize(Vector3.Lerp(facetNormal, diagonalNormal, blend))
@@ -397,7 +402,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 
     private static void GetCornerHeights(RCTTileSurfaceData surface, out float north, out float east, out float south, out float west)
     {
-        var baseHeight = surface.BaseZ * BaseHeightScale;
+        var baseHeight = surface.BaseZ * WorldUnits.HeightPerBaseUnit;
         north = baseHeight + surface.NorthCornerHeight * CornerHeightScale;
         east = baseHeight + surface.EastCornerHeight * CornerHeightScale;
         south = baseHeight + surface.SouthCornerHeight * CornerHeightScale;
@@ -406,10 +411,10 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 
     private static Vector3 GetBaseTriangleNormal(float north, float east, float south, float west, bool firstTriangle)
     {
-        var cNorth = new Vector3(TileSize, north, TileSize);
-        var cEast = new Vector3(TileSize, east, 0.0f);
+        var cNorth = new Vector3(WorldUnits.TileSize, north, WorldUnits.TileSize);
+        var cEast = new Vector3(WorldUnits.TileSize, east, 0.0f);
         var cSouth = new Vector3(0.0f, south, 0.0f);
-        var cWest = new Vector3(0.0f, west, TileSize);
+        var cWest = new Vector3(0.0f, west, WorldUnits.TileSize);
 
         return firstTriangle
             ? Vector3.Normalize(Vector3.Cross(cEast - cNorth, cWest - cNorth))
@@ -418,19 +423,19 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 
     private void AddWaterTile(int x, int y, float waterHeight, float tileSize)
     {
-        var tileOrigin = _waterVertices.Count;
+        var tileOrigin = waterVertices.Count;
 
-        _waterVertices.Add(new Vector3((x + 1) * tileSize, waterHeight, (y + 1) * tileSize));
-        _waterVertices.Add(new Vector3((x + 1) * tileSize, waterHeight, y * tileSize));
-        _waterVertices.Add(new Vector3(x * tileSize, waterHeight, (y + 1) * tileSize));
-        _waterVertices.Add(new Vector3(x * tileSize, waterHeight, y * tileSize));
+        waterVertices.Add(new Vector3((x + 1) * tileSize, waterHeight, (y + 1) * tileSize));
+        waterVertices.Add(new Vector3((x + 1) * tileSize, waterHeight, y * tileSize));
+        waterVertices.Add(new Vector3(x * tileSize, waterHeight, (y + 1) * tileSize));
+        waterVertices.Add(new Vector3(x * tileSize, waterHeight, y * tileSize));
 
-        _waterIndices.Add((uint)tileOrigin);
-        _waterIndices.Add((uint)tileOrigin + 1);
-        _waterIndices.Add((uint)tileOrigin + 2);
-        _waterIndices.Add((uint)tileOrigin + 1);
-        _waterIndices.Add((uint)tileOrigin + 3);
-        _waterIndices.Add((uint)tileOrigin + 2);
+        waterIndices.Add((uint)tileOrigin);
+        waterIndices.Add((uint)tileOrigin + 1);
+        waterIndices.Add((uint)tileOrigin + 2);
+        waterIndices.Add((uint)tileOrigin + 1);
+        waterIndices.Add((uint)tileOrigin + 3);
+        waterIndices.Add((uint)tileOrigin + 2);
     }
 
     private void AddSkirtEdge(Vector3 edgeStart, float surfaceAStart, Vector3 edgeEnd, float surfaceAEnd,
@@ -474,14 +479,15 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 
         var materialId = aIsHigher ? materialA : materialB;
         var normal = aIsHigher ? normalA : -normalA;
+        var tangent = Vector3.Normalize(Vector3.Cross(normal, Vector3.UnitY));
         var startPosition = Vector3.Lerp(edgeStart, edgeEnd, startT);
         var endPosition = Vector3.Lerp(edgeStart, edgeEnd, endT);
         var topStart = new Vector3(startPosition.X, startHigh, startPosition.Z);
         var topEnd = new Vector3(endPosition.X, endHigh, endPosition.Z);
         var bottomStart = new Vector3(startPosition.X, startLow, startPosition.Z);
         var bottomEnd = new Vector3(endPosition.X, endLow, endPosition.Z);
-        var edgeUStart = (MathF.Abs(edgeEnd.X - edgeStart.X) > 0.0001f ? startPosition.X : startPosition.Z) / 3.0f;
-        var edgeUEnd = (MathF.Abs(edgeEnd.X - edgeStart.X) > 0.0001f ? endPosition.X : endPosition.Z) / 3.0f;
+        var edgeUStart = Vector3.Dot(startPosition, tangent) / 3.0f;
+        var edgeUEnd = Vector3.Dot(endPosition, tangent) / 3.0f;
         var baseIndex = (uint)_vertices.Count;
 
         _skirtSections++;
@@ -508,7 +514,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         var positionB = _vertices[(int)indexB].Position;
         var positionC = _vertices[(int)indexC].Position;
 
-        if (Vector3.Dot(Vector3.Cross(positionB - positionA, positionC - positionA), expectedNormal) < 0.0f)
+        if (Vector3.Dot(Vector3.Cross(positionB - positionA, positionC - positionA), expectedNormal) > 0.0f)
             (indexB, indexC) = (indexC, indexB);
 
         _indices.Add(indexA);

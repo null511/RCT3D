@@ -1,12 +1,18 @@
 import lib.colors;
+import lib.uniforms;
+import lib.octohedral;
 
 struct FullscreenVertexOutput {
 	float4 position : SV_Position;
 	float2 texCoord : TEXCOORD0;
 };
 
-[[vk::binding(0, 0)]] Texture2D<float4> sceneOutput;
-[[vk::binding(1, 0)]] SamplerState linearSampler;
+[[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
+[[vk::binding(0, 1)]] Texture2D<float4> sceneOutput;
+[[vk::binding(1, 1)]] Texture2D<float4> defer_albedo;
+[[vk::binding(2, 1)]] Texture2D<float4> defer_normals;
+[[vk::binding(3, 1)]] SamplerState linearSampler;
+[[vk::binding(4, 1)]] SamplerState nearestSampler;
 
 [shader("vertex")]
 FullscreenVertexOutput vertexMain(uint vertexId : SV_VertexID)
@@ -28,9 +34,24 @@ float4 fragmentMain(FullscreenVertexOutput input) : SV_Target
 
     //color = getColorSpace().toLinear(color);
 
-     color = aces_fit_tonemap(color);
+    color = aces_fit_tonemap(color);
+
+    switch (sceneUniforms.debugView) {
+        case DebugView.GeoNormal:
+            color = octohedral::decode(defer_normals.Sample(nearestSampler, input.texCoord).xy) * 0.5 + 0.5;
+            break;
+        case DebugView.TexNormal:
+            color = octohedral::decode(defer_normals.Sample(nearestSampler, input.texCoord).zw) * 0.5 + 0.5;
+            break;
+    }
 
     color = linearToSrgb(color);
+
+    switch (sceneUniforms.debugView) {
+        case DebugView.Albedo:
+            color = defer_albedo.Sample(linearSampler, input.texCoord).rgb;
+            break;
+    }
 
     return float4(color, 1.0);
 }

@@ -15,9 +15,15 @@ struct SceneUniforms {
 	uint2 renderDimensions;
 	float2 taa_jitter;
 	float4 sunDirection;
-	float4 lighting;
 	uint frameCounter;
 	float taa_sharpen;
-	float mipBias;
-	float padding;
+    float mipBias;
+    DebugView debugView;
+};
+
+enum DebugView : uint {
+    None = 0,
+    Albedo = 1,
+    GeoNormal = 2,
+    TexNormal = 3,
 };

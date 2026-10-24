@@ -1,6 +1,6 @@
 using System.Numerics;
+using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Terrain;
-using RCT3D.Render.Tracks.Meshing;
 
 namespace RCT3D.Render;
 

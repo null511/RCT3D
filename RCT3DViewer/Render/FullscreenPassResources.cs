@@ -10,13 +10,15 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
     private readonly DescriptorSetLayout _descriptorSetLayout;
     private DescriptorPool _descriptorPool;
     private Sampler _sampler;
+    private Sampler _nearestSampler;
     private DescriptorSet[] _descriptorSets = Array.Empty<DescriptorSet>();
     private bool _disposed;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline Pipeline { get; private set; }
 
-    public FullscreenPassResources(VulkanDeviceContext context, RenderPass renderPass, string shaderName, ImageView[][] sampledImageSets)
+    public FullscreenPassResources(VulkanDeviceContext context, RenderPass renderPass, string shaderName,
+        DescriptorSetLayout uniformDescriptorSetLayout, ImageView[][] sampledImageSets)
     {
         _context = context;
 
@@ -26,7 +28,7 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
         try {
             _descriptorSetLayout = CreateDescriptorSetLayout(sampledImageSets[0].Length);
             CreateDescriptors(sampledImageSets);
-            CreatePipeline(renderPass, shaderName);
+            CreatePipeline(renderPass, shaderName, uniformDescriptorSetLayout);
         }
         catch {
             Dispose();
@@ -36,7 +38,7 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
 
     private DescriptorSetLayout CreateDescriptorSetLayout(int imageCount)
     {
-        var bindings = new DescriptorSetLayoutBinding[imageCount + 1];
+        var bindings = new DescriptorSetLayoutBinding[imageCount + 2];
 
         for (uint binding = 0; binding < imageCount; binding++) {
             bindings[binding] = new DescriptorSetLayoutBinding {
@@ -49,6 +51,12 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
 
         bindings[imageCount] = new DescriptorSetLayoutBinding {
             Binding = (uint)imageCount,
+            DescriptorType = DescriptorType.Sampler,
+            DescriptorCount = 1,
+            StageFlags = ShaderStageFlags.FragmentBit
+        };
+        bindings[imageCount + 1] = new DescriptorSetLayoutBinding {
+            Binding = (uint)imageCount + 1,
             DescriptorType = DescriptorType.Sampler,
             DescriptorCount = 1,
             StageFlags = ShaderStageFlags.FragmentBit
@@ -91,6 +99,12 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
         if (vk.CreateSampler(device, in samplerInfo, null, out _sampler) != Result.Success)
             throw new Exception("Failed to create fullscreen-pass sampler.");
 
+        var nearestSamplerInfo = samplerInfo;
+        nearestSamplerInfo.MagFilter = Filter.Nearest;
+        nearestSamplerInfo.MinFilter = Filter.Nearest;
+        if (vk.CreateSampler(device, in nearestSamplerInfo, null, out _nearestSampler) != Result.Success)
+            throw new Exception("Failed to create fullscreen-pass nearest sampler.");
+
         var poolSizes = new[] {
             new DescriptorPoolSize {
                 Type = DescriptorType.SampledImage,
@@ -98,7 +112,7 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
             },
             new DescriptorPoolSize {
                 Type = DescriptorType.Sampler,
-                DescriptorCount = (uint)sampledImageSets.Length,
+                DescriptorCount = checked((uint)(sampledImageSets.Length * 2)),
             },
         };
 
@@ -161,10 +175,22 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
             };
 
             vk.UpdateDescriptorSets(device, 1, &samplerWrite, 0, null);
+
+            var nearestSamplerDescriptor = new DescriptorImageInfo { Sampler = _nearestSampler };
+            var nearestSamplerWrite = new WriteDescriptorSet {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = _descriptorSets[setIndex],
+                DstBinding = (uint)imageCount + 1,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.Sampler,
+                PImageInfo = &nearestSamplerDescriptor
+            };
+
+            vk.UpdateDescriptorSets(device, 1, &nearestSamplerWrite, 0, null);
         }
     }
 
-    private void CreatePipeline(RenderPass renderPass, string shaderName)
+    private void CreatePipeline(RenderPass renderPass, string shaderName, DescriptorSetLayout uniformDescriptorSetLayout)
     {
         var vk = _context.Api;
         var device = _context.LogicalDevice;
@@ -199,18 +225,20 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
                 },
             };
 
-            var descriptorLayout = _descriptorSetLayout;
+            var descriptorLayouts = new[] { uniformDescriptorSetLayout, _descriptorSetLayout };
 
             var layoutInfo = new PipelineLayoutCreateInfo {
                 SType = StructureType.PipelineLayoutCreateInfo,
-                PSetLayouts = &descriptorLayout,
-                SetLayoutCount = 1,
+                SetLayoutCount = (uint)descriptorLayouts.Length,
             };
 
-            if (vk.CreatePipelineLayout(device, in layoutInfo, null, out var pipelineLayout) != Result.Success)
-                throw new Exception($"Failed to create {shaderName} pipeline layout.");
+            fixed (DescriptorSetLayout* descriptorLayoutsPointer = descriptorLayouts) {
+                layoutInfo.PSetLayouts = descriptorLayoutsPointer;
+                if (vk.CreatePipelineLayout(device, in layoutInfo, null, out var pipelineLayout) != Result.Success)
+                    throw new Exception($"Failed to create {shaderName} pipeline layout.");
 
-            PipelineLayout = pipelineLayout;
+                PipelineLayout = pipelineLayout;
+            }
 
             var vertexInput = new PipelineVertexInputStateCreateInfo {
                 SType = StructureType.PipelineVertexInputStateCreateInfo,
@@ -322,15 +350,17 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
         }
     }
 
-    public void Draw(CommandBuffer commandBuffer, int descriptorSetIndex)
+    public void Draw(CommandBuffer commandBuffer, int descriptorSetIndex, DescriptorSet uniformDescriptorSet)
     {
         if ((uint)descriptorSetIndex >= _descriptorSets.Length)
             throw new ArgumentOutOfRangeException(nameof(descriptorSetIndex));
 
         var vk = _context.Api;
         vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, Pipeline);
-        var descriptorSet = _descriptorSets[descriptorSetIndex];
-        vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, PipelineLayout, 0, 1, in descriptorSet, 0, null);
+        var descriptorSets = stackalloc DescriptorSet[2];
+        descriptorSets[0] = uniformDescriptorSet;
+        descriptorSets[1] = _descriptorSets[descriptorSetIndex];
+        vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, PipelineLayout, 0, 2, descriptorSets, 0, null);
         vk.CmdDraw(commandBuffer, 3, 1, 0, 0);
     }
 
@@ -346,12 +376,14 @@ internal sealed unsafe class FullscreenPassResources : IDisposable
         if (PipelineLayout.Handle != 0) vk.DestroyPipelineLayout(device, PipelineLayout, null);
         if (_descriptorPool.Handle != 0) vk.DestroyDescriptorPool(device, _descriptorPool, null);
         if (_sampler.Handle != 0) vk.DestroySampler(device, _sampler, null);
+        if (_nearestSampler.Handle != 0) vk.DestroySampler(device, _nearestSampler, null);
         if (_descriptorSetLayout.Handle != 0) vk.DestroyDescriptorSetLayout(device, _descriptorSetLayout, null);
 
         Pipeline = default;
         PipelineLayout = default;
         _descriptorPool = default;
         _sampler = default;
+        _nearestSampler = default;
         _descriptorSets = Array.Empty<DescriptorSet>();
     }
 }
