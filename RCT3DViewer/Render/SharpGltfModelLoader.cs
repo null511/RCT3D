@@ -146,6 +146,9 @@ internal sealed class SharpGltfModelLoader
                 if (sourceNormals is null)
                     GenerateNormals(vertices, indices, nodeMesh.Name ?? "mesh");
 
+                for (var index = 0; index < indices.Length; index += 3)
+                    (indices[index + 1], indices[index + 2]) = (indices[index + 2], indices[index + 1]);
+
                 var material = CreateMaterial(primitive.Material, textureCache);
                 meshes.Add(new ImportedModelMesh(nodeMesh.Name ?? "mesh", vertices, indices, material));
             }

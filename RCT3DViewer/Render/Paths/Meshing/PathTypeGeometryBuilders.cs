@@ -6,15 +6,15 @@ namespace RCT3D.Render.Paths.Meshing;
 
 internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 {
-    public const float TileSize = 3.0f;
-    public const float BaseHeightScale = 0.75f;
+    //public const float TileSize = 3.0f;
+    //public const float BaseHeightScale = 0.75f;
     private const float SurfaceBias = 0.004f;
     private const float RailHeight = 0.62f;
     private const float RailThickness = 0.045f;
     private const float RailPostHalfWidth = 0.055f;
     public const float SupportHalfWidth = 0.075f;
     private const float FullSupportSectionHeight = 3.0f;
-    public const float CornerInset = TileSize * 4.0f / 32.0f;
+    public const float CornerInset = WorldUnits.TileSize * 4.0f / 32.0f;
     public const float SupportBaseHalfWidth = 0.24f;
     public const float SupportBaseHeight = 0.18f;
     private const float ElevatedPlatformThickness = 0.18f;
@@ -48,11 +48,11 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     private void AddRailings(RCTTilePathData path, PathMeshGeometry geometry)
     {
-        var west = path.TileX * TileSize;
-        var east = (path.TileX + 1) * TileSize;
-        var south = path.TileY * TileSize;
-        var north = (path.TileY + 1) * TileSize;
-        var baseHeight = path.BaseZ * BaseHeightScale;
+        var west = path.TileX * WorldUnits.TileSize;
+        var east = (path.TileX + 1) * WorldUnits.TileSize;
+        var south = path.TileY * WorldUnits.TileSize;
+        var north = (path.TileY + 1) * WorldUnits.TileSize;
+        var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit;
         var material = Materials.GetRailingLayer(path.RailingsIdHash);
 
         if (path.IsSloped) {
@@ -100,12 +100,12 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     protected void AddSurface(RCTTilePathData path, PathMeshGeometry geometry)
     {
-        var west = path.TileX * TileSize;
-        var east = (path.TileX + 1) * TileSize;
-        var south = path.TileY * TileSize;
-        var north = (path.TileY + 1) * TileSize;
+        var west = path.TileX * WorldUnits.TileSize;
+        var east = (path.TileX + 1) * WorldUnits.TileSize;
+        var south = path.TileY * WorldUnits.TileSize;
+        var north = (path.TileY + 1) * WorldUnits.TileSize;
 
-        var baseHeight = path.BaseZ * BaseHeightScale;
+        var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit;
 
         var southWest = new Vector3(west, GetPathCornerHeight(path, true, false, baseHeight) + SurfaceBias, south);
         var southEast = new Vector3(east, GetPathCornerHeight(path, false, false, baseHeight) + SurfaceBias, south);
@@ -122,12 +122,12 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     protected void BuildElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry, uint material)
     {
-        var west = path.TileX * TileSize;
-        var east = (path.TileX + 1) * TileSize;
-        var south = path.TileY * TileSize;
-        var north = (path.TileY + 1) * TileSize;
+        var west = path.TileX * WorldUnits.TileSize;
+        var east = (path.TileX + 1) * WorldUnits.TileSize;
+        var south = path.TileY * WorldUnits.TileSize;
+        var north = (path.TileY + 1) * WorldUnits.TileSize;
 
-        var baseHeight = path.BaseZ * BaseHeightScale;
+        var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit;
         var topOffset = ElevatedPlatformTopOffset;
 
         var topSouthWest = new Vector3(west, GetPathCornerHeight(path, true, false, baseHeight) + topOffset, south);
@@ -189,7 +189,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     protected static void BuildRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, uint material, int postCount, PathMeshGeometry geometry)
     {
-        var tileSize = TileSize;
+        var tileSize = WorldUnits.TileSize;
         var startHeight = GetPathCornerHeight(path, start.X == path.TileX * tileSize, start.Z == (path.TileY + 1) * tileSize, baseHeight);
         var endHeight = GetPathCornerHeight(path, end.X == path.TileX * tileSize, end.Z == (path.TileY + 1) * tileSize, baseHeight);
         start.Y = startHeight;
@@ -324,11 +324,11 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     protected static float GetPathHeight(RCTTilePathData path, float worldX, float worldZ)
     {
-        var baseHeight = path.BaseZ * BaseHeightScale;
+        var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit;
 
         return InterpolateTileHeight(
-            (worldX - path.TileX * TileSize) / TileSize,
-            (worldZ - path.TileY * TileSize) / TileSize,
+            (worldX - path.TileX * WorldUnits.TileSize) / WorldUnits.TileSize,
+            (worldZ - path.TileY * WorldUnits.TileSize) / WorldUnits.TileSize,
             GetPathCornerHeight(path, false, true, baseHeight),
             GetPathCornerHeight(path, false, false, baseHeight),
             GetPathCornerHeight(path, true, false, baseHeight),
@@ -347,16 +347,16 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
             _ => false,
         };
 
-        return baseHeight + (uphill ? 2.0f * BaseHeightScale : 0.0f);
+        return baseHeight + (uphill ? 2.0f * WorldUnits.HeightPerBaseUnit : 0.0f);
     }
 
     protected static float GetSurfaceHeight(RCTTileSurfaceData surface, int tileX, int tileY, float worldX, float worldZ)
     {
-        var baseHeight = surface.BaseZ * BaseHeightScale;
+        var baseHeight = surface.BaseZ * WorldUnits.HeightPerBaseUnit;
 
         return InterpolateTileHeight(
-            (worldX - tileX * TileSize) / TileSize,
-            (worldZ - tileY * TileSize) / TileSize,
+            (worldX - tileX * WorldUnits.TileSize) / WorldUnits.TileSize,
+            (worldZ - tileY * WorldUnits.TileSize) / WorldUnits.TileSize,
             baseHeight + surface.NorthCornerHeight * CornerHeightScale,
             baseHeight + surface.EastCornerHeight * CornerHeightScale,
             baseHeight + surface.SouthCornerHeight * CornerHeightScale,

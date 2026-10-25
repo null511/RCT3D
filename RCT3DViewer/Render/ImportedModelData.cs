@@ -4,18 +4,11 @@ using System.Runtime.InteropServices;
 namespace RCT3D.Render;
 
 [StructLayout(LayoutKind.Sequential)]
-public struct ImportedModelVertex
+public struct ImportedModelVertex(Vector3 position, Vector3 normal, Vector2 textureCoordinate)
 {
-    public Vector3 Position;
-    public Vector3 Normal;
-    public Vector2 TextureCoordinate;
-
-    public ImportedModelVertex(Vector3 position, Vector3 normal, Vector2 textureCoordinate)
-    {
-        Position = position;
-        Normal = normal;
-        TextureCoordinate = textureCoordinate;
-    }
+    public Vector3 Position = position;
+    public Vector3 Normal = normal;
+    public Vector2 TextureCoordinate = textureCoordinate;
 }
 
 internal sealed record ImportedModelData(ImportedModelMesh[] Meshes, Vector3 BoundsMin, Vector3 BoundsMax);

@@ -10,8 +10,8 @@ internal sealed class WoodenPathGeometryBuilder(PathMaterialLibrary materials) :
         RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry,
         PathSupportStationRegistry supportStations)
     {
-        var tileOriginX = path.TileX * TileSize;
-        var tileOriginZ = path.TileY * TileSize;
+        var tileOriginX = path.TileX * WorldUnits.TileSize;
+        var tileOriginZ = path.TileY * WorldUnits.TileSize;
         var isNorthSouth = path.SupportOrientation == RCTPathSupportOrientation.NorthWestSouthEast;
         var firstEdge = isNorthSouth ? DirectionWest : DirectionSouth;
         var secondEdge = isNorthSouth ? DirectionEast : DirectionNorth;
@@ -26,11 +26,11 @@ internal sealed class WoodenPathGeometryBuilder(PathMaterialLibrary materials) :
             : new Vector2(tileOriginX, tileOriginZ + CornerInset);
 
         var secondStart = isNorthSouth
-            ? new Vector2(tileOriginX + TileSize - CornerInset, tileOriginZ)
-            : new Vector2(tileOriginX, tileOriginZ + TileSize - CornerInset);
+            ? new Vector2(tileOriginX + WorldUnits.TileSize - CornerInset, tileOriginZ)
+            : new Vector2(tileOriginX, tileOriginZ + WorldUnits.TileSize - CornerInset);
 
-        var firstEnd = isNorthSouth ? firstStart + new Vector2(0, TileSize) : firstStart + new Vector2(TileSize, 0);
-        var secondEnd = isNorthSouth ? secondStart + new Vector2(0, TileSize) : secondStart + new Vector2(TileSize, 0);
+        var firstEnd = isNorthSouth ? firstStart + new Vector2(0, WorldUnits.TileSize) : firstStart + new Vector2(WorldUnits.TileSize, 0);
+        var secondEnd = isNorthSouth ? secondStart + new Vector2(0, WorldUnits.TileSize) : secondStart + new Vector2(WorldUnits.TileSize, 0);
 
         AddWoodenSupportStation(path, surface, material, geometry, supportStations, startStation, isNorthSouth, firstEdge, firstStart, secondEdge, secondStart);
 

@@ -42,8 +42,8 @@ internal sealed class PathMeshGeometry
         vertices.Add(new TerrainVertex(c, normal, uvC, material));
 
         indices.Add(firstIndex);
-        indices.Add(firstIndex + 1);
         indices.Add(firstIndex + 2);
+        indices.Add(firstIndex + 1);
     }
 
     public void AddPrismFace(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 prismCenter, uint material)

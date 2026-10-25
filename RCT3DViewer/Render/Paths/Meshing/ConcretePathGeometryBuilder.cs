@@ -13,9 +13,8 @@ internal sealed class ConcretePathGeometryBuilder(PathMaterialLibrary materials)
 
     protected override void AddSupports(RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
     {
-        var tileSize = TileSize;
-        var x = (path.TileX + 0.5f) * tileSize;
-        var z = (path.TileY + 0.5f) * tileSize;
+        var x = (path.TileX + 0.5f) * WorldUnits.TileSize;
+        var z = (path.TileY + 0.5f) * WorldUnits.TileSize;
 
         var bottom = GetSurfaceHeight(surface, path.TileX, path.TileY, x, z);
         var top = GetPathHeight(path, x, z);
