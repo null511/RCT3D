@@ -207,6 +207,21 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
                 PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
                 PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit);
 
+            RecordSkyImageBarrier(commandBuffer, skyTargets.SkyIrradianceImage,
+                ImageLayout.Undefined, ImageLayout.TransferDstOptimal,
+                PipelineStageFlags.TopOfPipeBit, AccessFlags.None,
+                PipelineStageFlags.TransferBit, AccessFlags.TransferWriteBit);
+
+            var irradianceClearColor = new ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f);
+            var irradianceSubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1);
+            Vk.CmdClearColorImage(commandBuffer, skyTargets.SkyIrradianceImage, ImageLayout.TransferDstOptimal,
+                &irradianceClearColor, 1, &irradianceSubresourceRange);
+
+            RecordSkyImageBarrier(commandBuffer, skyTargets.SkyIrradianceImage,
+                ImageLayout.TransferDstOptimal, ImageLayout.General,
+                PipelineStageFlags.TransferBit, AccessFlags.TransferWriteBit,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit);
+
             if (Vk.EndCommandBuffer(commandBuffer) != Result.Success)
                 throw new InvalidOperationException("Failed to end the sky initialization command buffer.");
 

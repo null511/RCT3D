@@ -6,6 +6,7 @@ import lib.celestial;
 import lib.sky;
 import lib.sky_transmit;
 import lib.sky_view;
+import lib.sky_irradiance;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
@@ -20,8 +21,9 @@ struct ComputeInput {
 [[vk::binding(3, 1)]] Texture2D<float> defer_depth;
 [[vk::binding(4, 1)]] Texture2D<float4> sky_transmit;
 [[vk::binding(5, 1)]] Texture2D<float4> sky_view;
-[[vk::binding(6, 1)]] SamplerState linearSampler;
-[[vk::binding(7, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
+[[vk::binding(6, 1)]] Texture2D<float4> texSkyIrradiance;
+[[vk::binding(7, 1)]] SamplerState linearSampler;
+[[vk::binding(8, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
 
 [shader("compute")]
 [numthreads(16, 16)]
@@ -71,10 +73,10 @@ void main(ComputeInput input) {
         specular *= lerp(1.0, albedo, metalness);
 
         float3 sunLight = SunLux * getValFromTLUT(sky_transmit, linearSampler, sky_viewPos, sunDir);
-        float3 ambientLight = getValFromSkyLUT(sky_view, linearSampler, texNormal, sunDir);
+        float3 ambientLight = sampleSkyIrradiance(texSkyIrradiance, linearSampler, texNormal);
 
         float3 directLighting = (diffuseWeight * albedo * (diffuseNdotL / PI) + specular * nDotL) * sunLight;
-        float3 ambientLighting = diffuseWeight * albedo * ambientLight * ao;
+        float3 ambientLighting = ambientLight * diffuseWeight * albedo * ao;
         color = directLighting + ambientLighting + albedo * emission * 8.0;
     }
     else {
@@ -93,6 +95,11 @@ void main(ComputeInput input) {
 
         // Add atmosphere
         color += getValFromSkyLUT(sky_view, linearSampler, localViewDir, localSunDir);
+    }
+
+    int2 shit = input.globalPos - int2(8, 32);
+    if (all(shit > 0 && shit < 16)) {
+        color = texSkyIrradiance.Load(int3(shit, 0)).rgb;
     }
 
     sceneOutput[input.globalPos] = float4(color, 1.0);

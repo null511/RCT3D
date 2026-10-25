@@ -9,6 +9,7 @@ internal sealed class DeferredPassResources : IDisposable
     public ComputePassResources SkyTransmit { get; }
     public ComputePassResources SkyMultiscatter { get; }
     public ComputePassResources SkyView { get; }
+    public ComputePassResources SkyIrradiance { get; }
     public ComputePassResources TaaResolve { get; }
     public ComputePassResources TaaSharpen { get; }
     public FullscreenPassResources Tonemap { get; }
@@ -19,6 +20,7 @@ internal sealed class DeferredPassResources : IDisposable
         ComputePassResources? skyTransmit = null;
         ComputePassResources? skyMultiscatter = null;
         ComputePassResources? skyView = null;
+        ComputePassResources? skyIrradiance = null;
         ComputePassResources? taaResolve = null;
         ComputePassResources? taaSharpen = null;
         FullscreenPassResources? tonemap = null;
@@ -35,6 +37,11 @@ internal sealed class DeferredPassResources : IDisposable
                 new[] { new[] { skyTargets.SkyTransmitView, skyTargets.SkyMultiscatterView } },
                 new[] { skyTargets.SkyViewView });
 
+            skyIrradiance = new ComputePassResources(context, "post/sky_irradiance", uniformBuffers.DescriptorSetLayout,
+                new[] { new[] { skyTargets.SkyViewView, skyTargets.SkyIrradianceView } },
+                new[] { skyTargets.SkyIrradianceView },
+                new[] { new[] { ImageLayout.ShaderReadOnlyOptimal, ImageLayout.General } });
+
             composite = new ComputePassResources(context, "post/composite", uniformBuffers.DescriptorSetLayout,
                 new[] {
                     new[] {
@@ -44,6 +51,7 @@ internal sealed class DeferredPassResources : IDisposable
                         targets.DepthView,
                         skyTargets.SkyTransmitView,
                         skyTargets.SkyViewView,
+                        skyTargets.SkyIrradianceView,
                     },
                 },
                 new[] {
@@ -57,6 +65,7 @@ internal sealed class DeferredPassResources : IDisposable
                         ImageLayout.DepthStencilReadOnlyOptimal,
                         ImageLayout.ShaderReadOnlyOptimal,
                         ImageLayout.ShaderReadOnlyOptimal,
+                        ImageLayout.General,
                     },
                 });
 
@@ -91,6 +100,7 @@ internal sealed class DeferredPassResources : IDisposable
             SkyTransmit = skyTransmit;
             SkyMultiscatter = skyMultiscatter;
             SkyView = skyView;
+            SkyIrradiance = skyIrradiance;
             TaaResolve = taaResolve;
             TaaSharpen = taaSharpen;
             Tonemap = tonemap;
@@ -100,6 +110,7 @@ internal sealed class DeferredPassResources : IDisposable
             skyTransmit?.Dispose();
             skyMultiscatter?.Dispose();
             skyView?.Dispose();
+            skyIrradiance?.Dispose();
             taaResolve?.Dispose();
             taaSharpen?.Dispose();
             tonemap?.Dispose();
@@ -113,6 +124,7 @@ internal sealed class DeferredPassResources : IDisposable
         TaaSharpen.Dispose();
         TaaResolve.Dispose();
         Composite.Dispose();
+        SkyIrradiance.Dispose();
         SkyView.Dispose();
         SkyMultiscatter.Dispose();
         SkyTransmit.Dispose();

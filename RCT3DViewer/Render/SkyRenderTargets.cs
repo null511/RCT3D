@@ -15,6 +15,8 @@ internal sealed unsafe class SkyRenderTargets : IDisposable
     public ImageView SkyMultiscatterView { get; private set; }
     public Image SkyViewImage { get; private set; }
     public ImageView SkyViewView { get; private set; }
+    public Image SkyIrradianceImage { get; private set; }
+    public ImageView SkyIrradianceView { get; private set; }
 
 
     public SkyRenderTargets(VulkanDeviceContext context)
@@ -27,6 +29,7 @@ internal sealed unsafe class SkyRenderTargets : IDisposable
             (SkyTransmitImage, _, SkyTransmitView) = CreateImage(256, 64);
             (SkyMultiscatterImage, _, SkyMultiscatterView) = CreateImage(32, 32);
             (SkyViewImage, _, SkyViewView) = CreateImage(256, 256);
+            (SkyIrradianceImage, _, SkyIrradianceView) = CreateImage(16, 16, transferDestination: true);
         }
         catch {
             Dispose();
@@ -43,8 +46,12 @@ internal sealed unsafe class SkyRenderTargets : IDisposable
             throw new NotSupportedException("RGBA16F does not support sampled and storage images on the selected Vulkan device.");
     }
 
-    private (Image Image, DeviceMemory Memory, ImageView View) CreateImage(uint width, uint height)
+    private (Image Image, DeviceMemory Memory, ImageView View) CreateImage(uint width, uint height, bool transferDestination = false)
     {
+        var usage = ImageUsageFlags.SampledBit | ImageUsageFlags.StorageBit;
+        if (transferDestination)
+            usage |= ImageUsageFlags.TransferDstBit;
+
         var imageInfo = new ImageCreateInfo {
             SType = StructureType.ImageCreateInfo,
             ImageType = ImageType.Type2D,
@@ -52,7 +59,7 @@ internal sealed unsafe class SkyRenderTargets : IDisposable
             Format = Format.R16G16B16A16Sfloat,
             Tiling = ImageTiling.Optimal,
             InitialLayout = ImageLayout.Undefined,
-            Usage = ImageUsageFlags.SampledBit | ImageUsageFlags.StorageBit,
+            Usage = usage,
             Samples = SampleCountFlags.Count1Bit,
             SharingMode = SharingMode.Exclusive,
             ArrayLayers = 1,

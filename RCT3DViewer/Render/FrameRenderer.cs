@@ -102,6 +102,17 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
         skyViewInitialized = true;
 
+        var irradianceAccess = AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit;
+        RecordImageBarrier(commandBuffer, resources.SkyTargets.SkyIrradianceImage, ImageLayout.General, ImageLayout.General,
+            PipelineStageFlags.ComputeShaderBit, irradianceAccess,
+            PipelineStageFlags.ComputeShaderBit, irradianceAccess);
+
+        deferredPassResources.SkyIrradiance.Dispatch(commandBuffer, 0, uniformDescriptorSet, new Vector2D<uint>(16, 16));
+
+        RecordImageBarrier(commandBuffer, resources.SkyTargets.SkyIrradianceImage, ImageLayout.General, ImageLayout.General,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit);
+
         var clearValues = stackalloc ClearValue[4];
         clearValues[0] = new ClearValue {
             Color = new ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f),
