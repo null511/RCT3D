@@ -82,7 +82,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
 
         var supportResources = new TerrainGraphicsResources(
             DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, TerrainMaterials!,
-            shaderNameOverride: Path.Combine("defer", "deferredTrack"), createWireframePipeline: true, colorAttachmentCount: 3,
+            shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true, colorAttachmentCount: 3,
             useTrackVertexColor: true);
 
         try {
@@ -116,10 +116,10 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         UniformBufferResources = new UniformBufferResources(DeviceContext, MaxFramesInFlight);
         DeferredPassResources = new DeferredPassResources(DeviceContext, RenderPass, DeferredTargets, SkyTargets, UniformBufferResources);
         TerrainGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, TerrainMaterials,
-            shaderNameOverride: Path.Combine("defer", "deferredTerrain"), createWireframePipeline: true, colorAttachmentCount: 3);
+            shaderNameOverride: Path.Combine("object", "terrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         TerrainGraphicsResources.CreatePipeline();
         PathGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, PathMaterials.TextureLibrary,
-            shaderNameOverride: Path.Combine("defer", "deferredTerrain"), createWireframePipeline: true, colorAttachmentCount: 3);
+            shaderNameOverride: Path.Combine("object", "terrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         PathGraphicsResources.CreatePipeline();
         WaterGraphicsResources = new WaterGraphicsResources(DeviceContext, DeferredTargets.WaterRenderPass, UniformBufferResources.DescriptorSetLayout, SkyTargets);
         WaterGraphicsResources.CreatePipeline();
@@ -143,7 +143,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
 
         var trackResources = new TerrainGraphicsResources(
             DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, TerrainMaterials!,
-            shaderNameOverride: Path.Combine("defer", "deferredTrack"), createWireframePipeline: true, colorAttachmentCount: 3,
+            shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true, colorAttachmentCount: 3,
             useTrackVertexColor: true);
 
         try {
@@ -266,7 +266,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         VehicleCubeGraphicsResources = new ModelGraphicsResources[MaxFramesInFlight];
 
         for (var i = 0; i < VehicleCubeGraphicsResources.Length; i++) {
-            var resources = new ModelGraphicsResources(DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, vehicleCube.Material, unlit: true, deferred: true);
+            var resources = new ModelGraphicsResources(DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, vehicleCube.Material, unlit: true);
             
             try {
                 resources.CreatePipeline();

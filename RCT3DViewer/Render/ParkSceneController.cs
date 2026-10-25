@@ -109,7 +109,7 @@ internal sealed class ParkSceneController(
 
                 foreach (var batch in result.PathAccessories) {
                     var accessoryResources = new ModelGraphicsResources(resources.DeviceContext!, resources.DeferredTargets!.GBufferRenderPass,
-                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Material, deferred: true);
+                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Material);
 
                     try {
                         accessoryResources.CreatePipeline();

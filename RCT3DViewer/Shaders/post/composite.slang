@@ -35,13 +35,13 @@ void main(ComputeInput input) {
     float3 color;
 
     float3 worldPosition = reconstructWorldPosition(input.globalPos, depth);
+    float3 localSunDir = normalize(sceneUniforms.sunDirection.xyz);
 
     if (depth < 1.0) {
         float4 albedoMap = defer_albedo.Load(pos);
         float4 normalsMap = defer_normals.Load(pos);
         float4 specularMap = defer_specular.Load(pos);
 
-        //float3 albedo = srgbToLinear(albedoMap.rgb);
         float3 albedo = albedoMap.rgb;
         float3 geoNormal = octohedral::decode(normalsMap.xy);
         float3 texNormal = octohedral::decode(normalsMap.zw);
@@ -61,27 +61,60 @@ void main(ComputeInput input) {
         float nDotH = max(dot(texNormal, halfDirection), 0.0);
         float hDotV = max(dot(halfDirection, viewDirection), 0.0);
 
+        float smoothness = 1.0 - roughness;
+        smoothness = pow2(smoothness);
+
         float3 f0 = lerp(0.04, albedo, metalness);
-        float3 fresnel = FresnelSchlick(hDotV, f0);
+        float3 fresnel_sun = FresnelSchlick(hDotV, f0);
         float distribution = DistributionGgx(nDotH, roughness);
         float geometry = GeometrySchlickGgx(nDotV, roughness) * GeometrySchlickGgx(nDotL, roughness);
-        float3 specular = distribution * geometry * fresnel / max(4.0 * nDotV * nDotL, 0.0001);
-        float3 diffuseWeight = (1.0 - fresnel) * (1.0 - metalness);
+        float3 specular = distribution * geometry * fresnel_sun / max(4.0 * nDotV * nDotL, 0.0001);
+
+        // Sky Reflections
+        float3 reflectDir = normalize(reflect(-viewDirection, texNormal));
+        float3 reflectColor = getValFromSkyLUT(sky_view, linearSampler, reflectDir, localSunDir);
+        float3 fresnel_sky = FresnelSchlick(nDotV, f0);
+        specular += reflectColor * fresnel_sky * smoothness;
+
+        float3 sunLight = SunLux * getValFromTLUT(sky_transmit, linearSampler, sky_viewPos, sunDir);
+        specular *= nDotL * sunLight;
+
+        // Metal Diffuse Weighting
+        // float3 diffuseWeight = (1.0 - fresnel) * (1.0 - metalness);
+        float3 diffuseWeight = 1.0 - metalness * smoothness;
+
+        // SSS
         float wrappedNdotL = saturate((nDotL + sss) / (1.0 + sss));
         float diffuseNdotL = lerp(nDotL, wrappedNdotL, sss);
 
+        // Metal Tinting
         specular *= lerp(1.0, albedo, metalness);
 
-        float3 sunLight = SunLux * getValFromTLUT(sky_transmit, linearSampler, sky_viewPos, sunDir);
         float3 ambientLight = sampleSkyIrradiance(texSkyIrradiance, linearSampler, texNormal);
 
-        float3 directLighting = (diffuseWeight * albedo * (diffuseNdotL / PI) + specular * nDotL) * sunLight;
-        float3 ambientLighting = ambientLight * diffuseWeight * albedo * ao;
-        color = directLighting + ambientLighting + albedo * emission * 8.0;
+
+
+        color = ambientLight * (1.0 - fresnel_sky) * ao;
+
+        color += (1.0 - fresnel_sun) * (diffuseNdotL / PI) * sunLight;
+
+        color *= diffuseWeight;
+
+        color += emission * 8.0;
+
+        color *= albedo;
+
+        color += specular;
+
+
+
+        //float3 directLighting = (diffuseWeight * albedo * (diffuseNdotL / PI) + specular * nDotL) * sunLight;
+        //float3 ambientLighting = ambientLight * albedo * ao;
+        //color = directLighting + ambientLighting + albedo * emission * 8.0;
     }
     else {
         float3 localViewDir = normalize(worldPosition - cameraUniforms.cameraPosition.xyz);
-        float3 localSunDir = normalize(sceneUniforms.sunDirection.xyz);
+        //float3 localSunDir = normalize(sceneUniforms.sunDirection.xyz);
 
         color = 0.0;
 

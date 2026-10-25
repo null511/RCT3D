@@ -1,4 +1,5 @@
 import lib.uniforms;
+import lib.colors;
 import lib.normals;
 import lib.octohedral;
 
@@ -46,8 +47,11 @@ GBufferOutput fragmentMain(VertexStageOutput input)
 {
 	float3 normal = normalize(input.normal);
 
-	GBufferOutput output;
-	output.albedo = input.color;
+    float4 color = input.color;
+    color.rgb = srgbToLinear(color.rgb);
+
+    GBufferOutput output;
+    output.albedo = color;
 	output.normals.xy = octohedral::encode(normal);
 	output.normals.zw = octohedral::encode(normal);
 	output.specular = float4(input.specularData, 0.0, 1.0);

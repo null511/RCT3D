@@ -85,7 +85,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
 
     private void CreateImages()
     {
-        var albedo = CreateColorImage(Format.R8G8B8A8Unorm);
+        var albedo = CreateColorImage(Format.R8G8B8A8Srgb);
         AlbedoView = albedo.View;
 
         var normals = CreateColorImage(Format.R16G16B16A16Sfloat);

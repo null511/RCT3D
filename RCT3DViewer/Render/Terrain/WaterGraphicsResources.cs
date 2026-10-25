@@ -28,7 +28,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
         var vk = context.Api;
         var device = context.LogicalDevice;
         CreateSkyDescriptors();
-        var shaderDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders");
+        var shaderDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", "object");
         var vertPath = Path.Combine(shaderDirectory, "water.vert.spv");
         var fragPath = Path.Combine(shaderDirectory, "water.frag.spv");
         if (!File.Exists(vertPath) || !File.Exists(fragPath))

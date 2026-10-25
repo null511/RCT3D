@@ -21,7 +21,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
     public ModelRegionBatch[] RegionBatches { get; private set; } = Array.Empty<ModelRegionBatch>();
 
 
-    public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout, ImportedModelMaterial material, bool unlit = false, bool deferred = false)
+    public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout, ImportedModelMaterial material, bool unlit = false)
     {
         _context = context;
 
@@ -31,10 +31,8 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
             uniformDescriptorSetLayout,
             TerrainMaterialLibrary.FromModelMaterial(material),
             useInstances: true,
-            shaderNameOverride: deferred
-                ? Path.Combine("defer", unlit ? "deferredVehicleCube" : "deferredModel")
-                : unlit ? "vehicleCube" : "model",
-            colorAttachmentCount: deferred ? 3u : 1u);
+            shaderNameOverride: Path.Combine("object", unlit ? "vehicleCube" : "model"),
+            colorAttachmentCount: 3u);
     }
 
     public void CreatePipeline() => _graphicsResources.CreatePipeline();

@@ -14,7 +14,6 @@ internal class Monorail : RideDefinition
         TrackHeightOffset = 0.2f;
     }
 
-
     protected override TrackRailProfile CreateProfile()
     {
         return new TrackRailProfile([
@@ -31,7 +30,7 @@ internal class Monorail : RideDefinition
                 new Vector2(-0.20f, 0.40f),
             ], false) {
                 Swatch = TrackRailSwatch.Main,
-                Specular = new TrackRailSpecularData(200, 0),
+                Specular = new TrackRailSpecularData(180, 0),
             },
             new TrackRailProfileShape([
                 new Vector2(-0.20f, 0.40f),
@@ -46,7 +45,7 @@ internal class Monorail : RideDefinition
                 new Vector2(0.20f, 0.40f),
             ], false) {
                 Swatch = TrackRailSwatch.Alternate,
-                Specular = new TrackRailSpecularData(120, 255),
+                Specular = new TrackRailSpecularData(240, 0),
             },
         ]);
     }
