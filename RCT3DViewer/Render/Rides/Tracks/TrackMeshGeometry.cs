@@ -10,8 +10,11 @@ internal sealed class TrackMeshGeometry
     private readonly List<RenderRegionIndexRange> _regions = new();
     private RenderRegionCoordinate? _region;
     private List<TrackCenterlinePath>? _centerlineCapture;
+    private float _verticalOffset;
     private int _firstVertex;
     private int _firstIndex;
+
+    public void SetVerticalOffset(float offset) => _verticalOffset = offset;
 
     public void BeginCenterlineCapture()
     {
@@ -33,7 +36,13 @@ internal sealed class TrackMeshGeometry
 
     public void CaptureCenterline(in RCTTrackElementData track, ReadOnlySpan<Vector3> centerline)
     {
-        _centerlineCapture?.Add(new TrackCenterlinePath(track.Sequence, centerline.ToArray()));
+        if (_centerlineCapture is null) return;
+
+        var offsetCenterline = centerline.ToArray();
+        for (var i = 0; i < offsetCenterline.Length; i++)
+            offsetCenterline[i].Y += _verticalOffset;
+
+        _centerlineCapture.Add(new TrackCenterlinePath(track.Sequence, offsetCenterline));
     }
 
     public void BeginRegion(RenderRegionCoordinate region)
@@ -64,6 +73,7 @@ internal sealed class TrackMeshGeometry
     public uint AddIndexedVertex(Vector3 position, Vector3 normal, TrackRgba8 color, TrackRailSpecularData specular)
     {
         var index = (uint)_vertices.Count;
+        position.Y += _verticalOffset;
         _vertices.Add(new TrackVertex(position, Vector3.Normalize(normal), color, specular.Roughness, specular.Metalness));
         return index;
     }

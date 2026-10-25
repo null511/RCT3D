@@ -130,11 +130,6 @@ void main(ComputeInput input) {
         color += getValFromSkyLUT(sky_view, linearSampler, localViewDir, localSunDir);
     }
 
-    int2 shit = input.globalPos - int2(8, 32);
-    if (all(shit > 0 && shit < 16)) {
-        color = texSkyIrradiance.Load(int3(shit, 0)).rgb;
-    }
-
     sceneOutput[input.globalPos] = float4(color, 1.0);
 }
 

@@ -191,5 +191,12 @@ internal class LoopingRollerCoaster : RideDefinition
         registry.RegisterMany(type => new VerticalLoopTrackPieceBuilder(type),
             RCTTrackElementType.LeftVerticalLoop,
             RCTTrackElementType.RightVerticalLoop);
+
+        registry.RegisterMany(type => new TwistTrackPieceBuilder(type),
+            RCTTrackElementType.LeftTwistDownToUp,
+            RCTTrackElementType.RightTwistDownToUp,
+            RCTTrackElementType.RightTwistUpToDown);
+
+        registry.Register(new BankedCurveTrackPieceBuilder(RCTTrackElementType.RightQuarterBankedHelixLargeUp));
     }
 }

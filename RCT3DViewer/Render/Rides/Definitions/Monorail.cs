@@ -11,7 +11,7 @@ internal class Monorail : RideDefinition
     {
         SupportStyle = RideSupportStyle.MetalBoxed;
         HasSupportPlacement = true;
-        TrackHeightOffset = 0.2f;
+        SupportTrackOffset = 0.2f;
     }
 
     protected override TrackRailProfile CreateProfile()

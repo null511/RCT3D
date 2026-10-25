@@ -4,7 +4,7 @@
 - User prefers .NET 10 for this project; do not retarget to .NET 8 or .NET 9.
 - For nested OpenRCT2 builds, compile only the base `openrct2` project/target. Do not build the full OpenRCT2 solution or configure multiple OS variants, and do not introduce a `zstd` dependency; verify the selected target before starting native builds.
 - Do not add or implement tests unless the user explicitly asks. For this feature, the user will manually verify behavior; limit validation to builds and static checks.
-- Execute code implementation requests in Agent mode, not left as a registered plan; the user is using Agent mode rather than Plan mode.
+- Execute code implementation requests in Agent mode, not left as a registered plan; the user expects approved coding plans to be implemented in Agent mode, not left waiting for handoff or further approval.
 - For RCT3DViewer integration, use the app's own OpenRCT2 config rather than assuming the main game's settings carry over, as the embedded OpenRCT2 instance is isolated from the main game's config/data location.
 - For ride configurations, do not directly reuse another ride's registry; give each ride an independent registry so future changes to one ride do not propagate to another.
 - For the looping coaster, the entry/exit slope segments should be length-adjustable, extend inward from the existing fixed endpoints, and be used to broaden the bottom of the loop. Keep the main loop curve logic intact and avoid changing the established overall apex height if feasible.
@@ -26,4 +26,4 @@
 - When interpreting topology diagrams, map and validate the explicit vertex/edge connectivity before claiming understanding; if the graph cannot be reliably inferred, ask for concrete connectivity rather than guess.
 
 ## Uniform Block Organization
-- When organizing custom uniform blocks, group fields by their commented type/category (Camera, Temporal, Scene), not by usage. Follow this preference rather than reorganizing fields based on usage.- When organizing custom uniform blocks, group fields by their commented type/category (Camera, Temporal, Scene), not by usage. Follow this preference rather than reorganizing fields based on usage.
+- When organizing custom uniform blocks, group fields by their commented type/category (Camera, Temporal, Scene), not by usage. Follow this preference rather than reorganizing fields based on usage.

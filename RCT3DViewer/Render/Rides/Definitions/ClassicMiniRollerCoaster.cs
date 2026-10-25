@@ -10,7 +10,7 @@ internal class ClassicMiniRollerCoaster : RideDefinition
     {
         SupportStyle = RideSupportStyle.MetalFork;
         HasSupportPlacement = true;
-        TrackHeightOffset = 0.25f;
+        SupportTrackOffset = 0.25f;
     }
 
     protected override TrackRailProfile CreateProfile()

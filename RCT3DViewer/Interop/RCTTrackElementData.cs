@@ -8,6 +8,7 @@ public enum RCTRideType : ushort
     Monorail = 6,
     WoodenWildMouse = 9,
     LoopingRollerCoaster = 15,
+    CompactInvertedCoaster = 73,
     ClassicMiniRollerCoaster = 95
 }
 

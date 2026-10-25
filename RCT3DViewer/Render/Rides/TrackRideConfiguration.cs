@@ -10,7 +10,8 @@ internal class TrackRideConfiguration(
     TrackPieceBuilderRegistry pieceBuilders,
     IReadOnlyList<ITrackPartGenerator> partGenerators,
     RideSupportStyle supportStyle,
-    float trackHeightOffset,
+    float centerlineHeightOffset,
+    float supportTrackOffset,
     Action<RCTTrackElementData, List<TrackSupportPlacement>>? getSupportPlacements)
 {
     private readonly Dictionary<RCTTrackElementType, ITrackPieceMeshBuilder> builders = pieceBuilders.Builders.ToDictionary(builder => builder.PieceType);
@@ -18,7 +19,8 @@ internal class TrackRideConfiguration(
     public RCTRideType RideType { get; } = rideType;
     public IReadOnlyList<ITrackPartGenerator> PartGenerators { get; } = partGenerators;
     public RideSupportStyle SupportStyle { get; } = supportStyle;
-    public float TrackHeightOffset { get; } = trackHeightOffset;
+    public float CenterlineHeightOffset { get; } = centerlineHeightOffset;
+    public float SupportTrackOffset { get; } = supportTrackOffset;
     public IRideSupportMeshBuilder? SupportMeshBuilder { get; } = RideSupportMeshBuilders.Resolve(supportStyle);
     public Action<RCTTrackElementData, List<TrackSupportPlacement>>? GetSupportPlacements { get; } = getSupportPlacements;
 
@@ -33,6 +35,7 @@ internal static class TrackRideConfigurations
         new WoodenWildMouse().Build(),
         new ClassicMiniRollerCoaster().Build(),
         new LoopingRollerCoaster().Build(),
+        new CompactInvertedCoaster().Build(),
     ];
 
     public static IReadOnlyList<TrackRideConfiguration> All => configurations;

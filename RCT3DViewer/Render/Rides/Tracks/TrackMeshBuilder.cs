@@ -107,10 +107,16 @@ internal sealed class TrackMeshBuilder
                 var pieceSpan = CollectionsMarshal.AsSpan(piece);
                 var hasSupportPlacements = configuration.SupportMeshBuilder is not null
                     && configuration.GetSupportPlacements is not null;
+                geometry.SetVerticalOffset(configuration.CenterlineHeightOffset);
                 if (hasSupportPlacements)
                     geometry.BeginCenterlineCapture();
 
-                pieceBuilder.AddPiece(pieceSpan, geometry, configuration.PartGenerators, palette);
+                try {
+                    pieceBuilder.AddPiece(pieceSpan, geometry, configuration.PartGenerators, palette);
+                }
+                finally {
+                    geometry.SetVerticalOffset(0.0f);
+                }
 
                 if (hasSupportPlacements
                     && configuration.SupportMeshBuilder is { } supportMeshBuilder
@@ -126,11 +132,11 @@ internal sealed class TrackMeshBuilder
                         foreach (var placement in placements) {
                             var anchor = ResolveSupportAnchor(
                                 supportTrack, placement, supportMeshBuilder.PlacementMode, centerlines,
-                                configuration.TrackHeightOffset, mapWidth, mapHeight);
+                                configuration.SupportTrackOffset, mapWidth, mapHeight);
                             var surfaceIndex = checked(anchor.SurfaceTileY * mapWidth + anchor.SurfaceTileX);
                             var surface = surfaces[surfaceIndex];
                             supportMeshBuilder.AddSupport(
-                                supportTrack, placement, anchor, supportGeometry, surface, supportColor, configuration.TrackHeightOffset);
+                                supportTrack, placement, anchor, supportGeometry, surface, supportColor, configuration.SupportTrackOffset);
                         }
                     }
                 }
@@ -148,7 +154,7 @@ internal sealed class TrackMeshBuilder
         TrackSupportPlacement placement,
         TrackSupportPlacementMode placementMode,
         ReadOnlySpan<TrackCenterlinePath> centerlines,
-        float trackHeightOffset,
+        float supportTrackOffset,
         int mapWidth,
         int mapHeight)
     {
@@ -164,7 +170,7 @@ internal sealed class TrackMeshBuilder
                 var target = TrackCenterlineGeometry.GetTileCenter(track);
                 target.Y = track.BaseHeight * WorldUnits.HeightPerBaseUnit
                     + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f
-                    + trackHeightOffset;
+                    + supportTrackOffset;
                 (position, tangent) = FindClosestCenterlinePointInTile(centerline.Points, track.TileX, track.TileY, target);
             }
 

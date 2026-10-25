@@ -8,7 +8,8 @@ namespace RCT3D.Render.Rides;
 internal abstract class RideDefinition(RCTRideType rideType)
 {
     protected RideSupportStyle SupportStyle;
-    protected float TrackHeightOffset = 0.0f;
+    protected float CenterlineHeightOffset = 0.0f;
+    protected float SupportTrackOffset = 0.0f;
     protected bool HasSupportPlacement = false;
 
 
@@ -21,7 +22,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
 
         return new TrackRideConfiguration(rideType, registry, [
             new SweptRailProfileGenerator(profile),
-        ], SupportStyle, TrackHeightOffset, HasSupportPlacement ? GetSupportPlacements : null);
+        ], SupportStyle, CenterlineHeightOffset, SupportTrackOffset, HasSupportPlacement ? GetSupportPlacements : null);
     }
 
     protected abstract TrackRailProfile CreateProfile();

@@ -8,6 +8,7 @@ internal enum RideSupportStyle
     MetalBoxed,
     MetalFork,
     MetalTubes,
+    MetalTubesInverted,
     WoodenTruss,
 }
 

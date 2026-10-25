@@ -1,6 +1,7 @@
 import lib.colors;
 import lib.uniforms;
 import lib.octohedral;
+import lib.bayer;
 
 struct FullscreenVertexOutput {
 	float4 position : SV_Position;
@@ -27,7 +28,8 @@ FullscreenVertexOutput vertexMain(uint vertexId : SV_VertexID)
 [shader("fragment")]
 float4 fragmentMain(FullscreenVertexOutput input) : SV_Target
 {
-	float3 color = sceneOutput.Sample(linearSampler, input.texCoord).rgb;
+    uint2 uv = uint2(input.position.xy);
+    float3 color = sceneOutput[uv].rgb;
 
     //color = max(color, 0.0);
     //color /= max(exposure[0].average, 1e-8);
@@ -38,10 +40,10 @@ float4 fragmentMain(FullscreenVertexOutput input) : SV_Target
 
     switch (sceneUniforms.debugView) {
         case DebugView.GeoNormal:
-            color = octohedral::decode(defer_normals.Sample(nearestSampler, input.texCoord).xy) * 0.5 + 0.5;
+            color = octohedral::decode(defer_normals[uv].xy) * 0.5 + 0.5;
             break;
         case DebugView.TexNormal:
-            color = octohedral::decode(defer_normals.Sample(nearestSampler, input.texCoord).zw) * 0.5 + 0.5;
+            color = octohedral::decode(defer_normals[uv].zw) * 0.5 + 0.5;
             break;
     }
 
@@ -49,9 +51,13 @@ float4 fragmentMain(FullscreenVertexOutput input) : SV_Target
 
     switch (sceneUniforms.debugView) {
         case DebugView.Albedo:
-            color = defer_albedo.Sample(linearSampler, input.texCoord).rgb;
+            color = defer_albedo[uv].rgb;
             break;
     }
+
+    // TODO: dither
+    const float ditherScale = rcp(255.0);
+    color += (GetBayerValue(uv) - 0.5) * ditherScale;
 
     return float4(color, 1.0);
 }
