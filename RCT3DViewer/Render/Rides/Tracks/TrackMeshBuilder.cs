@@ -105,8 +105,7 @@ internal sealed class TrackMeshBuilder
                 var track = piece[0];
                 configuration.TryResolvePiece(track.TrackType, out var pieceBuilder);
                 var pieceSpan = CollectionsMarshal.AsSpan(piece);
-                var hasSupportPlacements = configuration.SupportMeshBuilder is not null
-                    && configuration.GetSupportPlacements is not null;
+                var hasSupportPlacements = configuration.HasSupportPlacements;
                 geometry.SetVerticalOffset(configuration.CenterlineHeightOffset);
                 if (hasSupportPlacements)
                     geometry.BeginCenterlineCapture();
@@ -119,15 +118,14 @@ internal sealed class TrackMeshBuilder
                 }
 
                 if (hasSupportPlacements
-                    && configuration.SupportMeshBuilder is { } supportMeshBuilder
-                    && configuration.GetSupportPlacements is { } getSupportPlacements) {
+                    && configuration.SupportMeshBuilder is { } supportMeshBuilder) {
                     var centerlines = geometry.EndCenterlineCapture();
                     if (centerlines.Length == 0)
                         throw new InvalidDataException($"Track piece {track.TrackType} did not expose a centerline for support placement.");
 
                     var placements = new List<TrackSupportPlacement>();
                     foreach (ref readonly var supportTrack in pieceSpan) {
-                        getSupportPlacements(supportTrack, placements);
+                        configuration.PopulateSupportPlacements(supportTrack, placements);
                         var supportColor = GetPaletteColor(supportTrack.SupportPaletteIndex, palette);
                         foreach (var placement in placements) {
                             var anchor = ResolveSupportAnchor(

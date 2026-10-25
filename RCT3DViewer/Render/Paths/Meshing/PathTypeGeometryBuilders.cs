@@ -8,7 +8,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 {
     //public const float TileSize = 3.0f;
     //public const float BaseHeightScale = 0.75f;
-    private const float SurfaceBias = 0.004f;
+    private const float SurfaceBias = 0.008f;
     private const float RailHeight = 0.62f;
     private const float RailThickness = 0.045f;
     private const float RailPostHalfWidth = 0.055f;

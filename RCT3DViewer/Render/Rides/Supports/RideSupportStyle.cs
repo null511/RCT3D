@@ -17,6 +17,7 @@ internal static class RideSupportMeshBuilders
     public static IRideSupportMeshBuilder? Resolve(RideSupportStyle style) => style switch {
         RideSupportStyle.MetalBoxed => new MetalBoxedSupportMeshBuilder(),
         RideSupportStyle.MetalFork => new MetalForkSupportMeshBuilder(),
+        RideSupportStyle.WoodenTruss => new WoodenTrussSupportMeshBuilder(),
         _ => null,
     };
 }

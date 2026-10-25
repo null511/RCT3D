@@ -1,4 +1,5 @@
 import lib.common;
+import lib.colors;
 import lib.sky;
 import lib.sky_transmit;
 
@@ -99,7 +100,8 @@ void getMulScattValues(float3 pos, float3 sunDir, out float3 lumTotal, out float
 
                 if (dot(pos, sunDir) > 0.0) {
                     hitPos = normalize(hitPos) * GroundRadius_MM;
-                    lum += transmittance * groundAlbedo * getValFromTLUT(skyTransmit, linearSampler, hitPos, sunDir);
+                    float3 albedo = srgbToLinear(groundAlbedo);
+                    lum += transmittance * albedo * getValFromTLUT(skyTransmit, linearSampler, hitPos, sunDir);
                 }
             }
 

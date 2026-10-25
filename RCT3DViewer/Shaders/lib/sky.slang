@@ -3,8 +3,7 @@ public module sky;
 import lib.common;
 import lib.uniforms;
 
-
-static const float3 groundAlbedo = 0.3;
+static const float3 groundAlbedo = float3(0.631, 0.573, 0.459);
 static const bool planetSurfaceEnabled = true;
 
 static const float SunLux = 8.0;// * transformer.fromGamma(1.0);

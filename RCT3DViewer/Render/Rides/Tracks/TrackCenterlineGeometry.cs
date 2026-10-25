@@ -47,13 +47,21 @@ internal static class TrackCenterlineGeometry
         if (pieceType is RCTTrackElementType.LeftQuarterTurn3TilesUp25
             or RCTTrackElementType.RightQuarterTurn3TilesUp25
             or RCTTrackElementType.LeftQuarterTurn5TilesUp25
-            or RCTTrackElementType.RightQuarterTurn5TilesUp25)
+            or RCTTrackElementType.RightQuarterTurn5TilesUp25
+            or RCTTrackElementType.LeftBankedQuarterTurn3TileUp25
+            or RCTTrackElementType.RightBankedQuarterTurn3TileUp25
+            or RCTTrackElementType.LeftBankedQuarterTurn5TileUp25
+            or RCTTrackElementType.RightBankedQuarterTurn5TileUp25)
             return Pitch.Slope25;
 
         if (pieceType is RCTTrackElementType.LeftQuarterTurn3TilesDown25
             or RCTTrackElementType.RightQuarterTurn3TilesDown25
             or RCTTrackElementType.LeftQuarterTurn5TilesDown25
-            or RCTTrackElementType.RightQuarterTurn5TilesDown25)
+            or RCTTrackElementType.RightQuarterTurn5TilesDown25
+            or RCTTrackElementType.LeftBankedQuarterTurn3TileDown25
+            or RCTTrackElementType.RightBankedQuarterTurn3TileDown25
+            or RCTTrackElementType.LeftBankedQuarterTurn5TileDown25
+            or RCTTrackElementType.RightBankedQuarterTurn5TileDown25)
             return -Pitch.Slope25;
 
         var isUpTransition = pieceType is RCTTrackElementType.LeftBankToUp25

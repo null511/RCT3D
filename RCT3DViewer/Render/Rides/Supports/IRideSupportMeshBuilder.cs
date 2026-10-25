@@ -7,6 +7,10 @@ internal interface IRideSupportMeshBuilder
 {
     TrackSupportPlacementMode PlacementMode { get; }
 
+    bool HasDefaultSupportPlacements => false;
+
+    void GetDefaultSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements) => placements.Clear();
+
     void AddSupport(
         RCTTrackElementData track,
         TrackSupportPlacement placement,
