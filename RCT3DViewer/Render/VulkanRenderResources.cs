@@ -26,6 +26,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
     public TerrainGraphicsResources? PathGraphicsResources { get; private set; }
     public TerrainGraphicsResources? TrackGraphicsResources { get; private set; }
     public TerrainGraphicsResources? RideSupportGraphicsResources { get; private set; }
+    public TerrainGraphicsResources? RideEntranceGraphicsResources { get; private set; }
     public WaterGraphicsResources? WaterGraphicsResources { get; private set; }
     public ModelGraphicsResources[] VehicleCubeGraphicsResources { get; private set; } = Array.Empty<ModelGraphicsResources>();
     public TerrainMaterialLibrary? TerrainMaterials { get; private set; }
@@ -92,6 +93,27 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         }
         catch {
             supportResources.Dispose();
+            throw;
+        }
+    }
+
+    public void CreateRideEntranceGraphicsResources()
+    {
+        RideEntranceGraphicsResources?.Dispose();
+        RideEntranceGraphicsResources = null;
+
+        var entranceResources = new TerrainGraphicsResources(
+            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, TerrainMaterials!,
+            shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true, colorAttachmentCount: 3,
+            useTrackVertexColor: true);
+
+        try {
+            entranceResources.CreatePipeline();
+            entranceResources.CreateTextureResources(CommandPool);
+            RideEntranceGraphicsResources = entranceResources;
+        }
+        catch {
+            entranceResources.Dispose();
             throw;
         }
     }
@@ -414,6 +436,10 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         var rideSupportResources = RideSupportGraphicsResources;
         RideSupportGraphicsResources = null;
         rideSupportResources?.Dispose();
+
+        var rideEntranceResources = RideEntranceGraphicsResources;
+        RideEntranceGraphicsResources = null;
+        rideEntranceResources?.Dispose();
 
         var pathResources = PathGraphicsResources;
         PathGraphicsResources = null;

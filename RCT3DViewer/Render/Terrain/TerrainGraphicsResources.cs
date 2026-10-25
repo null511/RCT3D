@@ -1,6 +1,7 @@
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Rides.Supports;
+using RCT3D.Render.Rides.Entrances;
 using Silk.NET.Vulkan;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -514,6 +515,11 @@ internal sealed unsafe class TerrainGraphicsResources(
     }
 
     public void UploadMesh(RideSupportMeshData mesh)
+    {
+        UploadMesh(mesh.Vertices, mesh.Indices);
+    }
+
+    public void UploadMesh(RideEntranceExitMeshData mesh)
     {
         UploadMesh(mesh.Vertices, mesh.Indices);
     }

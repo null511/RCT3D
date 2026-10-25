@@ -6,7 +6,7 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 21;
+    private const uint ExpectedAbiVersion = 22;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -34,6 +34,12 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int CopyTrackDataDelegate(IntPtr context, RCTTrackElementData* output, ulong capacity);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int GetRideEntranceCountDelegate(IntPtr context, out ulong count);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int CopyRideEntranceDataDelegate(IntPtr context, RCTRideEntranceData* output, ulong capacity);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int CopyPaletteDataDelegate(IntPtr context, RCTPaletteEntry* output, ulong capacity);
@@ -67,6 +73,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private readonly CopyPathDataDelegate _copyPathData;
     private readonly GetTrackCountDelegate _getTrackCount;
     private readonly CopyTrackDataDelegate _copyTrackData;
+    private readonly GetRideEntranceCountDelegate _getRideEntranceCount;
+    private readonly CopyRideEntranceDataDelegate _copyRideEntranceData;
     private readonly CopyPaletteDataDelegate _copyPaletteData;
     private readonly AdvanceSimulationDelegate _advanceSimulation;
     private readonly PauseStateDelegate _getPauseState;
@@ -109,6 +117,9 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (Marshal.SizeOf<RCTTrackElementData>() != 30)
                 throw new InvalidOperationException("RCTTrackElementData must be 30 bytes to match the OpenRCT2 adapter ABI.");
 
+            if (Marshal.SizeOf<RCTRideEntranceData>() != 14)
+                throw new InvalidOperationException("RCTRideEntranceData must be 14 bytes to match the OpenRCT2 adapter ABI.");
+
             if (Marshal.SizeOf<RCTPaletteEntry>() != 4)
                 throw new InvalidOperationException("RCTPaletteEntry must be 4 bytes to match the OpenRCT2 adapter ABI.");
 
@@ -120,6 +131,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             _copyPathData = Bind<CopyPathDataDelegate>("rct3d_openrct2_copy_path_data");
             _getTrackCount = Bind<GetTrackCountDelegate>("rct3d_openrct2_get_track_count");
             _copyTrackData = Bind<CopyTrackDataDelegate>("rct3d_openrct2_copy_track_data");
+            _getRideEntranceCount = Bind<GetRideEntranceCountDelegate>("rct3d_openrct2_get_ride_entrance_count");
+            _copyRideEntranceData = Bind<CopyRideEntranceDataDelegate>("rct3d_openrct2_copy_ride_entrance_data");
             _copyPaletteData = Bind<CopyPaletteDataDelegate>("rct3d_openrct2_copy_palette_data");
             _advanceSimulation = Bind<AdvanceSimulationDelegate>("rct3d_openrct2_advance_simulation");
             _getPauseState = Bind<PauseStateDelegate>("rct3d_openrct2_get_pause_state");
@@ -192,6 +205,18 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     {
         fixed (RCTTrackElementData* pointer = output)
             ThrowIfFailed(_copyTrackData(_context, pointer, (ulong)output.Length));
+    }
+
+    public ulong GetRideEntranceCount()
+    {
+        ThrowIfFailed(_getRideEntranceCount(_context, out var count));
+        return count;
+    }
+
+    public void CopyRideEntranceData(Span<RCTRideEntranceData> output)
+    {
+        fixed (RCTRideEntranceData* pointer = output)
+            ThrowIfFailed(_copyRideEntranceData(_context, pointer, (ulong)output.Length));
     }
 
     public void CopyPaletteData(Span<RCTPaletteEntry> output)

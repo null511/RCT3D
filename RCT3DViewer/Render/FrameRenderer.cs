@@ -2,6 +2,7 @@ using RCT3D.Render.Buffers;
 using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Entrances;
 using RCT3D.Render.Terrain;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
@@ -35,7 +36,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         PathMeshData? pathMesh,
         WaterMeshData? waterMesh,
         TrackMeshData? trackMesh,
-        RideSupportMeshData? rideSupportMesh)
+        RideSupportMeshData? rideSupportMesh,
+        RideEntranceExitMeshData? rideEntranceExitMesh)
     {
         if (taaEnabledLastFrame != ui.TaaEnabled) {
             taaHistoryValid = false;
@@ -217,6 +219,23 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             Vk.CmdBindIndexBuffer(commandBuffer, trackResources.IndexBuffer, 0, IndexType.Uint32);
 
             foreach (var region in trackMesh.Regions) {
+                if (viewFrustum.Intersects(region.Bounds))
+                    Vk.CmdDrawIndexed(commandBuffer, region.IndexCount, 1, region.FirstIndex, 0, 0);
+            }
+        }
+
+        if (rideEntranceExitMesh is { Vertices.Length: > 0, Indices.Length: > 0 }
+            && resources.RideEntranceGraphicsResources is { IndexCount: > 0 } rideEntranceResources) {
+            var entrancePipeline = ui.WireframeEnabled ? rideEntranceResources.WireframePipeline : rideEntranceResources.Pipeline;
+            Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, entrancePipeline);
+            Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, rideEntranceResources.PipelineLayout,
+                0, 1, &uniformDescriptorSet, 0, null);
+
+            var entranceVertexBuffer = rideEntranceResources.VertexBuffer;
+            Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in entranceVertexBuffer, in offset);
+            Vk.CmdBindIndexBuffer(commandBuffer, rideEntranceResources.IndexBuffer, 0, IndexType.Uint32);
+
+            foreach (var region in rideEntranceExitMesh.Regions) {
                 if (viewFrustum.Intersects(region.Bounds))
                     Vk.CmdDrawIndexed(commandBuffer, region.IndexCount, 1, region.FirstIndex, 0, 0);
             }

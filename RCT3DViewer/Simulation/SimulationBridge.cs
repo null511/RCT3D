@@ -81,6 +81,15 @@ public sealed class SimulationBridge : IDisposable
 
                     var trackData = new RCTTrackElementData[(int)trackCount];
                     openRCT2.CopyTrackData(trackData);
+
+                    reportProgress("Reading ride entrance and exit tiles...");
+                    var rideEntranceCount = openRCT2.GetRideEntranceCount();
+                    if (rideEntranceCount > int.MaxValue)
+                        throw new InvalidOperationException($"OpenRCT2 returned too many ride entrance and exit tiles: {rideEntranceCount}.");
+
+                    var rideEntranceData = new RCTRideEntranceData[(int)rideEntranceCount];
+                    openRCT2.CopyRideEntranceData(rideEntranceData);
+
                     var paletteData = new RCTPaletteEntry[256];
                     openRCT2.CopyPaletteData(paletteData);
 
@@ -88,7 +97,7 @@ public sealed class SimulationBridge : IDisposable
                     Volatile.Write(ref gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                     Volatile.Write(ref vehicleSnapshots, new VehicleSnapshotPair(null, ReadVehicleSnapshot(openRCT2)));
                     Volatile.Write(ref parkLoaded, true);
-                    completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData, trackData, paletteData));
+                    completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData, trackData, rideEntranceData, paletteData));
                 }
                 catch (Exception ex) {
                     completion.TrySetException(ex);
@@ -220,6 +229,7 @@ public sealed record ParkSnapshot(
     RCTTileSurfaceData[] SurfaceData,
     RCTTilePathData[] PathData,
     RCTTrackElementData[] TrackData,
+    RCTRideEntranceData[] RideEntranceData,
     RCTPaletteEntry[] PaletteData);
 
 public sealed record VehicleSnapshot(long Timestamp, ReadOnlyMemory<RCTVehicleData> Vehicles);
