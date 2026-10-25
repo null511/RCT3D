@@ -87,9 +87,6 @@ internal sealed class LongBaseSlopeTrackPieceBuilder(RCTTrackElementType pieceTy
 internal sealed class SlopeTrackPieceBuilder(RCTTrackElementType pieceType, float startPitch, float endPitch)
     : TrackPieceMeshBuilder(pieceType)
 {
-    public SlopeTrackPieceBuilder(RCTTrackElementType pieceType, bool beginsFlat, bool endsFlat)
-        : this(pieceType, GetLegacyPitch(pieceType, beginsFlat), GetLegacyPitch(pieceType, endsFlat)) {}
-
     public override bool RequiresCompletePiece => true;
 
     public override void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries)
@@ -126,8 +123,4 @@ internal sealed class SlopeTrackPieceBuilder(RCTTrackElementType pieceType, floa
             startTangent: startTangent, endTangent: endTangent);
     }
 
-    private static float GetLegacyPitch(RCTTrackElementType pieceType, bool flat) =>
-        flat ? Pitch.None : pieceType is RCTTrackElementType.Down25 or RCTTrackElementType.Down25ToFlat or RCTTrackElementType.FlatToDown25
-            ? -Pitch.Slope25
-            : Pitch.Slope25;
 }

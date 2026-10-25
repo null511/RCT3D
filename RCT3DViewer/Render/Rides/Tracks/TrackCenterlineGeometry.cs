@@ -98,6 +98,26 @@ internal static class TrackCenterlineGeometry
         return isUpTransition ? Pitch.Slope25 : -Pitch.Slope25;
     }
 
+    public static (float Start, float End)? GetDiagonalSlopeTransitionPitches(RCTTrackElementType pieceType) => pieceType switch {
+        RCTTrackElementType.DiagFlatToUp25 => (Pitch.None, Pitch.Slope25),
+        RCTTrackElementType.DiagUp25ToFlat => (Pitch.Slope25, Pitch.None),
+        RCTTrackElementType.DiagFlatToDown25 => (Pitch.None, -Pitch.Slope25),
+        RCTTrackElementType.DiagDown25ToFlat => (-Pitch.Slope25, Pitch.None),
+        RCTTrackElementType.DiagFlatToUp60 => (Pitch.None, Pitch.Slope60),
+        RCTTrackElementType.DiagUp60ToFlat => (Pitch.Slope60, Pitch.None),
+        RCTTrackElementType.DiagFlatToDown60 => (Pitch.None, -Pitch.Slope60),
+        RCTTrackElementType.DiagDown60ToFlat => (-Pitch.Slope60, Pitch.None),
+        RCTTrackElementType.DiagUp25ToUp60 => (Pitch.Slope25, Pitch.Slope60),
+        RCTTrackElementType.DiagUp60ToUp25 => (Pitch.Slope60, Pitch.Slope25),
+        RCTTrackElementType.DiagDown25ToDown60 => (-Pitch.Slope25, -Pitch.Slope60),
+        RCTTrackElementType.DiagDown60ToDown25 => (-Pitch.Slope60, -Pitch.Slope25),
+        RCTTrackElementType.DiagFlatToUp60LongBase => (Pitch.None, Pitch.Slope60),
+        RCTTrackElementType.DiagUp60ToFlatLongBase => (Pitch.Slope60, Pitch.None),
+        RCTTrackElementType.DiagFlatToDown60LongBase => (Pitch.None, -Pitch.Slope60),
+        RCTTrackElementType.DiagDown60ToFlatLongBase => (-Pitch.Slope60, Pitch.None),
+        _ => null,
+    };
+
     public static Vector3[] CreateCubicCurvePoints(
         Vector3 start,
         Vector3 end,

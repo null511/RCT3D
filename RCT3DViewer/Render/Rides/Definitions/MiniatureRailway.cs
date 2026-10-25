@@ -58,37 +58,4 @@ internal class MiniatureRailway : RideDefinition
         };
     }
 
-    protected override void BuildRegistry(TrackPieceBuilderRegistry registry)
-    {
-        registry.RegisterMany(type => new StraightTrackPieceBuilder(type),
-            RCTTrackElementType.Flat,
-            RCTTrackElementType.EndStation,
-            RCTTrackElementType.BeginStation,
-            RCTTrackElementType.MiddleStation);
-
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToUp25, true, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25ToFlat, false, true));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25, false, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown25, true, false));
-        registry.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25ToFlat, false, true));
-
-        registry.RegisterMany(type => new CurveTrackPieceBuilder(type),
-            RCTTrackElementType.LeftQuarterTurn5Tiles,
-            RCTTrackElementType.RightQuarterTurn5Tiles,
-            RCTTrackElementType.SBendLeft,
-            RCTTrackElementType.SBendRight,
-            RCTTrackElementType.LeftQuarterTurn3Tiles,
-            RCTTrackElementType.RightQuarterTurn3Tiles,
-            RCTTrackElementType.LeftQuarterTurn1Tile,
-            RCTTrackElementType.RightQuarterTurn1Tile,
-            RCTTrackElementType.LeftEighthToDiag,
-            RCTTrackElementType.RightEighthToDiag,
-            RCTTrackElementType.LeftEighthToOrthogonal,
-            RCTTrackElementType.RightEighthToOrthogonal,
-            RCTTrackElementType.LeftEighthBankToDiag,
-            RCTTrackElementType.RightEighthBankToDiag,
-            RCTTrackElementType.LeftEighthBankToOrthogonal,
-            RCTTrackElementType.RightEighthBankToOrthogonal);
-    }
 }

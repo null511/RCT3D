@@ -7,9 +7,9 @@ namespace RCT3D.Render.Rides.Supports.Builders;
 internal sealed class WoodenTrussSupportMeshBuilder : IRideSupportMeshBuilder
 {
     private const float BeamHalfWidth = 0.08f;
-    private const float SegmentHeight = 2.0f;
 
     private static readonly TrackRailSpecularData supportSpecular = new(220, 0);
+
     private static readonly HashSet<RCTTrackElementType> loopTrackTypes = Enum.GetValues<RCTTrackElementType>()
         .Where(trackType => trackType.ToString().Contains("Loop", StringComparison.Ordinal))
         .ToHashSet();
@@ -17,11 +17,11 @@ internal sealed class WoodenTrussSupportMeshBuilder : IRideSupportMeshBuilder
     public TrackSupportPlacementMode PlacementMode => TrackSupportPlacementMode.TileBased;
     public bool HasDefaultSupportPlacements => true;
 
+
     public void GetDefaultSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements)
     {
         placements.Clear();
-        if (loopTrackTypes.Contains(track.TrackType))
-            return;
+        if (loopTrackTypes.Contains(track.TrackType)) return;
 
         placements.Add(TrackSupportPlacement.AtTile());
     }
@@ -37,10 +37,12 @@ internal sealed class WoodenTrussSupportMeshBuilder : IRideSupportMeshBuilder
     {
         var tileX = track.TileX * WorldUnits.TileSize;
         var tileZ = track.TileY * WorldUnits.TileSize;
+
         var west = tileX + BeamHalfWidth;
         var east = tileX + WorldUnits.TileSize - BeamHalfWidth;
         var south = tileZ + BeamHalfWidth;
         var north = tileZ + WorldUnits.TileSize - BeamHalfWidth;
+
         var trackBaseHeight = track.BaseHeight * WorldUnits.HeightPerBaseUnit;
         var southWestHeight = GetCornerHeight(surface, surface.SouthCornerHeight);
         var southEastHeight = GetCornerHeight(surface, surface.EastCornerHeight);
@@ -53,22 +55,34 @@ internal sealed class WoodenTrussSupportMeshBuilder : IRideSupportMeshBuilder
             && northWestHeight == trackBaseHeight)
             return;
 
-        var topHeight = trackBaseHeight
-            + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f
-            + trackHeightOffset;
-        var segmentBaseHeight = MathF.Min(MathF.Min(southWestHeight, southEastHeight), MathF.Min(northEastHeight, northWestHeight));
-        var wholeSegmentUnits = (int)MathF.Floor(topHeight - segmentBaseHeight);
-        if (wholeSegmentUnits < 1)
-            return;
+        var topHeight = trackBaseHeight + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f;
+
+        var terrainBaseGameUnits = Math.Min(
+            Math.Min(
+                GetCornerHeightInBaseUnits(surface, surface.SouthCornerHeight),
+                GetCornerHeightInBaseUnits(surface, surface.EastCornerHeight)),
+            Math.Min(
+                GetCornerHeightInBaseUnits(surface, surface.NorthCornerHeight),
+                GetCornerHeightInBaseUnits(surface, surface.WestCornerHeight)));
+
+        var segmentBaseHeight = terrainBaseGameUnits * WorldUnits.HeightPerBaseUnit;
+        var wholeSegmentUnits = (int)MathF.Floor((topHeight - segmentBaseHeight) / (2f*WorldUnits.HeightPerBaseUnit));
+
+        // alignment
+        if (wholeSegmentUnits >= 1 && terrainBaseGameUnits % 4 >= 2) {
+            AddBoxSegment(geometry, west, east, south, north, segmentBaseHeight, 2f * WorldUnits.HeightPerBaseUnit, color);
+            segmentBaseHeight += 2f * WorldUnits.HeightPerBaseUnit;
+            wholeSegmentUnits -= 1;
+        }
 
         while (wholeSegmentUnits >= 2) {
-            AddBoxSegment(geometry, west, east, south, north, segmentBaseHeight, SegmentHeight, color);
-            segmentBaseHeight += SegmentHeight;
+            AddBoxSegment(geometry, west, east, south, north, segmentBaseHeight, 4f * WorldUnits.HeightPerBaseUnit, color);
+            segmentBaseHeight += 4f * WorldUnits.HeightPerBaseUnit;
             wholeSegmentUnits -= 2;
         }
 
-        if (wholeSegmentUnits == 1) {
-            AddBoxSegment(geometry, west, east, south, north, segmentBaseHeight, 1.0f, color);
+        if (wholeSegmentUnits >= 1) {
+            AddBoxSegment(geometry, west, east, south, north, segmentBaseHeight, 2f * WorldUnits.HeightPerBaseUnit, color);
         }
     }
 
@@ -112,6 +126,9 @@ internal sealed class WoodenTrussSupportMeshBuilder : IRideSupportMeshBuilder
 
     private static float GetCornerHeight(RCTTileSurfaceData surface, byte cornerHeight) =>
         surface.BaseZ * WorldUnits.HeightPerBaseUnit + cornerHeight * 1.5f;
+
+    private static int GetCornerHeightInBaseUnits(RCTTileSurfaceData surface, byte cornerHeight) =>
+        surface.BaseZ + cornerHeight * 2;
 
     private static void AddTopFrame(
         RideSupportMeshGeometry geometry,

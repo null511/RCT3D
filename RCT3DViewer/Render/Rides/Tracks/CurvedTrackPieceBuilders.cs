@@ -85,10 +85,11 @@ internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveT
         end.Y = originHeight + first.SplineZEnd * WorldUnits.HeightPerBaseUnit;
         var smoothTransition = PieceType is RCTTrackElementType.DiagRightBankToDown25
             or RCTTrackElementType.DiagDown25ToLeftBank;
+        var transitionPitches = TrackCenterlineGeometry.GetDiagonalSlopeTransitionPitches(PieceType);
         var horizontalDistance = Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(end.X, end.Z));
         var risePerRun = horizontalDistance > float.Epsilon ? (end.Y - start.Y) / horizontalDistance : 0.0f;
-        var startPitch = smoothTransition ? TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: true) : risePerRun;
-        var endPitch = smoothTransition ? TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: false) : risePerRun;
+        var startPitch = transitionPitches?.Start ?? (smoothTransition ? TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: true) : risePerRun);
+        var endPitch = transitionPitches?.End ?? (smoothTransition ? TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: false) : risePerRun);
         var pitchedStartDirection = Vector3.Normalize(startDirection + Vector3.UnitY * startPitch);
         var pitchedEndDirection = Vector3.Normalize(endDirection + Vector3.UnitY * endPitch);
         var points = TrackCenterlineGeometry.CreateCubicCurvePoints(start, end, pitchedStartDirection, pitchedEndDirection,

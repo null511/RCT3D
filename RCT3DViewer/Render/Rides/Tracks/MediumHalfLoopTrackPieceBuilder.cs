@@ -1,5 +1,5 @@
-using System.Numerics;
 using RCT3D.Interop;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides.Tracks;
 
@@ -30,13 +30,15 @@ internal sealed class MediumHalfLoopTrackPieceBuilder(RCTTrackElementType pieceT
         end.Y = originHeight + first.SplineZEnd * WorldUnits.HeightPerBaseUnit;
 
         var isUp = PieceType is RCTTrackElementType.LeftMediumHalfLoopUp or RCTTrackElementType.RightMediumHalfLoopUp;
-        var slope = Pitch.Slope25;
+
         var startTangent = isUp
-            ? Vector3.Normalize(startDirection + Vector3.UnitY * slope)
+            ? Vector3.Normalize(startDirection + Vector3.UnitY * Pitch.Slope25)
             : startDirection;
+
         var endTangent = isUp
             ? endDirection
-            : Vector3.Normalize(endDirection - Vector3.UnitY * slope);
+            : Vector3.Normalize(endDirection - Vector3.UnitY * Pitch.Slope25);
+
         var preferredSide = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, startDirection));
         var controlLength = Vector3.Distance(start, end) * 0.4f;
         var points = TrackCenterlineGeometry.CreateCubicCurvePoints(

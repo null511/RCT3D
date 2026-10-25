@@ -17,17 +17,12 @@ internal abstract class RideDefinition(RCTRideType rideType)
     {
         var profile = CreateProfile();
 
-        TrackPieceBuilderRegistry registry = new();
-        BuildRegistry(registry);
-
-        return new TrackRideConfiguration(rideType, registry, [
+        return new TrackRideConfiguration(rideType, [
             new SweptRailProfileGenerator(profile),
         ], SupportStyle, CenterlineHeightOffset, SupportTrackOffset, HasSupportPlacement ? GetSupportPlacements : null);
     }
 
     protected abstract TrackRailProfile CreateProfile();
-
-    protected abstract void BuildRegistry(TrackPieceBuilderRegistry registry);
 
     protected virtual void GetSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements)
     {

@@ -7,15 +7,12 @@ namespace RCT3D.Render.Rides;
 
 internal class TrackRideConfiguration(
     RCTRideType rideType,
-    TrackPieceBuilderRegistry pieceBuilders,
     IReadOnlyList<ITrackPartGenerator> partGenerators,
     RideSupportStyle supportStyle,
     float centerlineHeightOffset,
     float supportTrackOffset,
     Action<RCTTrackElementData, List<TrackSupportPlacement>>? getSupportPlacements)
 {
-    private readonly Dictionary<RCTTrackElementType, ITrackPieceMeshBuilder> builders = pieceBuilders.Builders.ToDictionary(builder => builder.PieceType);
-
     public RCTRideType RideType { get; } = rideType;
     public IReadOnlyList<ITrackPartGenerator> PartGenerators { get; } = partGenerators;
     public RideSupportStyle SupportStyle { get; } = supportStyle;
@@ -40,7 +37,6 @@ internal class TrackRideConfiguration(
         }
     }
 
-    public bool TryResolvePiece(RCTTrackElementType type, out ITrackPieceMeshBuilder builder) => builders.TryGetValue(type, out builder!);
 }
 
 internal static class TrackRideConfigurations

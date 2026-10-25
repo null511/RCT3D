@@ -8,6 +8,7 @@ namespace RCT3D.Render.Rides.Tracks;
 internal sealed class TrackMeshBuilder
 {
     private readonly Dictionary<RCTRideType, TrackRideConfiguration> rideConfigurations;
+    private readonly TrackPieceBuilderCatalog pieceBuilders = TrackPieceBuilderCatalog.Shared;
 
     public TrackMeshBuilder(IEnumerable<TrackRideConfiguration>? rideConfigurations = null)
     {
@@ -49,8 +50,8 @@ internal sealed class TrackMeshBuilder
             if (track.SequenceCount == 0 || track.Sequence >= track.SequenceCount)
                 throw new InvalidDataException($"OpenRCT2 returned an invalid track sequence at ({track.TileX}, {track.TileY}).");
 
-            if (!rideConfigurations.TryGetValue(track.RideType, out var configuration)
-                || !configuration.TryResolvePiece(track.TrackType, out _)) continue;
+            if (!rideConfigurations.TryGetValue(track.RideType, out _)
+                || !pieceBuilders.TryResolve(track.TrackType, out _)) continue;
 
             var offset = RotateSequenceOffset(track.SequenceOffsetX, track.SequenceOffsetY, track.Direction);
 
@@ -78,7 +79,7 @@ internal sealed class TrackMeshBuilder
         foreach (var (key, pieceElements) in pieces) {
             pieceElements.Sort((left, right) => left.Sequence.CompareTo(right.Sequence));
             var configuration = rideConfigurations[key.RideType];
-            configuration.TryResolvePiece(key.TrackType, out var pieceBuilder);
+            pieceBuilders.TryResolve(key.TrackType, out var pieceBuilder);
 
             if (pieceBuilder.RequiresCompletePiece)
                 ValidatePieceSequences(key, pieceElements);
@@ -103,7 +104,7 @@ internal sealed class TrackMeshBuilder
 
             foreach (var (configuration, piece) in regionPieces) {
                 var track = piece[0];
-                configuration.TryResolvePiece(track.TrackType, out var pieceBuilder);
+                pieceBuilders.TryResolve(track.TrackType, out var pieceBuilder);
                 var pieceSpan = CollectionsMarshal.AsSpan(piece);
                 var hasSupportPlacements = configuration.HasSupportPlacements;
                 geometry.SetVerticalOffset(configuration.CenterlineHeightOffset);
