@@ -31,7 +31,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
         placements.Clear();
     }
 
-    protected static Vector2[] CreateCircle(float radius, float centerX, float centerY, int vertexCount)
+    protected static Vector2[] CreateCircle(float centerX, float centerY, float radius, int vertexCount)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(vertexCount, 3);
 

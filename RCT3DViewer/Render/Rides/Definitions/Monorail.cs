@@ -10,7 +10,6 @@ internal class Monorail : RideDefinition
     public Monorail() : base(RCTRideType.Monorail)
     {
         SupportStyle = RideSupportStyle.MetalBoxed;
-        HasSupportPlacement = true;
         SupportTrackOffset = 0.2f;
         CarVerticalOffset = 0.5f;
     }
@@ -50,79 +49,4 @@ internal class Monorail : RideDefinition
             },
         ]);
     }
-
-    protected override void GetSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements)
-    {
-        placements.Clear();
-
-        if (track.TrackType is RCTTrackElementType.BeginStation or RCTTrackElementType.MiddleStation or RCTTrackElementType.EndStation) {
-            placements.Add(TrackSupportPlacement.OnTrack(0.31f));
-            placements.Add(TrackSupportPlacement.OnTrack(-0.31f));
-
-            return;
-        }
-
-        if (track.TrackType is RCTTrackElementType.LeftQuarterTurn5Tiles or RCTTrackElementType.RightQuarterTurn5Tiles
-            or RCTTrackElementType.LeftQuarterTurn5TilesCovered or RCTTrackElementType.RightQuarterTurn5TilesCovered) {
-            if (track.Sequence is 0 or 6)
-                placements.Add(TrackSupportPlacement.OnTrack());
-
-            return;
-        }
-
-        if (track.TrackType is RCTTrackElementType.LeftQuarterTurn3Tiles or RCTTrackElementType.RightQuarterTurn3Tiles
-            or RCTTrackElementType.LeftQuarterTurn3TilesCovered or RCTTrackElementType.RightQuarterTurn3TilesCovered) {
-            if (track.Sequence is 0 or 3)
-                placements.Add(TrackSupportPlacement.OnTrack());
-
-            return;
-        }
-
-        if (track.TrackType is RCTTrackElementType.SBendLeft or RCTTrackElementType.SBendRight
-            or RCTTrackElementType.SBendLeftCovered or RCTTrackElementType.SBendRightCovered) {
-            var trackProgress = (track.Sequence + 0.5f) / track.SequenceCount;
-
-            if (track.Sequence is 0 or 3) {
-                placements.Add(TrackSupportPlacement.OnTrack(trackProgress: trackProgress));
-                return;
-            }
-
-            if (track.Sequence is 1 or 2) {
-                placements.Add(TrackSupportPlacement.OnTrack(trackProgress: trackProgress));
-            }
-
-            return;
-        }
-
-        if (track.TrackType.IsEighthTurn()) {
-            const float supportInsetProgress = 16.0f / 87.0f;
-
-            if (track.Sequence == 0)
-                placements.Add(TrackSupportPlacement.OnTrack(trackProgress: supportInsetProgress));
-            else if (track.Sequence == track.SequenceCount - 1)
-                placements.Add(TrackSupportPlacement.OnTrack(trackProgress: 1.0f - supportInsetProgress));
-
-            return;
-        }
-
-        if (track.TrackType.IsDiagonal()) {
-            if (track.Sequence == 3)
-                placements.Add(TrackSupportPlacement.OnTrack(heightExtra: GetSlopeSupportHeightExtra(track.TrackType)));
-
-            return;
-        }
-
-        if ((track.TileX & 1) == (track.TileY & 1))
-            placements.Add(TrackSupportPlacement.OnTrack(heightExtra: GetSlopeSupportHeightExtra(track.TrackType)));
-    }
-
-    private static int GetSlopeSupportHeightExtra(RCTTrackElementType trackType) => trackType switch {
-        RCTTrackElementType.Up25 or RCTTrackElementType.Down25 => 8,
-        RCTTrackElementType.FlatToUp25 or RCTTrackElementType.FlatToDown25 => 3,
-        RCTTrackElementType.Up25ToFlat or RCTTrackElementType.Down25ToFlat => 6,
-        RCTTrackElementType.DiagUp25 or RCTTrackElementType.DiagDown25 => 8,
-        RCTTrackElementType.DiagFlatToUp25 or RCTTrackElementType.DiagFlatToDown25 => 0,
-        RCTTrackElementType.DiagUp25ToFlat or RCTTrackElementType.DiagDown25ToFlat => 4,
-        _ => 0,
-    };
 }

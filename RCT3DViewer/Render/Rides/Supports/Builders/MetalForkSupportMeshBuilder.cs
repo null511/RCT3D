@@ -40,7 +40,7 @@ internal sealed class MetalForkSupportMeshBuilder : IRideSupportMeshBuilder
             anchor.Position.Z);
 
         var groundHeight = GetSurfaceHeight(surface, anchor.SurfaceTileX, anchor.SurfaceTileY, center.X, center.Z) + SupportSurfaceOffset;
-        var topHeight = track.BaseHeight * WorldUnits.HeightPerBaseUnit
+        var topHeight = anchor.Position.Y
             + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f
             + trackHeightOffset;
         if (topHeight <= groundHeight + ForkBaseRise) return;

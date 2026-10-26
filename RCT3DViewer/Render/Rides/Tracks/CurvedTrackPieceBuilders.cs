@@ -12,6 +12,7 @@ internal class CurveTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPiec
 
     protected virtual float GetRollBegin(in RCTTrackElementData track) => 0.0f;
     protected virtual float GetRollEnd(in RCTTrackElementData track) => 0.0f;
+    protected virtual bool SmoothRollTransition => false;
     protected virtual float GetControlLength(Vector3 start, Vector3 end) => Vector3.Distance(start, end) * 0.4f;
     protected virtual int GetSubdivisions(int trackCount) => trackCount * TrackCenterlineGeometry.CurveSubdivisionsPerTile;
 
@@ -46,7 +47,8 @@ internal class CurveTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPiec
 
         TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, paletteEntries,
             GetRollBegin(first), GetRollEnd(first),
-            startTangent: pitchedStartDirection, endTangent: pitchedEndDirection);
+            startTangent: pitchedStartDirection, endTangent: pitchedEndDirection,
+            smoothRollTransition: SmoothRollTransition);
     }
 }
 
@@ -60,6 +62,26 @@ internal sealed class BankedCurveTrackPieceBuilder(RCTTrackElementType pieceType
 {
     protected override float GetRollBegin(in RCTTrackElementData track) => TrackCenterlineGeometry.GetRollRadians(track.RollBegin);
     protected override float GetRollEnd(in RCTTrackElementData track) => TrackCenterlineGeometry.GetRollRadians(track.RollEnd);
+}
+
+internal sealed class CorkscrewTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
+{
+    private const float HalfTwist = MathF.PI;
+
+    private bool IsUp => PieceType is RCTTrackElementType.LeftCorkscrewUp
+        or RCTTrackElementType.RightCorkscrewUp
+        or RCTTrackElementType.LeftLargeCorkscrewUp
+        or RCTTrackElementType.RightLargeCorkscrewUp;
+    private float SignedHalfTwist => PieceType is RCTTrackElementType.LeftCorkscrewUp
+        or RCTTrackElementType.LeftCorkscrewDown
+        or RCTTrackElementType.LeftLargeCorkscrewUp
+        or RCTTrackElementType.LeftLargeCorkscrewDown
+        ? HalfTwist
+        : -HalfTwist;
+
+    protected override float GetRollBegin(in RCTTrackElementData track) => IsUp ? 0.0f : SignedHalfTwist;
+    protected override float GetRollEnd(in RCTTrackElementData track) => IsUp ? SignedHalfTwist : 0.0f;
+    protected override bool SmoothRollTransition => true;
 }
 
 internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)

@@ -9,6 +9,7 @@
 - For ride configurations, do not directly reuse another ride's registry; give each ride an independent registry so future changes to one ride do not propagate to another.
 - For wooden truss behavior, define it by the support type, not individual ride definitions; every occupied track tile gets a placement.
 - For the looping coaster, the entry/exit slope segments should be length-adjustable, extend inward from the existing fixed endpoints, and be used to broaden the bottom of the loop. Keep the main loop curve logic intact and avoid changing the established overall apex height if feasible.
+- For HalfLoopUp and HalfLoopDown roll handling, use separate per-piece endpoint rules derived from OpenRCT2 track metadata; do not assume both pieces share a constant 180-degree roll.
 
 ## Rendering Guidelines
 - Request source-derived terrain direction reasoning rather than guess-and-test; validate rendering hypotheses before making further geometry changes.

@@ -84,7 +84,55 @@ internal sealed class RideSupportMeshGeometry
         AddFace(westBottom, southBottom, northBottom, eastBottom, -yAxis, color, specular);
     }
 
+    public void AddVerticalTube(
+        Vector3 center,
+        float bottomHeight,
+        float topHeight,
+        float radius,
+        int sideCount,
+        TrackRgba8 color,
+        TrackRailSpecularData specular)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(sideCount, 3);
+        if (topHeight <= bottomHeight)
+            throw new ArgumentOutOfRangeException(nameof(topHeight));
+        if (radius <= 0.0f)
+            throw new ArgumentOutOfRangeException(nameof(radius));
+
+        var bottomRing = new Vector3[sideCount];
+        var topRing = new Vector3[sideCount];
+        for (var i = 0; i < sideCount; i++) {
+            var angle = 2.0f * MathF.PI * i / sideCount;
+            var offset = new Vector3(MathF.Cos(angle) * radius, 0.0f, MathF.Sin(angle) * radius);
+            bottomRing[i] = new Vector3(center.X, bottomHeight, center.Z) + offset;
+            topRing[i] = new Vector3(center.X, topHeight, center.Z) + offset;
+        }
+
+        for (var i = 0; i < sideCount; i++) {
+            var next = (i + 1) % sideCount;
+            var middleAngle = 2.0f * MathF.PI * (i + 0.5f) / sideCount;
+            var normal = new Vector3(MathF.Cos(middleAngle), 0.0f, MathF.Sin(middleAngle));
+            AddFace(bottomRing[i], bottomRing[next], topRing[next], topRing[i], normal, color, specular);
+        }
+
+        AddCap(new Vector3(center.X, bottomHeight, center.Z), bottomRing, -Vector3.UnitY, color, specular);
+        AddCap(new Vector3(center.X, topHeight, center.Z), topRing, Vector3.UnitY, color, specular);
+    }
+
     public RideSupportMeshData Build() => new(vertices.ToArray(), indices.ToArray(), regions.ToArray());
+
+    private void AddCap(Vector3 center, Vector3[] ring, Vector3 normal, TrackRgba8 color, TrackRailSpecularData specular)
+    {
+        var centerIndex = (uint)vertices.Count;
+        vertices.Add(new TrackVertex(center, normal, color, specular.Roughness, specular.Metalness));
+
+        for (var i = 0; i < ring.Length; i++) {
+            var firstIndex = (uint)vertices.Count;
+            vertices.Add(new TrackVertex(ring[i], normal, color, specular.Roughness, specular.Metalness));
+            vertices.Add(new TrackVertex(ring[(i + 1) % ring.Length], normal, color, specular.Roughness, specular.Metalness));
+            AddTriangle(centerIndex, firstIndex, firstIndex + 1, normal);
+        }
+    }
 
     private void AddFace(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal, TrackRgba8 color, TrackRailSpecularData specular)
     {

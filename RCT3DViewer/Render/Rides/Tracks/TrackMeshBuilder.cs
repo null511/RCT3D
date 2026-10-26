@@ -1,7 +1,7 @@
-using System.Runtime.InteropServices;
-using System.Numerics;
 using RCT3D.Interop;
 using RCT3D.Render.Rides.Supports;
+using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace RCT3D.Render.Rides.Tracks;
 
@@ -9,6 +9,7 @@ internal sealed class TrackMeshBuilder
 {
     private readonly Dictionary<RCTRideType, TrackRideConfiguration> rideConfigurations;
     private readonly TrackPieceBuilderCatalog pieceBuilders = TrackPieceBuilderCatalog.Shared;
+
 
     public TrackMeshBuilder(IEnumerable<TrackRideConfiguration>? rideConfigurations = null)
     {
@@ -118,24 +119,37 @@ internal sealed class TrackMeshBuilder
                     geometry.SetVerticalOffset(0.0f);
                 }
 
-                if (hasSupportPlacements
-                    && configuration.SupportMeshBuilder is { } supportMeshBuilder) {
+                if (hasSupportPlacements && configuration.SupportMeshBuilder is { } supportMeshBuilder) {
                     var centerlines = geometry.EndCenterlineCapture();
                     if (centerlines.Length == 0)
                         throw new InvalidDataException($"Track piece {track.TrackType} did not expose a centerline for support placement.");
 
                     var placements = new List<TrackSupportPlacement>();
+
                     foreach (ref readonly var supportTrack in pieceSpan) {
-                        configuration.PopulateSupportPlacements(supportTrack, placements);
+                        if (supportMeshBuilder.PlacementMode == TrackSupportPlacementMode.TrackBased) {
+                            placements.Clear();
+                            foreach (var progress in TrackBasedSupportProgressMap.GetProgresses(supportTrack))
+                                placements.Add(TrackSupportPlacement.OnTrack(trackProgress: progress));
+                        }
+                        else {
+                            configuration.PopulateSupportPlacements(supportTrack, placements);
+                        }
+
+                        var trackHeightOffset = configuration.SupportTrackOffset;
+
                         var supportColor = GetPaletteColor(supportTrack.SupportPaletteIndex, palette);
                         foreach (var placement in placements) {
                             var anchor = ResolveSupportAnchor(
                                 supportTrack, placement, supportMeshBuilder.PlacementMode, centerlines,
-                                configuration.SupportTrackOffset, mapWidth, mapHeight);
+                                mapWidth, mapHeight);
+
                             var surfaceIndex = checked(anchor.SurfaceTileY * mapWidth + anchor.SurfaceTileX);
                             var surface = surfaces[surfaceIndex];
-                            supportMeshBuilder.AddSupport(
-                                supportTrack, placement, anchor, supportGeometry, surface, supportColor, configuration.SupportTrackOffset);
+                            var trackBaseHeight = supportTrack.BaseHeight * WorldUnits.HeightPerBaseUnit;
+                            if (IsSurfaceLevelWithTrackBase(surface, trackBaseHeight)) continue;
+
+                            supportMeshBuilder.AddSupport(supportTrack, placement, anchor, supportGeometry, surface, supportColor, trackHeightOffset);
                         }
                     }
                 }
@@ -153,7 +167,6 @@ internal sealed class TrackMeshBuilder
         TrackSupportPlacement placement,
         TrackSupportPlacementMode placementMode,
         ReadOnlySpan<TrackCenterlinePath> centerlines,
-        float supportTrackOffset,
         int mapWidth,
         int mapHeight)
     {
@@ -162,23 +175,7 @@ internal sealed class TrackMeshBuilder
 
         if (placementMode == TrackSupportPlacementMode.TrackBased) {
             var centerline = GetCenterlineForSequence(track.Sequence, centerlines);
-            if (float.IsFinite(placement.TrackProgress)) {
-                (position, tangent) = FindCenterlinePointAtProgress(centerline.Points, placement.TrackProgress);
-            }
-            else {
-                var target = TrackCenterlineGeometry.GetTileCenter(track);
-                target.Y = track.BaseHeight * WorldUnits.HeightPerBaseUnit
-                    + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f
-                    + supportTrackOffset;
-                (position, tangent) = FindClosestCenterlinePointInTile(centerline.Points, track.TileX, track.TileY, target);
-            }
-
-            if (placement.TrackLateralOffset != 0.0f) {
-                var lateral = Vector3.Cross(Vector3.UnitY, tangent);
-                if (lateral.LengthSquared() <= float.Epsilon)
-                    lateral = Vector3.Cross(Vector3.UnitY, TrackCenterlineGeometry.GetTrackDirection(track.Direction));
-                position += Vector3.Normalize(lateral) * placement.TrackLateralOffset;
-            }
+            (position, tangent) = FindCenterlinePointAtProgress(centerline.Points, placement.TrackProgress);
         }
         else {
             position = new Vector3(
@@ -204,46 +201,6 @@ internal sealed class TrackMeshBuilder
         }
 
         throw new InvalidDataException($"No rendered track centerline was captured for sequence {sequence}.");
-    }
-
-    private static (Vector3 Position, Vector3 Tangent) FindClosestCenterlinePointInTile(
-        ReadOnlySpan<Vector3> points,
-        int tileX,
-        int tileY,
-        Vector3 target)
-    {
-        var minX = tileX * WorldUnits.TileSize;
-        var minZ = tileY * WorldUnits.TileSize;
-        var maxX = minX + WorldUnits.TileSize;
-        var maxZ = minZ + WorldUnits.TileSize;
-        var bestDistance = float.PositiveInfinity;
-        var bestPosition = default(Vector3);
-        var bestTangent = Vector3.Zero;
-
-        for (var i = 0; i < points.Length - 1; i++) {
-            var start = points[i];
-            var end = points[i + 1];
-            if (!ClipSegmentToTile(start, end, minX, minZ, maxX, maxZ, out var minT, out var maxT)) continue;
-
-            var segment = end - start;
-            var lengthSquared = segment.LengthSquared();
-            var projectedT = lengthSquared > float.Epsilon
-                ? Vector3.Dot(target - start, segment) / lengthSquared
-                : minT;
-            var t = Math.Clamp(projectedT, minT, maxT);
-            var position = Vector3.Lerp(start, end, t);
-            var distance = Vector3.DistanceSquared(position, target);
-            if (distance >= bestDistance) continue;
-
-            bestDistance = distance;
-            bestPosition = position;
-            bestTangent = lengthSquared > float.Epsilon ? Vector3.Normalize(segment) : Vector3.UnitY;
-        }
-
-        if (float.IsPositiveInfinity(bestDistance))
-            throw new InvalidDataException($"The rendered track centerline does not pass through support tile ({tileX}, {tileY}).");
-
-        return (bestPosition, bestTangent);
     }
 
     private static (Vector3 Position, Vector3 Tangent) FindCenterlinePointAtProgress(
@@ -278,43 +235,13 @@ internal sealed class TrackMeshBuilder
         throw new InvalidDataException("Could not resolve a point on the rendered track centerline.");
     }
 
-    private static bool ClipSegmentToTile(
-        Vector3 start,
-        Vector3 end,
-        float minX,
-        float minZ,
-        float maxX,
-        float maxZ,
-        out float minT,
-        out float maxT)
+    private static bool IsSurfaceLevelWithTrackBase(RCTTileSurfaceData surface, float trackBaseHeight)
     {
-        minT = 0.0f;
-        maxT = 1.0f;
-        var deltaX = end.X - start.X;
-        var deltaZ = end.Z - start.Z;
-
-        return ClipAxis(-deltaX, start.X - minX, ref minT, ref maxT)
-            && ClipAxis(deltaX, maxX - start.X, ref minT, ref maxT)
-            && ClipAxis(-deltaZ, start.Z - minZ, ref minT, ref maxT)
-            && ClipAxis(deltaZ, maxZ - start.Z, ref minT, ref maxT);
-    }
-
-    private static bool ClipAxis(float p, float q, ref float minT, ref float maxT)
-    {
-        if (MathF.Abs(p) <= float.Epsilon)
-            return q >= 0.0f;
-
-        var t = q / p;
-        if (p < 0.0f) {
-            if (t > maxT) return false;
-            minT = Math.Max(minT, t);
-        }
-        else {
-            if (t < minT) return false;
-            maxT = Math.Min(maxT, t);
-        }
-
-        return minT <= maxT;
+        var baseHeight = surface.BaseZ * WorldUnits.HeightPerBaseUnit;
+        return baseHeight + surface.NorthCornerHeight * 1.5f == trackBaseHeight
+            && baseHeight + surface.EastCornerHeight * 1.5f == trackBaseHeight
+            && baseHeight + surface.SouthCornerHeight * 1.5f == trackBaseHeight
+            && baseHeight + surface.WestCornerHeight * 1.5f == trackBaseHeight;
     }
 
     private static (int X, int Y) RotateSequenceOffset(int x, int y, byte direction) => direction switch {

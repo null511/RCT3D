@@ -189,6 +189,10 @@ internal sealed class TrackPieceBuilderCatalog
             RCTTrackElementType.LeftVerticalLoop,
             RCTTrackElementType.RightVerticalLoop);
 
+        catalog.RegisterMany(type => new HalfLoopTrackPieceBuilder(type),
+            RCTTrackElementType.HalfLoopDown,
+            RCTTrackElementType.HalfLoopUp);
+
         catalog.RegisterMany(type => new MediumHalfLoopTrackPieceBuilder(type),
             RCTTrackElementType.LeftMediumHalfLoopDown,
             RCTTrackElementType.LeftMediumHalfLoopUp,
@@ -200,6 +204,16 @@ internal sealed class TrackPieceBuilderCatalog
             RCTTrackElementType.LeftLargeHalfLoopUp,
             RCTTrackElementType.RightLargeHalfLoopDown,
             RCTTrackElementType.RightLargeHalfLoopUp);
+
+        catalog.RegisterMany(type => new CorkscrewTrackPieceBuilder(type),
+            RCTTrackElementType.LeftCorkscrewDown,
+            RCTTrackElementType.LeftCorkscrewUp,
+            RCTTrackElementType.RightCorkscrewDown,
+            RCTTrackElementType.RightCorkscrewUp,
+            RCTTrackElementType.LeftLargeCorkscrewDown,
+            RCTTrackElementType.LeftLargeCorkscrewUp,
+            RCTTrackElementType.RightLargeCorkscrewDown,
+            RCTTrackElementType.RightLargeCorkscrewUp);
 
         catalog.RegisterMany(type => new TwistTrackPieceBuilder(type),
             RCTTrackElementType.LeftTwistDownToUp,

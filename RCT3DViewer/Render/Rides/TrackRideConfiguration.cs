@@ -24,7 +24,9 @@ internal class TrackRideConfiguration(
     public Action<RCTTrackElementData, List<TrackSupportPlacement>>? GetSupportPlacements { get; } = getSupportPlacements;
 
     public bool HasSupportPlacements => SupportMeshBuilder is { } builder
-        && (builder.HasDefaultSupportPlacements || GetSupportPlacements is not null);
+        && (builder.PlacementMode == TrackSupportPlacementMode.TrackBased
+            || builder.HasDefaultSupportPlacements
+            || GetSupportPlacements is not null);
 
     public void PopulateSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements)
     {
@@ -51,6 +53,7 @@ internal static class TrackRideConfigurations
         new MineTrainCoaster().Build(),
         new ClassicWoodenRollerCoaster().Build(),
         new LoopingRollerCoaster().Build(),
+        new CorkscrewRollerCoaster().Build(),
         new CompactInvertedCoaster().Build(),
     ];
 

@@ -31,7 +31,7 @@ internal sealed class MetalBoxedSupportMeshBuilder : IRideSupportMeshBuilder
 
         var groundHeight = GetSurfaceHeight(surface, anchor.SurfaceTileX, anchor.SurfaceTileY, worldX, worldZ) + SupportSurfaceOffset;
 
-        var topHeight = track.BaseHeight * WorldUnits.HeightPerBaseUnit
+        var topHeight = anchor.Position.Y
             + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f
             + trackHeightOffset;
 

@@ -15,15 +15,15 @@ internal class LoopingRollerCoaster : RideDefinition
     protected override TrackRailProfile CreateProfile()
     {
         return new TrackRailProfile([
-            new TrackRailProfileShape(CreateCircle(0.06f, -0.42f, 0.28f, 5), true) {
+            new TrackRailProfileShape(CreateCircle(-0.42f, 0.28f, 0.06f, 5), true) {
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(100, 0),
             },
-            new TrackRailProfileShape(CreateCircle(0.18f,  0.00f, 0.20f, 6), true) {
+            new TrackRailProfileShape(CreateCircle(0.00f, 0.20f, 0.18f, 6), true) {
                 Swatch = TrackRailSwatch.Main,
                 Specular = new TrackRailSpecularData(100, 0),
             },
-            new TrackRailProfileShape(CreateCircle(0.06f,  0.42f, 0.28f, 5), true) {
+            new TrackRailProfileShape(CreateCircle(0.42f, 0.28f, 0.06f, 5), true) {
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(100, 0),
             },

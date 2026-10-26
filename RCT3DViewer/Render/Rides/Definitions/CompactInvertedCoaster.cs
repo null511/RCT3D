@@ -9,22 +9,22 @@ internal sealed class CompactInvertedCoaster : RideDefinition
     public CompactInvertedCoaster() : base(RCTRideType.CompactInvertedCoaster)
     {
         SupportStyle = RideSupportStyle.MetalTubesInverted;
-        CenterlineHeightOffset = 3.0f;
+        CenterlineHeightOffset = 2.0f;
         CarVerticalOffset = -0.5f;
     }
 
     protected override TrackRailProfile CreateProfile()
     {
         return new TrackRailProfile([
-            new TrackRailProfileShape(CreateCircle(0.06f, -0.42f, 1.12f, 5), true) {
+            new TrackRailProfileShape(CreateCircle(-0.42f, 1.12f, 0.06f, 5), true) {
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(100, 0),
             },
-            new TrackRailProfileShape(CreateCircle(0.18f,  0.00f, 1.20f, 6), true) {
+            new TrackRailProfileShape(CreateCircle(0.00f, 1.20f, 0.18f, 6), true) {
                 Swatch = TrackRailSwatch.Main,
                 Specular = new TrackRailSpecularData(100, 0),
             },
-            new TrackRailProfileShape(CreateCircle(0.06f,  0.42f, 1.12f, 5), true) {
+            new TrackRailProfileShape(CreateCircle(0.42f, 1.12f, 0.06f, 5), true) {
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(100, 0),
             },
