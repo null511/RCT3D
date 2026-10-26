@@ -9,6 +9,7 @@ internal sealed class MineTrainCoaster : RideDefinition
     public MineTrainCoaster() : base(RCTRideType.MineTrainCoaster)
     {
         CenterlineHeightOffset = 0.2f;
+        CarVerticalOffset = 0.5f;
     }
 
     protected override TrackRailProfile CreateProfile()

@@ -9,6 +9,7 @@ internal class LoopingRollerCoaster : RideDefinition
     public LoopingRollerCoaster() : base(RCTRideType.LoopingRollerCoaster)
     {
         SupportStyle = RideSupportStyle.MetalTubes;
+        CarVerticalOffset = 0.5f;
     }
 
     protected override TrackRailProfile CreateProfile()

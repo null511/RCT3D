@@ -9,15 +9,19 @@ internal sealed class ViewerInputController : IDisposable
 {
     private readonly IInputContext inputContext;
     private readonly FlightCamera camera;
+    private readonly PeepModeController peepMode;
     private readonly Action togglePause;
     private readonly Action toggleDebug;
     private bool f9WasPressed;
     private bool f3WasPressed;
+    private bool pWasPressed;
+    private bool eWasPressed;
 
 
-    public ViewerInputController(IWindow window, FlightCamera camera, Func<bool> wantCaptureMouse, Action togglePause, Action toggleDebug)
+    public ViewerInputController(IWindow window, FlightCamera camera, PeepModeController peepMode, Func<bool> wantCaptureMouse, Action togglePause, Action toggleDebug)
     {
         this.camera = camera;
+        this.peepMode = peepMode;
         this.togglePause = togglePause;
         this.toggleDebug = toggleDebug;
 
@@ -64,6 +68,18 @@ internal sealed class ViewerInputController : IDisposable
             if (f3Pressed && !f3WasPressed)
                 toggleDebug();
             f3WasPressed = f3Pressed;
+
+            var pPressed = keyboard.IsKeyPressed(Key.P);
+            if (pPressed && !pWasPressed)
+                peepMode.Toggle();
+            pWasPressed = pPressed;
+
+            var ePressed = keyboard.IsKeyPressed(Key.E);
+            if (ePressed && !eWasPressed)
+                peepMode.Interact();
+            eWasPressed = ePressed;
+
+            peepMode.Update(keyboard, (float)deltaTime, !(imguiRenderer?.WantCaptureKeyboard ?? false));
         }
 
         if (imguiRenderer is not null) {
@@ -93,7 +109,8 @@ internal sealed class ViewerInputController : IDisposable
             }
         }
 
-        if (inputContext.Keyboards.Count > 0 && !(imguiRenderer?.WantCaptureKeyboard ?? false))
+        if (inputContext.Keyboards.Count > 0 && !(imguiRenderer?.WantCaptureKeyboard ?? false)
+            && !peepMode.IsEnabled && !peepMode.IsEntering)
             camera.HandleKeyboard(inputContext.Keyboards[0], (float)deltaTime);
     }
 

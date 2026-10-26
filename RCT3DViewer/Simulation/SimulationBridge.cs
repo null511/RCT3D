@@ -18,8 +18,11 @@ public sealed class SimulationBridge : IDisposable
     private bool isPaused;
     private float gameTimeOfDayHours;
     private VehicleSnapshotPair? vehicleSnapshots;
+    private PeepSnapshot? peepSnapshot;
+    private int activePeepEntityId = -1;
 
     public VehicleSnapshotPair? VehicleSnapshots => Volatile.Read(ref vehicleSnapshots);
+    public PeepSnapshot? Peep => Volatile.Read(ref peepSnapshot);
     public float? GameTimeOfDayHours => Volatile.Read(ref parkLoaded) ? Volatile.Read(ref gameTimeOfDayHours) : null;
     public bool? IsPaused => Volatile.Read(ref parkLoaded) ? Volatile.Read(ref isPaused) : null;
     public Exception? SimulationFailure => Volatile.Read(ref simulationFailure);
@@ -55,6 +58,8 @@ public sealed class SimulationBridge : IDisposable
                     reportProgress("Loading park file...");
                     Volatile.Write(ref parkLoaded, false);
                     Volatile.Write(ref vehicleSnapshots, null);
+                    Volatile.Write(ref peepSnapshot, null);
+                    Volatile.Write(ref activePeepEntityId, -1);
                     Volatile.Write(ref simulationFailure, null);
                     openRCT2.LoadPark(savePath);
 
@@ -106,6 +111,141 @@ public sealed class SimulationBridge : IDisposable
         }
 
         return completion.Task;
+    }
+
+    public Task<ushort> CreatePeepAsync(int x, int y, int z)
+    {
+        var completion = new TaskCompletionSource<ushort>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        lock (sync) {
+            ObjectDisposedException.ThrowIf(isDisposed, this);
+            if (!Volatile.Read(ref parkLoaded)) {
+                completion.TrySetException(new InvalidOperationException("No park is loaded."));
+                return completion.Task;
+            }
+
+            requests.Add(openRCT2 => {
+                try {
+                    var entityId = openRCT2.CreatePeep(x, y, z);
+                    Volatile.Write(ref activePeepEntityId, entityId);
+                    Volatile.Write(ref peepSnapshot, ToPeepSnapshot(openRCT2.GetPeepData(entityId)));
+                    completion.TrySetResult(entityId);
+                }
+                catch (Exception ex) {
+                    completion.TrySetException(ex);
+                }
+            });
+        }
+
+        return completion.Task;
+    }
+
+    public void MovePeep(ushort entityId, int x, int y, int z, byte direction)
+    {
+        lock (sync) {
+            ObjectDisposedException.ThrowIf(isDisposed, this);
+            if (!Volatile.Read(ref parkLoaded) || Volatile.Read(ref activePeepEntityId) != entityId) return;
+
+            requests.Add(openRCT2 => {
+                try {
+                    openRCT2.MovePeep(entityId, x, y, z, direction);
+                    Volatile.Write(ref peepSnapshot, ToPeepSnapshot(openRCT2.GetPeepData(entityId)));
+                }
+                catch (Exception ex) {
+                    Volatile.Write(ref simulationFailure, ex);
+                }
+            });
+        }
+    }
+
+    public Task EnterRideAsync(ushort entityId, ushort rideId, byte stationIndex)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        lock (sync) {
+            ObjectDisposedException.ThrowIf(isDisposed, this);
+            if (!Volatile.Read(ref parkLoaded) || Volatile.Read(ref activePeepEntityId) != entityId) {
+                completion.TrySetException(new InvalidOperationException("The Peep Mode guest is not active."));
+                return completion.Task;
+            }
+
+            requests.Add(openRCT2 => {
+                try {
+                    openRCT2.EnterRide(entityId, rideId, stationIndex);
+                    Volatile.Write(ref peepSnapshot, ToPeepSnapshot(openRCT2.GetPeepData(entityId)));
+                    completion.TrySetResult();
+                }
+                catch (Exception ex) {
+                    completion.TrySetException(ex);
+                }
+            });
+        }
+
+        return completion.Task;
+    }
+
+    public Task TakeControlPeepAsync(ushort entityId, int x, int y, int z, byte direction)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        lock (sync) {
+            ObjectDisposedException.ThrowIf(isDisposed, this);
+            if (!Volatile.Read(ref parkLoaded) || Volatile.Read(ref activePeepEntityId) != entityId) {
+                completion.TrySetException(new InvalidOperationException("The Peep Mode guest is not active."));
+                return completion.Task;
+            }
+
+            requests.Add(openRCT2 => {
+                try {
+                    openRCT2.TakeControlPeep(entityId, x, y, z, direction);
+                    Volatile.Write(ref peepSnapshot, ToPeepSnapshot(openRCT2.GetPeepData(entityId)));
+                    completion.TrySetResult();
+                }
+                catch (Exception ex) {
+                    completion.TrySetException(ex);
+                }
+            });
+        }
+
+        return completion.Task;
+    }
+
+    public void ReleasePeep(ushort entityId)
+    {
+        lock (sync) {
+            ObjectDisposedException.ThrowIf(isDisposed, this);
+            if (Volatile.Read(ref activePeepEntityId) != entityId) return;
+
+            requests.Add(openRCT2 => {
+                try {
+                    openRCT2.ReleasePeep(entityId);
+                    Volatile.Write(ref activePeepEntityId, -1);
+                    Volatile.Write(ref peepSnapshot, null);
+                }
+                catch (Exception ex) {
+                    Volatile.Write(ref simulationFailure, ex);
+                }
+            });
+        }
+    }
+
+    public void RemovePeep(ushort entityId)
+    {
+        lock (sync) {
+            ObjectDisposedException.ThrowIf(isDisposed, this);
+            if (Volatile.Read(ref activePeepEntityId) != entityId) return;
+
+            requests.Add(openRCT2 => {
+                try {
+                    openRCT2.RemovePeep(entityId);
+                    Volatile.Write(ref activePeepEntityId, -1);
+                    Volatile.Write(ref peepSnapshot, null);
+                }
+                catch (Exception ex) {
+                    Volatile.Write(ref simulationFailure, ex);
+                }
+            });
+        }
     }
 
     public void TogglePause()
@@ -163,6 +303,7 @@ public sealed class SimulationBridge : IDisposable
                         openRCT2.AdvanceSimulation();
                         Volatile.Write(ref gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                         PublishVehicleSnapshot(openRCT2);
+                        PublishPeepSnapshot(openRCT2);
                         nextUpdate += updateInterval;
                         if (now - nextUpdate > updateInterval * 4)
                             nextUpdate = now + updateInterval;
@@ -195,6 +336,25 @@ public sealed class SimulationBridge : IDisposable
         var current = ReadVehicleSnapshot(openRCT2);
         Volatile.Write(ref vehicleSnapshots, new VehicleSnapshotPair(previous, current));
     }
+
+    private void PublishPeepSnapshot(LibOpenRCT2 openRCT2)
+    {
+        var entityId = Volatile.Read(ref activePeepEntityId);
+        if (entityId < 0) return;
+
+        try {
+            Volatile.Write(ref peepSnapshot, ToPeepSnapshot(openRCT2.GetPeepData((ushort)entityId)));
+        }
+        catch (Exception ex) {
+            Volatile.Write(ref simulationFailure, ex);
+            Volatile.Write(ref peepSnapshot, null);
+            Volatile.Write(ref activePeepEntityId, -1);
+        }
+    }
+
+    private static PeepSnapshot ToPeepSnapshot(RCTPeepData data) => new(
+        data.EntityId, data.X, data.Y, data.Z, data.State, data.RideId,
+        data.StationIndex, data.TrainIndex, data.CarIndex, data.SeatIndex, data.TrainHeadEntityId);
 
     private static VehicleSnapshot ReadVehicleSnapshot(LibOpenRCT2 openRCT2)
     {
@@ -235,3 +395,16 @@ public sealed record ParkSnapshot(
 public sealed record VehicleSnapshot(long Timestamp, ReadOnlyMemory<RCTVehicleData> Vehicles);
 
 public sealed record VehicleSnapshotPair(VehicleSnapshot? Previous, VehicleSnapshot Current);
+
+public sealed record PeepSnapshot(
+    ushort EntityId,
+    int X,
+    int Y,
+    int Z,
+    byte State,
+    ushort RideId,
+    byte StationIndex,
+    byte TrainIndex,
+    byte CarIndex,
+    byte SeatIndex,
+    ushort TrainHeadEntityId);

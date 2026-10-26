@@ -11,6 +11,7 @@ internal class TrackRideConfiguration(
     RideSupportStyle supportStyle,
     float centerlineHeightOffset,
     float supportTrackOffset,
+    float carVerticalOffset,
     Action<RCTTrackElementData, List<TrackSupportPlacement>>? getSupportPlacements)
 {
     public RCTRideType RideType { get; } = rideType;
@@ -18,6 +19,7 @@ internal class TrackRideConfiguration(
     public RideSupportStyle SupportStyle { get; } = supportStyle;
     public float CenterlineHeightOffset { get; } = centerlineHeightOffset;
     public float SupportTrackOffset { get; } = supportTrackOffset;
+    public float CarVerticalOffset { get; } = carVerticalOffset;
     public IRideSupportMeshBuilder? SupportMeshBuilder { get; } = RideSupportMeshBuilders.Resolve(supportStyle);
     public Action<RCTTrackElementData, List<TrackSupportPlacement>>? GetSupportPlacements { get; } = getSupportPlacements;
 

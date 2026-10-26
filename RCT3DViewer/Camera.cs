@@ -9,9 +9,13 @@ public class FlightCamera
     public Vector3 Position = new(192.0f, 120.0f, -120.0f);
     public Vector3 Front = Vector3.Normalize(new Vector3(0.0f, -0.5f, MathF.Sqrt(3.0f) * 0.5f));
     public Vector3 Up = Vector3.UnitY;
+    public Vector3 HorizontalForward => Vector3.Normalize(Vector3.TransformNormal(
+        new Vector3(MathF.Cos(_yaw * MathF.PI / 180.0f), 0.0f, MathF.Sin(_yaw * MathF.PI / 180.0f)), _baseRotation));
+    public Vector3 HorizontalRight => Vector3.Normalize(Vector3.Cross(Up, HorizontalForward));
 
     private float _yaw = 90.0f;
     private float _pitch = -30.0f;
+    private Matrix4x4 _baseRotation = Matrix4x4.Identity;
     private float _speed = 40.0f;
     private const float MinimumSpeed = 0.0f;
     private const float MaximumSpeed = 100.0f;
@@ -71,6 +75,21 @@ public class FlightCamera
         _firstMouse = true;
     }
 
+    public void SetBaseRotation(Matrix4x4 rotation)
+    {
+        _baseRotation = rotation;
+        UpdateOrientation();
+    }
+
+    public void ClearBaseRotationPreservingOrientation()
+    {
+        var worldFront = Front;
+        _baseRotation = Matrix4x4.Identity;
+        _yaw = MathF.Atan2(worldFront.Z, worldFront.X) * 180.0f / MathF.PI;
+        _pitch = MathF.Asin(Math.Clamp(worldFront.Y, -1.0f, 1.0f)) * 180.0f / MathF.PI;
+        UpdateOrientation();
+    }
+
     public void HandleMouse(Vector2 mousePosition)
     {
         if (_firstMouse)
@@ -87,10 +106,19 @@ public class FlightCamera
         _yaw -= xOffset;
         _pitch = Math.Clamp(_pitch + yOffset, -89.0f, 89.0f);
 
-        Vector3 direction;
-        direction.X = (float)(Math.Cos(_yaw * Math.PI / 180.0) * Math.Cos(_pitch * Math.PI / 180.0));
-        direction.Y = (float)(Math.Sin(_pitch * Math.PI / 180.0));
-        direction.Z = (float)(Math.Sin(_yaw * Math.PI / 180.0) * Math.Cos(_pitch * Math.PI / 180.0));
-        Front = Vector3.Normalize(direction);
+        UpdateOrientation();
+    }
+
+    private void UpdateOrientation()
+    {
+        var yawRadians = _yaw * MathF.PI / 180.0f;
+        var pitchRadians = _pitch * MathF.PI / 180.0f;
+        var direction = new Vector3(
+            MathF.Cos(yawRadians) * MathF.Cos(pitchRadians),
+            MathF.Sin(pitchRadians),
+            MathF.Sin(yawRadians) * MathF.Cos(pitchRadians));
+
+        Front = Vector3.Normalize(Vector3.TransformNormal(direction, _baseRotation));
+        Up = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY, _baseRotation));
     }
 }

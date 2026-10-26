@@ -6,7 +6,7 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 22;
+    private const uint ExpectedAbiVersion = 24;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -60,6 +60,27 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private delegate int CopyVehicleDataDelegate(IntPtr context, RCTVehicleData* output, ulong capacity);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int CreatePeepDelegate(IntPtr context, int x, int y, int z, out ushort entityId);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int MovePeepDelegate(IntPtr context, ushort entityId, int x, int y, int z, byte direction);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int TakeControlPeepDelegate(IntPtr context, ushort entityId, int x, int y, int z, byte direction);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int ReleasePeepDelegate(IntPtr context, ushort entityId);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int EnterRideDelegate(IntPtr context, ushort entityId, ushort rideId, byte stationIndex);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int GetPeepDataDelegate(IntPtr context, ushort entityId, RCTPeepData* output);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int RemovePeepDelegate(IntPtr context, ushort entityId);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate IntPtr GetLastErrorDelegate();
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -82,6 +103,13 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private readonly GetTimeOfDayHoursDelegate _getTimeOfDayHours;
     private readonly GetVehicleCountDelegate _getVehicleCount;
     private readonly CopyVehicleDataDelegate _copyVehicleData;
+    private readonly CreatePeepDelegate _createPeep;
+    private readonly MovePeepDelegate _movePeep;
+    private readonly TakeControlPeepDelegate _takeControlPeep;
+    private readonly ReleasePeepDelegate _releasePeep;
+    private readonly EnterRideDelegate _enterRide;
+    private readonly GetPeepDataDelegate _getPeepData;
+    private readonly RemovePeepDelegate _removePeep;
     private readonly GetLastErrorDelegate _getLastError;
     private readonly ShutdownDelegate _shutdown;
     private readonly string _libraryPath;
@@ -111,8 +139,11 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (Marshal.SizeOf<RCTTilePathData>() != 28)
                 throw new InvalidOperationException("RCTTilePathData must be 28 bytes to match the OpenRCT2 adapter ABI.");
             
-            if (Marshal.SizeOf<RCTVehicleData>() != 28)
-                throw new InvalidOperationException("RCTVehicleData must be 28 bytes to match the OpenRCT2 adapter ABI.");
+            if (Marshal.SizeOf<RCTVehicleData>() != 36)
+                throw new InvalidOperationException("RCTVehicleData must be 36 bytes to match the OpenRCT2 adapter ABI.");
+
+            if (Marshal.SizeOf<RCTPeepData>() != 24)
+                throw new InvalidOperationException("RCTPeepData must be 24 bytes to match the OpenRCT2 adapter ABI.");
 
             if (Marshal.SizeOf<RCTTrackElementData>() != 30)
                 throw new InvalidOperationException("RCTTrackElementData must be 30 bytes to match the OpenRCT2 adapter ABI.");
@@ -140,6 +171,13 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             _getTimeOfDayHours = Bind<GetTimeOfDayHoursDelegate>("rct3d_openrct2_get_time_of_day_hours");
             _getVehicleCount = Bind<GetVehicleCountDelegate>("rct3d_openrct2_get_vehicle_count");
             _copyVehicleData = Bind<CopyVehicleDataDelegate>("rct3d_openrct2_copy_vehicle_data");
+            _createPeep = Bind<CreatePeepDelegate>("rct3d_openrct2_create_peep");
+            _movePeep = Bind<MovePeepDelegate>("rct3d_openrct2_move_peep");
+            _takeControlPeep = Bind<TakeControlPeepDelegate>("rct3d_openrct2_take_control_peep");
+            _releasePeep = Bind<ReleasePeepDelegate>("rct3d_openrct2_release_peep");
+            _enterRide = Bind<EnterRideDelegate>("rct3d_openrct2_enter_ride");
+            _getPeepData = Bind<GetPeepDataDelegate>("rct3d_openrct2_get_peep_data");
+            _removePeep = Bind<RemovePeepDelegate>("rct3d_openrct2_remove_peep");
             _getLastError = Bind<GetLastErrorDelegate>("rct3d_openrct2_get_last_error");
             _shutdown = Bind<ShutdownDelegate>("rct3d_openrct2_shutdown");
 
@@ -260,6 +298,32 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             ThrowIfFailed(_copyVehicleData(_context, pointer, (ulong)output.Length));
     }
 
+    public ushort CreatePeep(int x, int y, int z)
+    {
+        ThrowIfFailed(_createPeep(_context, x, y, z, out var entityId));
+        return entityId;
+    }
+
+    public void MovePeep(ushort entityId, int x, int y, int z, byte direction) =>
+        ThrowIfFailed(_movePeep(_context, entityId, x, y, z, direction));
+
+    public void TakeControlPeep(ushort entityId, int x, int y, int z, byte direction) =>
+        ThrowIfFailed(_takeControlPeep(_context, entityId, x, y, z, direction));
+
+    public void ReleasePeep(ushort entityId) => ThrowIfFailed(_releasePeep(_context, entityId));
+
+    public void EnterRide(ushort entityId, ushort rideId, byte stationIndex) =>
+        ThrowIfFailed(_enterRide(_context, entityId, rideId, stationIndex));
+
+    public RCTPeepData GetPeepData(ushort entityId)
+    {
+        RCTPeepData output = default;
+        ThrowIfFailed(_getPeepData(_context, entityId, &output));
+        return output;
+    }
+
+    public void RemovePeep(ushort entityId) => ThrowIfFailed(_removePeep(_context, entityId));
+
     private T Bind<T>(string name) where T : Delegate
     {
         if (!NativeLibrary.TryGetExport(_nativeHandle, name, out var address))
@@ -354,4 +418,25 @@ public struct RCTVehicleData
     public byte Reserved;
     public float PitchRadians;
     public float RollRadians;
+    public ushort RideId;
+    public ushort TrainHeadEntityId;
+    public byte CurrentStation;
+    public byte Status;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct RCTPeepData
+{
+    public ushort EntityId;
+    public int X;
+    public int Y;
+    public int Z;
+    public byte State;
+    public ushort RideId;
+    public byte StationIndex;
+    public byte TrainIndex;
+    public byte CarIndex;
+    public byte SeatIndex;
+    public ushort TrainHeadEntityId;
+    public byte Reserved;
 }

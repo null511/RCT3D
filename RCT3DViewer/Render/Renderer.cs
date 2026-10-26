@@ -21,6 +21,7 @@ public sealed class Renderer : IDisposable
     private FrameRenderer? frameRenderer;
     private FrameCoordinator? frameCoordinator;
     private ParkSceneController? parkScene;
+    private PeepModeController? peepMode;
     private SimulationBridge? simulation;
     private bool framebufferResized;
     private bool exitRequested;
@@ -120,7 +121,8 @@ public sealed class Renderer : IDisposable
 
     private void SetupInputs()
     {
-        inputController = new ViewerInputController(window!, camera,
+        peepMode = new PeepModeController(camera, parkScene!);
+        inputController = new ViewerInputController(window!, camera, peepMode,
             () => imguiRenderer?.WantCaptureMouse ?? false, () => parkScene?.TogglePause(), ui.ToggleDebug);
     }
 
@@ -148,7 +150,8 @@ public sealed class Renderer : IDisposable
                 ui.BuildFrameUi(deltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours, parkScene.IsPaused,
                     cameraTileX, cameraTileY, parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
                     parkPath => parkScene.LoadPark(parkPath, TerrainSkirtFloor), parkScene.TogglePause,
-                    () => exitRequested = true, deviceContext!.SupportsWireframe);
+                    () => exitRequested = true, peepMode!.IsEnabled, peepMode.StatusMessage, peepMode.Toggle,
+                    deviceContext!.SupportsWireframe);
             },
             (commandBuffer, imageIndex, currentFrame) => frameRenderer!.Record(commandBuffer, imageIndex, currentFrame,
                 parkScene.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh, parkScene.RideSupportMesh,
@@ -161,6 +164,9 @@ public sealed class Renderer : IDisposable
 
     public void Dispose()
     {
+        peepMode?.Exit();
+        peepMode = null;
+
         parkScene?.Dispose();
         parkScene = null;
 

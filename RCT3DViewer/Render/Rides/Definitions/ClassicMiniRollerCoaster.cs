@@ -9,6 +9,7 @@ internal class ClassicMiniRollerCoaster : RideDefinition
     public ClassicMiniRollerCoaster() : base(RCTRideType.ClassicMiniRollerCoaster)
     {
         SupportStyle = RideSupportStyle.MetalFork;
+        CarVerticalOffset = 0.5f;
         HasSupportPlacement = true;
         SupportTrackOffset = 0.25f;
     }

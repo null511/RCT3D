@@ -10,6 +10,7 @@ internal sealed class CompactInvertedCoaster : RideDefinition
     {
         SupportStyle = RideSupportStyle.MetalTubesInverted;
         CenterlineHeightOffset = 3.0f;
+        CarVerticalOffset = -0.5f;
     }
 
     protected override TrackRailProfile CreateProfile()

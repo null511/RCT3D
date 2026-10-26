@@ -88,7 +88,8 @@ internal sealed class ViewerUiController
     //}
 
     public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, bool? isPaused, int cameraTileX, int cameraTileY,
-        IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit, bool wireframeAvailable = true)
+        IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit,
+        bool peepModeEnabled, string? peepModeStatus, Action togglePeepMode, bool wireframeAvailable = true)
     {
         _gameTimeOfDayHours = gameTimeOfDayHours;
         var instantFps = deltaTime > 0.0 ? (float)(1.0 / deltaTime) : 0.0f;
@@ -113,6 +114,8 @@ internal sealed class ViewerUiController
             if (ImGui.BeginMenu("View")) {
                 if (ImGui.MenuItem("Wireframe", string.Empty, _wireframeEnabled, wireframeAvailable))
                     _wireframeEnabled = !_wireframeEnabled;
+                if (ImGui.MenuItem("Peep Mode", "P", peepModeEnabled))
+                    togglePeepMode();
                 ImGui.MenuItem("Graphics Options", string.Empty, ref _showGraphicsOptions);
                 ImGui.MenuItem("Debug", string.Empty, ref _showDebug);
                 ImGui.EndMenu();
@@ -155,6 +158,9 @@ internal sealed class ViewerUiController
         if (_showDebug)
             DrawDebugOverlay(cameraTileX, cameraTileY, cameraTileTrackElements);
 
+        if (peepModeEnabled || peepModeStatus is not null)
+            DrawPeepModeOverlay(peepModeEnabled, peepModeStatus);
+
         if (_showParkLoadError) {
             var errorWindowVisible = ImGui.Begin("Park load error", ref _showParkLoadError, ImGuiWindowFlags.AlwaysAutoResize);
             if (errorWindowVisible) {
@@ -178,6 +184,24 @@ internal sealed class ViewerUiController
 
         if (_isParkLoading)
             DrawParkLoadingPanel();
+    }
+
+    private static void DrawPeepModeOverlay(bool enabled, string? status)
+    {
+        var viewport = ImGui.GetMainViewport();
+        ImGui.SetNextWindowPos(viewport.WorkPos + new Vector2(10.0f, viewport.WorkSize.Y - 10.0f), ImGuiCond.Always, new Vector2(0.0f, 1.0f));
+        ImGui.SetNextWindowBgAlpha(0.75f);
+
+        var flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings
+            | ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.AlwaysAutoResize;
+        if (ImGui.Begin("Peep Mode status", flags)) {
+            if (status is not null)
+                ImGui.TextWrapped(status);
+            else if (enabled) {
+                ImGui.TextUnformatted("Peep Mode | WASD walk | Shift run | E ride | P exit");
+            }
+        }
+        ImGui.End();
     }
 
     private static void DrawDebugOverlay(int tileX, int tileY, IReadOnlyList<RCTTrackElementData> trackElements)

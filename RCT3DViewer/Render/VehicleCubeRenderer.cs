@@ -14,10 +14,9 @@ internal static class VehicleCubeRenderer
     private const float CubeHalfSize = CubeSize * 0.5f;
 
     private const float CubeBoundsHalfSize = CubeHalfSize * 1.7320508f;
-    private static readonly Vector3 CubeOffset = new(0.0f, 0.5f, 0.0f);
 
 
-    public static ImportedModelMesh CreateMesh() => CreateCubeMesh(CubeOffset, CubeSize);
+    public static ImportedModelMesh CreateMesh() => CreateCubeMesh(Vector3.Zero, CubeSize);
 
     private static ImportedModelMesh CreateCubeMesh(Vector3 offset, float size)
     {
@@ -61,7 +60,11 @@ internal static class VehicleCubeRenderer
         return new ImportedModelMesh("ride-vehicle-cube", vertices, indices, material);
     }
 
-    public static ModelRegionBatch[] BuildInstances(VehicleSnapshotPair? snapshots, int mapWidth, int mapHeight)
+    public static ModelRegionBatch[] BuildInstances(
+        VehicleSnapshotPair? snapshots,
+        int mapWidth,
+        int mapHeight,
+        IReadOnlyDictionary<ushort, float>? carVerticalOffsets = null)
     {
         if (snapshots is null || mapWidth <= 0 || mapHeight <= 0)
             return Array.Empty<ModelRegionBatch>();
@@ -110,8 +113,11 @@ internal static class VehicleCubeRenderer
                 * Matrix4x4.CreateRotationX(-pitch)
                 * Matrix4x4.CreateRotationY(yaw);
 
+            if (carVerticalOffsets is not null && carVerticalOffsets.TryGetValue(current.RideId, out var carVerticalOffset))
+                position += Vector3.TransformNormal(new Vector3(0.0f, carVerticalOffset, 0.0f), rotation);
+
             var transform = rotation * Matrix4x4.CreateTranslation(position);
-            var boundsPosition = position + Vector3.TransformNormal(CubeOffset, rotation);
+            var boundsPosition = position;
 
             var bounds = new AxisAlignedBounds(
                 boundsPosition - new Vector3(CubeBoundsHalfSize),
