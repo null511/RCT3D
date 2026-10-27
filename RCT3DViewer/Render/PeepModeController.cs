@@ -1,8 +1,8 @@
 using RCT3D.Simulation;
-using RCT3D.Interop;
 using Silk.NET.Input;
 using System.Diagnostics;
 using System.Numerics;
+using RCT3D.Interop.Models;
 
 namespace RCT3D.Render;
 

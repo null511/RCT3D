@@ -1,4 +1,4 @@
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using System.Numerics;
@@ -15,7 +15,7 @@ internal class WoodenWildMouse : RideDefinition
         SupportStyle = RideSupportStyle.WoodenTruss;
     }
 
-    protected override TrackRailProfile CreateProfile()
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
     {
         const float centerY = 0.2f;
 
@@ -25,7 +25,7 @@ internal class WoodenWildMouse : RideDefinition
         var color = new TrackRgba8(255, 255, 255, 255);
         var specular = new TrackRailSpecularData(180, 255);
 
-        return new TrackRailProfile([
+        return [
             new TrackRailProfileShape([
                 new Vector2(-centerHalfWidth, centerY + centerHalfHeight),
                 new Vector2( centerHalfWidth, centerY + centerHalfHeight),
@@ -42,7 +42,7 @@ internal class WoodenWildMouse : RideDefinition
                 new Vector2( centerHalfWidth, centerY + centerHalfHeight),
                 new Vector2( centerHalfWidth, centerY - centerHalfHeight),
             ], false) { Color = color, Specular = specular },
-        ]);
+        ];
     }
 
 }

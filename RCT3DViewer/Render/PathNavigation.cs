@@ -1,4 +1,4 @@
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using RCT3D.Render.Paths.Meshing;
 using System.Numerics;
 

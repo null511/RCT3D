@@ -1,4 +1,4 @@
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using System.Numerics;
@@ -14,7 +14,7 @@ internal sealed class GoKarts : RideDefinition
         SupportStyle = RideSupportStyle.WoodenTruss;
     }
 
-    protected override TrackRailProfile CreateProfile() => new([
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType) => [
         // left-outside
         new TrackRailProfileShape([
             new Vector2(-1.40f, 0.3f),
@@ -71,5 +71,5 @@ internal sealed class GoKarts : RideDefinition
             Swatch = TrackRailSwatch.Alternate,
             Specular = new TrackRailSpecularData(220, 0),
         },
-    ]);
+    ];
 }

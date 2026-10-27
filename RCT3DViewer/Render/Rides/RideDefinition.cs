@@ -1,4 +1,4 @@
-﻿using RCT3D.Interop;
+﻿using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using System.Numerics;
@@ -27,18 +27,15 @@ internal abstract class RideDefinition(RCTRideType rideType)
     /// </summary>
     protected bool SmoothMovement = false;
 
-
     public TrackRideConfiguration Build()
     {
-        var profile = CreateProfile();
-
         return new TrackRideConfiguration(rideType, [
-            new SweptRailProfileGenerator(profile),
+            new SweptRailProfileGenerator(GetRailParts),
         ], SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
             HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement);
     }
 
-    protected abstract TrackRailProfile CreateProfile();
+    protected abstract IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType);
 
     protected virtual void GetSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements)
     {

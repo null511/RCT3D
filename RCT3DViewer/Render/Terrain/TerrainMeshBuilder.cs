@@ -1,4 +1,4 @@
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using System.Numerics;
 
 namespace RCT3D.Render.Terrain;
@@ -7,6 +7,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 {
     private const float CornerHeightScale = 1.5f;
     private const float NormalInterpolationBoundaryFraction = 1.0f / 8.0f;
+    private const float WaterPlaneVerticalOffset = -0.06f;
 
     private readonly List<TerrainVertex> _vertices = new();
     private readonly List<uint> _indices = new();
@@ -65,6 +66,21 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         17, 18, 16
     ];
 
+    private static readonly byte[] flippedTileTriangleIndices = CreateFlippedTileTriangleIndices();
+
+    private static byte[] CreateFlippedTileTriangleIndices()
+    {
+        var indices = new byte[tileTriangleIndices.Length];
+
+        for (var index = 0; index < tileTriangleIndices.Length; index += 3) {
+            indices[index] = tileTriangleIndices[index];
+            indices[index + 1] = tileTriangleIndices[index + 2];
+            indices[index + 2] = tileTriangleIndices[index + 1];
+        }
+
+        return indices;
+    }
+
     private int _skirtSections;
     private int _skirtTriangles;
     private int _flatEdgesSkipped;
@@ -96,7 +112,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                 var surface = surfaces[y * width + x];
 
                 if (surface.WaterHeight > 0)
-                    AddWaterTile(x, y, surface.WaterHeight * (WorldUnits.HeightPerBaseUnit / 8.0f), WorldUnits.TileSize);
+                    AddWaterTile(x, y, surface.WaterHeight * (WorldUnits.HeightPerBaseUnit / 8.0f) + WaterPlaneVerticalOffset, WorldUnits.TileSize);
 
                 GetCornerHeights(surface, out var north, out var east, out var south, out var west);
 
@@ -186,6 +202,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         int x, int y, int width, int height, ReadOnlySpan<RCTTileSurfaceData> surfaces,
         float north, float east, float south, float west, uint materialId)
     {
+        var flipDiagonal = ShouldFlipDiagonal(north, east, south, west);
         var boundary = NormalInterpolationBoundaryFraction;
 
         Span<Vector2> coordinates = stackalloc Vector2[] {
@@ -226,52 +243,65 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
             new(1.0f - boundary, 2.0f*boundary),
         };
 
-        var firstTriangleNormal = GetBaseTriangleNormal(north, east, south, west, true);
-        var secondTriangleNormal = GetBaseTriangleNormal(north, east, south, west, false);
+        var firstTriangleNormal = GetBaseTriangleNormal(north, east, south, west, true, flipDiagonal);
+        var secondTriangleNormal = GetBaseTriangleNormal(north, east, south, west, false, flipDiagonal);
         var diagonalNormal = Vector3.Normalize(firstTriangleNormal + secondTriangleNormal);
 
         var firstVertex = checked((uint)_vertices.Count);
         foreach (var coordinate in coordinates) {
-            var u = coordinate.X;
+            var u = flipDiagonal ? 1.0f - coordinate.X : coordinate.X;
             var v = coordinate.Y;
 
-            var point = CreateTerrainPoint(x, y, u, v, north, east, south, west);
-            var baseNormal = u + v >= 1.0f ? firstTriangleNormal : secondTriangleNormal;
-            var normal = GetInterpolatedNormal(baseNormal, diagonalNormal, x, y, width, height, surfaces, north, east, south, west, u, v);
+            var point = CreateTerrainPoint(x, y, u, v, north, east, south, west, flipDiagonal);
+            var baseNormal = IsFirstTriangle(u, v, flipDiagonal) ? firstTriangleNormal : secondTriangleNormal;
+            var normal = GetInterpolatedNormal(
+                baseNormal, diagonalNormal, x, y, width, height, surfaces, north, east, south, west, u, v, flipDiagonal);
 
             _vertices.Add(new TerrainVertex(point, normal, new Vector2(x + u, y + v), materialId));
         }
 
-        foreach (var index in tileTriangleIndices)
+        var tileIndices = flipDiagonal ? flippedTileTriangleIndices : tileTriangleIndices;
+        foreach (var index in tileIndices)
             _indices.Add(firstVertex + index);
     }
 
     private Vector3 CreateTerrainPoint(
-        int x, int y, float u, float v, float north, float east, float south, float west)
+        int x, int y, float u, float v, float north, float east, float south, float west, bool flipDiagonal)
     {
-        var height = u + v >= 1.0f
-            ? (north - west) * u + (north - east) * v + east - north + west
-            : south + (east - south) * u + (west - south) * v;
+        var height = flipDiagonal
+            ? u >= v
+                ? south + (east - south) * u + (north - east) * v
+                : south + (north - west) * u + (west - south) * v
+            : u + v >= 1.0f
+                ? (north - west) * u + (north - east) * v + east - north + west
+                : south + (east - south) * u + (west - south) * v;
 
         return new Vector3((x + u) * WorldUnits.TileSize, height, (y + v) * WorldUnits.TileSize);
     }
 
+    private static bool IsFirstTriangle(float u, float v, bool flipDiagonal)
+    {
+        return flipDiagonal ? u >= v : u + v >= 1.0f;
+    }
+
     private Vector3 GetInterpolatedNormal(
         Vector3 baseNormal, Vector3 diagonalNormal, int x, int y, int width, int height, ReadOnlySpan<RCTTileSurfaceData> surfaces,
-        float north, float east, float south, float west, float u, float v)
+        float north, float east, float south, float west, float u, float v, bool flipDiagonal)
     {
         var boundary = NormalInterpolationBoundaryFraction;
         if ((u == 0.0f || u == 1.0f) && (v == 0.0f || v == 1.0f))
             return GetConnectedCornerNormal(x, y, u, v, width, height, surfaces);
 
-        var normal = GetDiagonalAdjustedNormal(baseNormal, diagonalNormal, u, v);
+        var normal = GetDiagonalAdjustedNormal(baseNormal, diagonalNormal, u, v, flipDiagonal);
 
         if (u < boundary && x > 0) {
             var neighbor = surfaces[y * width + x - 1];
             GetCornerHeights(neighbor, out var neighborNorth, out var neighborEast, out var neighborSouth, out var neighborWest);
+            var neighborFlipDiagonal = ShouldFlipDiagonal(neighborNorth, neighborEast, neighborSouth, neighborWest);
             if (south == neighborEast && west == neighborNorth) {
                 normal += GetDiagonalAdjustedFacetNormal(
-                    neighborNorth, neighborEast, neighborSouth, neighborWest, true, 1.0f, v)
+                    neighborNorth, neighborEast, neighborSouth, neighborWest,
+                    IsFirstTriangle(1.0f, v, neighborFlipDiagonal), 1.0f, v, neighborFlipDiagonal)
                     * ((boundary - u) / boundary);
             }
         }
@@ -279,9 +309,11 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         if (u > 1.0f - boundary && x + 1 < width) {
             var neighbor = surfaces[y * width + x + 1];
             GetCornerHeights(neighbor, out var neighborNorth, out var neighborEast, out var neighborSouth, out var neighborWest);
+            var neighborFlipDiagonal = ShouldFlipDiagonal(neighborNorth, neighborEast, neighborSouth, neighborWest);
             if (east == neighborSouth && north == neighborWest) {
                 normal += GetDiagonalAdjustedFacetNormal(
-                    neighborNorth, neighborEast, neighborSouth, neighborWest, false, 0.0f, v)
+                    neighborNorth, neighborEast, neighborSouth, neighborWest,
+                    IsFirstTriangle(0.0f, v, neighborFlipDiagonal), 0.0f, v, neighborFlipDiagonal)
                     * ((boundary - (1.0f - u)) / boundary);
             }
         }
@@ -289,9 +321,11 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         if (v > 1.0f - boundary && y + 1 < height) {
             var neighbor = surfaces[(y + 1) * width + x];
             GetCornerHeights(neighbor, out var neighborNorth, out var neighborEast, out var neighborSouth, out var neighborWest);
+            var neighborFlipDiagonal = ShouldFlipDiagonal(neighborNorth, neighborEast, neighborSouth, neighborWest);
             if (west == neighborSouth && north == neighborEast) {
                 normal += GetDiagonalAdjustedFacetNormal(
-                    neighborNorth, neighborEast, neighborSouth, neighborWest, false, u, 0.0f)
+                    neighborNorth, neighborEast, neighborSouth, neighborWest,
+                    IsFirstTriangle(u, 0.0f, neighborFlipDiagonal), u, 0.0f, neighborFlipDiagonal)
                     * ((boundary - (1.0f - v)) / boundary);
             }
         }
@@ -299,9 +333,11 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         if (v < boundary && y > 0) {
             var neighbor = surfaces[(y - 1) * width + x];
             GetCornerHeights(neighbor, out var neighborNorth, out var neighborEast, out var neighborSouth, out var neighborWest);
+            var neighborFlipDiagonal = ShouldFlipDiagonal(neighborNorth, neighborEast, neighborSouth, neighborWest);
             if (south == neighborWest && east == neighborNorth) {
                 normal += GetDiagonalAdjustedFacetNormal(
-                    neighborNorth, neighborEast, neighborSouth, neighborWest, true, u, 1.0f)
+                    neighborNorth, neighborEast, neighborSouth, neighborWest,
+                    IsFirstTriangle(u, 1.0f, neighborFlipDiagonal), u, 1.0f, neighborFlipDiagonal)
                     * ((boundary - v) / boundary);
             }
         }
@@ -310,18 +346,20 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
     }
 
     private static Vector3 GetDiagonalAdjustedFacetNormal(
-        float north, float east, float south, float west, bool firstFacet, float u, float v)
+        float north, float east, float south, float west, bool firstFacet, float u, float v, bool flipDiagonal)
     {
-        var firstNormal = GetBaseTriangleNormal(north, east, south, west, true);
-        var secondNormal = GetBaseTriangleNormal(north, east, south, west, false);
+        var firstNormal = GetBaseTriangleNormal(north, east, south, west, true, flipDiagonal);
+        var secondNormal = GetBaseTriangleNormal(north, east, south, west, false, flipDiagonal);
         var diagonalNormal = Vector3.Normalize(firstNormal + secondNormal);
         var facetNormal = firstFacet ? firstNormal : secondNormal;
-        return GetDiagonalAdjustedNormal(facetNormal, diagonalNormal, u, v);
+        return GetDiagonalAdjustedNormal(facetNormal, diagonalNormal, u, v, flipDiagonal);
     }
 
-    private static Vector3 GetDiagonalAdjustedNormal(Vector3 facetNormal, Vector3 diagonalNormal, float u, float v)
+    private static Vector3 GetDiagonalAdjustedNormal(
+        Vector3 facetNormal, Vector3 diagonalNormal, float u, float v, bool flipDiagonal)
     {
-        var distanceFromDiagonal = MathF.Abs(u + v - 1.0f) * WorldUnits.TileSize / MathF.Sqrt(2.0f);
+        var distanceFromDiagonal = (flipDiagonal ? MathF.Abs(u - v) : MathF.Abs(u + v - 1.0f))
+            * WorldUnits.TileSize / MathF.Sqrt(2.0f);
         var boundaryWidth = WorldUnits.TileSize * NormalInterpolationBoundaryFraction;
         var blend = Math.Clamp(1.0f - distanceFromDiagonal / boundaryWidth, 0.0f, 1.0f);
         return blend > 0.0f
@@ -359,8 +397,9 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
             GetCornerHeights(surface, out var north, out var east, out var south, out var west);
             var localU = cornerX - tileX;
             var localV = cornerY - tileY;
+            var flipDiagonal = ShouldFlipDiagonal(north, east, south, west);
             normal += GetDiagonalAdjustedFacetNormal(
-                north, east, south, west, localU + localV >= 1.0f, localU, localV);
+                north, east, south, west, IsFirstTriangle(localU, localV, flipDiagonal), localU, localV, flipDiagonal);
 
             for (var neighborIndex = 0; neighborIndex < 4; neighborIndex++) {
                 if (visited[neighborIndex]
@@ -409,12 +448,25 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         west = baseHeight + surface.WestCornerHeight * CornerHeightScale;
     }
 
-    private static Vector3 GetBaseTriangleNormal(float north, float east, float south, float west, bool firstTriangle)
+    private static bool ShouldFlipDiagonal(float north, float east, float south, float west)
+    {
+        return (north == east && east == south && west != north)
+            || (north == south && south == west && east != north);
+    }
+
+    private static Vector3 GetBaseTriangleNormal(
+        float north, float east, float south, float west, bool firstTriangle, bool flipDiagonal = false)
     {
         var cNorth = new Vector3(WorldUnits.TileSize, north, WorldUnits.TileSize);
         var cEast = new Vector3(WorldUnits.TileSize, east, 0.0f);
         var cSouth = new Vector3(0.0f, south, 0.0f);
         var cWest = new Vector3(0.0f, west, WorldUnits.TileSize);
+
+        if (flipDiagonal) {
+            return firstTriangle
+                ? Vector3.Normalize(Vector3.Cross(cEast - cNorth, cSouth - cNorth))
+                : Vector3.Normalize(Vector3.Cross(cSouth - cNorth, cWest - cNorth));
+        }
 
         return firstTriangle
             ? Vector3.Normalize(Vector3.Cross(cEast - cNorth, cWest - cNorth))

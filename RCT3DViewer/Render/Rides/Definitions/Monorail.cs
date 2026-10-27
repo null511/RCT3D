@@ -1,4 +1,4 @@
-﻿using RCT3D.Interop;
+﻿using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using System.Numerics;
@@ -16,9 +16,9 @@ internal class Monorail : RideDefinition
         SupportTrackOffset = 0.2f;
     }
 
-    protected override TrackRailProfile CreateProfile()
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
     {
-        return new TrackRailProfile([
+        return [
             new TrackRailProfileShape([
                 new Vector2(0.20f, 0.40f),
                 new Vector2(0.20f, 0.50f),
@@ -49,6 +49,6 @@ internal class Monorail : RideDefinition
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(240, 0),
             },
-        ]);
+        ];
     }
 }

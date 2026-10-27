@@ -1,5 +1,5 @@
 using System.Numerics;
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 
@@ -16,14 +16,14 @@ internal sealed class InvertedRollerCoaster : RideDefinition
         SupportStyle = RideSupportStyle.MetalBoxed;
     }
 
-    protected override TrackRailProfile CreateProfile()
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
     {
         const float railSeparation = 0.53f;
         const float railRadius = 0.07f;
 
         var railSpecular = new TrackRailSpecularData(100, 0);
 
-        return new TrackRailProfile([
+        return [
             new TrackRailProfileShape(CreateCircle(-railSeparation, 0.90f, railRadius, 5), true) {
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = railSpecular,
@@ -64,6 +64,6 @@ internal sealed class InvertedRollerCoaster : RideDefinition
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = railSpecular,
             },
-        ]);
+        ];
     }
 }

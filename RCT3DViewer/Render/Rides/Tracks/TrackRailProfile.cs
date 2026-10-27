@@ -25,4 +25,3 @@ internal sealed record TrackRailProfileShape(Vector2[] Vertices, bool Closed)
     public TrackRailSpecularData Specular { get; init; } = new(250, 0);
 }
 
-internal sealed record TrackRailProfile(TrackRailProfileShape[] Shapes);

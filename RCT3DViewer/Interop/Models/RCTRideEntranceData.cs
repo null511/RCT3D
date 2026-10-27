@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace RCT3D.Interop;
+namespace RCT3D.Interop.Models;
 
 public enum RCTRideEntranceType : byte
 {

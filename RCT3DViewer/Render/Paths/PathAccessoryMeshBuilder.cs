@@ -1,6 +1,6 @@
+using RCT3D.Interop.Models;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using RCT3D.Interop;
 
 namespace RCT3D.Render.Paths;
 
@@ -22,7 +22,7 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
         _batches.Clear();
 
         foreach (var path in paths) {
-            if (!path.IsLampAddition && !path.IsBenchAddition) continue;
+            if (path is { IsLampAddition: false, IsBenchAddition: false }) continue;
 
             if ((uint)path.TileX >= (uint)mapWidth || (uint)path.TileY >= (uint)mapHeight)
                 throw new InvalidDataException($"OpenRCT2 returned a path accessory outside the {mapWidth}x{mapHeight} map.");
@@ -73,6 +73,7 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
     private static (float X, float Z, float YawDegrees) GetLampEdgePlacement(byte edge)
     {
         var unit = TileSize / 32.0f;
+
         return edge switch {
             EdgeNorthEast => (2.0f * unit, 16.0f * unit, 90.0f),
             EdgeSouthEast => (16.0f * unit, 30.0f * unit, 180.0f),
@@ -142,15 +143,15 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
 
     private sealed class RegionBuilder
     {
-        private bool _hasBounds;
+        private bool hasBounds;
 
         public AxisAlignedBounds Bounds { get; private set; }
         public List<ModelInstance> Instances { get; } = new();
 
         public void Add(ModelInstance instance, AxisAlignedBounds bounds)
         {
-            Bounds = _hasBounds ? Bounds.Encapsulate(bounds) : bounds;
-            _hasBounds = true;
+            Bounds = hasBounds ? Bounds.Encapsulate(bounds) : bounds;
+            hasBounds = true;
             Instances.Add(instance);
         }
     }

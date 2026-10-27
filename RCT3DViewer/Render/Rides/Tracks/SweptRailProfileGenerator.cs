@@ -1,15 +1,23 @@
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
+using System.Collections.Concurrent;
 using System.Numerics;
 
 namespace RCT3D.Render.Rides.Tracks;
 
-internal sealed class SweptRailProfileGenerator(TrackRailProfile profile) : ITrackPartGenerator
+internal sealed class SweptRailProfileGenerator(Func<RCTTrackElementType, IEnumerable<TrackRailProfileShape>> getRailParts) : ITrackPartGenerator
 {
-    public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd, Vector3? startTangent, Vector3? endTangent, Vector3? preferredSide, bool smoothRollTransition) =>
+    private readonly ConcurrentDictionary<RCTTrackElementType, TrackRailProfileShape[]> partsByTrackType = new();
+
+    public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd, Vector3? startTangent, Vector3? endTangent, Vector3? preferredSide, bool smoothRollTransition)
+    {
+        var trackType = track.TrackType;
+        var parts = partsByTrackType.GetOrAdd(trackType, type => getRailParts(type).ToArray());
+        if (parts.Length == 0) return;
+
         TrackMeshPartGenerator.AddSweptProfile(
             geometry,
             centerline,
-            profile,
+            parts,
             track.MainPaletteIndex,
             track.AdditionalPaletteIndex,
             palette,
@@ -19,6 +27,7 @@ internal sealed class SweptRailProfileGenerator(TrackRailProfile profile) : ITra
             endTangent,
             preferredSide,
             smoothRollTransition);
+    }
 }
 
 internal static class TrackMeshPartGenerator
@@ -26,7 +35,7 @@ internal static class TrackMeshPartGenerator
     public static void AddSweptProfile(
         TrackMeshGeometry geometry,
         ReadOnlySpan<Vector3> centerline,
-        TrackRailProfile profile,
+        TrackRailProfileShape[] shapes,
         byte mainPaletteIndex,
         byte alternatePaletteIndex,
         ReadOnlySpan<RCTPaletteEntry> palette,
@@ -39,7 +48,7 @@ internal static class TrackMeshPartGenerator
     {
         if (centerline.Length < 2) return;
 
-        foreach (var shape in profile.Shapes) {
+        foreach (var shape in shapes) {
             if (shape.Vertices.Length < 2) continue;
 
             var color = shape.Swatch switch {

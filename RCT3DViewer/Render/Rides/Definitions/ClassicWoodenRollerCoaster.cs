@@ -1,4 +1,4 @@
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using System.Numerics;
@@ -22,12 +22,12 @@ internal sealed class ClassicWoodenRollerCoaster : RideDefinition
         SupportTrackOffset = CenterlineHeightOffset - RailHalfHeight - SupportTopClearance;
     }
 
-    protected override TrackRailProfile CreateProfile()
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
     {
-        return new TrackRailProfile([
+        return [
             .. CreateRail(-RailSeparation * 0.5f),
             .. CreateRail( RailSeparation * 0.5f),
-        ]);
+        ];
     }
 
     private static IEnumerable<TrackRailProfileShape> CreateRail(float centerX)

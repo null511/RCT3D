@@ -1,4 +1,4 @@
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Tracks;
 using System.Numerics;
 
@@ -13,14 +13,14 @@ internal sealed class MineTrainCoaster : RideDefinition
         CarVerticalOffset = 0.5f;
     }
 
-    protected override TrackRailProfile CreateProfile()
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
     {
         const float RailSeparation = 0.48f;
 
-        return new TrackRailProfile([
+        return [
             .. CreateRail(-RailSeparation*0.5f),
             .. CreateRail( RailSeparation*0.5f),
-        ]);
+        ];
     }
 
     private static IEnumerable<TrackRailProfileShape> CreateRail(float centerX)

@@ -2,12 +2,12 @@ using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Terrain;
 using RCT3D.Simulation;
-using RCT3D.Interop;
 using System.Numerics;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Entrances;
 using RCT3D.Render.Rides;
+using RCT3D.Interop.Models;
 
 namespace RCT3D.Render;
 

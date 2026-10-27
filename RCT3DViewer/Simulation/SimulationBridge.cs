@@ -1,4 +1,5 @@
 using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 

@@ -1,5 +1,5 @@
 using System.Numerics;
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using RCT3D.Render.Terrain;
 
 namespace RCT3D.Render.Paths.Meshing;

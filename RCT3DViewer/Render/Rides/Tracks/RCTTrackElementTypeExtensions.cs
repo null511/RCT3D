@@ -1,9 +1,12 @@
-﻿using RCT3D.Interop;
+﻿using RCT3D.Interop.Models;
 
 namespace RCT3D.Render.Rides.Tracks;
 
 internal static class RCTTrackElementTypeExtensions
 {
+    public static bool IsStationPlatform(this RCTTrackElementType trackType) => trackType is
+        RCTTrackElementType.BeginStation or RCTTrackElementType.MiddleStation or RCTTrackElementType.EndStation;
+
     public static bool IsEighthTurn(this RCTTrackElementType trackType) => trackType is
         RCTTrackElementType.LeftEighthToDiag or RCTTrackElementType.RightEighthToDiag
         or RCTTrackElementType.LeftEighthToOrthogonal or RCTTrackElementType.RightEighthToOrthogonal

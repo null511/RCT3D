@@ -1,4 +1,4 @@
-﻿using RCT3D.Interop;
+﻿using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using System.Numerics;
@@ -15,23 +15,57 @@ internal class MiniatureRailway : RideDefinition
         SupportStyle = RideSupportStyle.WoodenTruss;
     }
 
-    protected override TrackRailProfile CreateProfile()
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
     {
-        return new TrackRailProfile([
-            CreateRailRectangle(-0.42f, 0.08f),
-            CreateRailRectangle( 0.42f, 0.08f),
-            new TrackRailProfileShape([
-                    new Vector2( 0.9f, -0.04f),
-                    new Vector2( 0.5f,  0.08f),
+        // rails
+        yield return CreateRailRectangle(-0.42f, 0.08f);
+        yield return CreateRailRectangle( 0.42f, 0.08f);
 
-                    new Vector2( 0.0f,  0.10f),
+        if (elementType.IsStationPlatform()) {
+            var metal_color = new TrackRgba8(20, 20, 20, 255);
+            var metal_specular = new TrackRailSpecularData(100, 20);
 
-                    new Vector2(-0.5f,  0.08f),
-                    new Vector2(-0.9f, -0.04f),
-                ], false) {
+            // metal-top
+            yield return new TrackRailProfileShape([
+                new Vector2( 1.5f, 0.08f),
+                new Vector2(-1.5f, 0.08f),
+            ], false) {
+                Color = metal_color,
+                Specular = metal_specular,
+            };
+
+            // metal-left
+            yield return new TrackRailProfileShape([
+                new Vector2(-1.5f, 0.08f),
+                new Vector2(-1.5f, 0.00f),
+            ], false) {
+                Color = metal_color,
+                Specular = metal_specular,
+            };
+
+            // metal-right
+            yield return new TrackRailProfileShape([
+                new Vector2( 1.5f, 0.00f),
+                new Vector2( 1.5f, 0.08f),
+            ], false) {
+                Color = metal_color,
+                Specular = metal_specular,
+            };
+        }
+        else {
+            // ballast
+            yield return new TrackRailProfileShape([
+                new Vector2(0.9f, -0.04f),
+                new Vector2(0.5f, 0.08f),
+
+                new Vector2(0.0f, 0.10f),
+
+                new Vector2(-0.5f, 0.08f),
+                new Vector2(-0.9f, -0.04f),
+            ], false) {
                 Color = new TrackRgba8(130, 113, 87, 255),
-            },
-        ]);
+            };
+        }
     }
 
     private static TrackRailProfileShape CreateRailRectangle(float centerX, float baseY)

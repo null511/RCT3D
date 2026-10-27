@@ -1,4 +1,4 @@
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 
@@ -16,11 +16,11 @@ internal class CorkscrewRollerCoaster : RideDefinition
         SupportTrackOffset = -0.24f;
     }
 
-    protected override TrackRailProfile CreateProfile()
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
     {
         const float railSeparation = 0.42f;
 
-        return new TrackRailProfile([
+        return [
             new TrackRailProfileShape(CreateCircle(-railSeparation, 0f, 0.08f, 5), true) {
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(100, 0),
@@ -33,6 +33,6 @@ internal class CorkscrewRollerCoaster : RideDefinition
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(100, 0),
             },
-        ]);
+        ];
     }
 }

@@ -1,5 +1,5 @@
 using System.Numerics;
-using RCT3D.Interop;
+using RCT3D.Interop.Models;
 
 namespace RCT3D.Render.Rides.Tracks;
 
