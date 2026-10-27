@@ -63,9 +63,8 @@ internal sealed class ParkSceneController(
         in RCTVehicleData current,
         float amount,
         out Vector3 position,
-        out Vector3 tangent,
-        out float rollRadians) =>
-        TrackCenterlinePoseResolver.TryInterpolate(previous, current, amount, rideCenterlines, out position, out tangent, out rollRadians);
+        out TrackCenterlineFrame frame) =>
+        TrackCenterlinePoseResolver.TryInterpolate(previous, current, amount, rideCenterlines, out position, out frame);
 
 
     public void LoadPark(string parkPath, float terrainSkirtFloor)

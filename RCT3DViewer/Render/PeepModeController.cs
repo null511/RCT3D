@@ -305,6 +305,7 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
         var yaw = GetVehicleYaw(currentVehicle.Orientation);
         var pitch = currentVehicle.PitchRadians;
         var roll = currentVehicle.RollRadians;
+        var centerlineResolved = false;
         var snapshotAlpha = 1.0f;
         var previousVehicleForCenterline = currentVehicle;
         var hasPreviousVehicle = false;
@@ -331,22 +332,23 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
 
         if (scene.UsesSmoothMovement(currentVehicle.RideId)
             && hasPreviousVehicle
-            && scene.TryGetCenterlinePose(previousVehicleForCenterline, currentVehicle, snapshotAlpha, out var centerlinePosition, out var centerlineTangent, out var centerlineRoll)) {
+            && scene.TryGetCenterlinePose(previousVehicleForCenterline, currentVehicle, snapshotAlpha, out var centerlinePosition, out var centerlineFrame)) {
             nativeX = centerlinePosition.X * NativeUnitsPerWorldUnit;
             nativeY = centerlinePosition.Z * NativeUnitsPerWorldUnit;
             nativeZ = centerlinePosition.Y / WorldUnitsPerNativeHeightUnit;
-            yaw = MathF.Atan2(centerlineTangent.X, centerlineTangent.Z);
-            pitch = MathF.Atan2(centerlineTangent.Y, MathF.Sqrt(centerlineTangent.X * centerlineTangent.X + centerlineTangent.Z * centerlineTangent.Z));
-            roll = centerlineRoll;
+            rotation = centerlineFrame.ToRotation();
+            centerlineResolved = true;
+        }
+        if (!centerlineResolved) {
+            rotation = Matrix4x4.CreateRotationZ(roll)
+                * Matrix4x4.CreateRotationX(-pitch)
+                * Matrix4x4.CreateRotationY(yaw);
         }
 
         position = new Vector3(
             nativeX * WorldUnits.TileSize / 32.0f,
             nativeZ * WorldUnits.HeightPerBaseUnit / 8.0f,
             nativeY * WorldUnits.TileSize / 32.0f);
-        rotation = Matrix4x4.CreateRotationZ(roll)
-            * Matrix4x4.CreateRotationX(-pitch)
-            * Matrix4x4.CreateRotationY(yaw);
         position += Vector3.TransformNormal(
             new Vector3(0.0f, scene.GetCarVerticalOffset(currentVehicle.RideId), 0.0f), rotation);
         return true;

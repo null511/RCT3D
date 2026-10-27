@@ -39,6 +39,9 @@ internal sealed class TrackMeshGeometry
         ReadOnlySpan<Vector3> centerline,
         float rollBegin,
         float rollEnd,
+        Vector3? startTangent,
+        Vector3? endTangent,
+        Vector3? preferredSide,
         bool smoothRollTransition)
     {
         if (_centerlineCapture is null) return;
@@ -47,15 +50,9 @@ internal sealed class TrackMeshGeometry
         for (var i = 0; i < offsetCenterline.Length; i++)
             offsetCenterline[i].Y += _verticalOffset;
 
-        var rollRadians = new float[offsetCenterline.Length];
-        for (var i = 0; i < rollRadians.Length; i++) {
-            var progress = rollRadians.Length <= 1 ? 0.0f : i / (float)(rollRadians.Length - 1);
-            if (smoothRollTransition)
-                progress = progress * progress * (3.0f - 2.0f * progress);
-            rollRadians[i] = rollBegin + (rollEnd - rollBegin) * progress;
-        }
-
-        _centerlineCapture.Add(new TrackCenterlinePath(track.Sequence, offsetCenterline, rollRadians));
+        var frames = TrackMeshPartGenerator.CreateFrames(
+            centerline, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
+        _centerlineCapture.Add(new TrackCenterlinePath(track.Sequence, offsetCenterline, frames));
     }
 
     public void BeginRegion(RenderRegionCoordinate region)

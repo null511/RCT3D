@@ -8,10 +8,23 @@ namespace RCT3D.Render.Rides;
 internal abstract class RideDefinition(RCTRideType rideType)
 {
     protected RideSupportStyle SupportStyle;
+
+    /// <summary>
+    /// The vertical offset in world-space for the tracks generation.
+    /// </summary>
     protected float CenterlineHeightOffset = 0.0f;
+
+    /// <summary>
+    /// The offset from the support-top to the track-bottom.
+    /// </summary>
     protected float SupportTrackOffset = 0.0f;
+
     protected float CarVerticalOffset = 0.0f;
     protected bool HasSupportPlacement = false;
+
+    /// <summary>
+    /// Enables smoothing of vehicle movement by using the track centerline instead of the game-provided location/rotation.
+    /// </summary>
     protected bool SmoothMovement = false;
 
 

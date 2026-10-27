@@ -95,6 +95,9 @@ internal static class VehicleCubeRenderer
             var yaw = GetYawRadians(current.Orientation);
             var pitch = current.PitchRadians;
             var roll = current.RollRadians;
+            var rotation = Matrix4x4.CreateRotationZ(roll)
+                * Matrix4x4.CreateRotationX(-pitch)
+                * Matrix4x4.CreateRotationY(yaw);
 
             if (previousVehicles is not null && previousVehicles.TryGetValue(current.EntityId, out var previous)) {
                 x = previous.X + (current.X - previous.X) * alpha;
@@ -110,13 +113,11 @@ internal static class VehicleCubeRenderer
                 && tryGetCenterlinePose is not null
                 && previousVehicles is not null
                 && previousVehicles.TryGetValue(current.EntityId, out var previousVehicle)
-                && tryGetCenterlinePose(previousVehicle, current, alpha, out var centerlinePosition, out var tangent, out var centerlineRoll)) {
+                && tryGetCenterlinePose(previousVehicle, current, alpha, out var centerlinePosition, out var centerlineFrame)) {
                 x = centerlinePosition.X * UnitsPerTile / TileSize;
                 y = centerlinePosition.Z * UnitsPerTile / TileSize;
                 z = centerlinePosition.Y * 8.0f / HeightPerStep;
-                yaw = MathF.Atan2(tangent.X, tangent.Z);
-                pitch = MathF.Atan2(tangent.Y, MathF.Sqrt(tangent.X * tangent.X + tangent.Z * tangent.Z));
-                roll = centerlineRoll;
+                rotation = centerlineFrame.ToRotation();
             }
 
             var tileX = (int)MathF.Floor(x / UnitsPerTile);
@@ -125,10 +126,6 @@ internal static class VehicleCubeRenderer
                 continue;
 
             var position = new Vector3(x * TileSize / UnitsPerTile, z * HeightPerStep / 8.0f, y * TileSize / UnitsPerTile);
-
-            var rotation = Matrix4x4.CreateRotationZ(roll)
-                * Matrix4x4.CreateRotationX(-pitch)
-                * Matrix4x4.CreateRotationY(yaw);
 
             if (carVerticalOffsets is not null && carVerticalOffsets.TryGetValue(current.RideId, out var carVerticalOffset))
                 position += Vector3.TransformNormal(new Vector3(0.0f, carVerticalOffset, 0.0f), rotation);

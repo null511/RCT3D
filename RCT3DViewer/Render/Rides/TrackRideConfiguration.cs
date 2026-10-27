@@ -50,6 +50,7 @@ internal static class TrackRideConfigurations
     private static readonly TrackRideConfiguration[] configurations = [
         new Monorail().Build(),
         new MiniatureRailway().Build(),
+        new GoKarts().Build(),
         new WoodenWildMouse().Build(),
         new ClassicMiniRollerCoaster().Build(),
         new MineTrainCoaster().Build(),
@@ -57,6 +58,7 @@ internal static class TrackRideConfigurations
         new LoopingRollerCoaster().Build(),
         new CorkscrewRollerCoaster().Build(),
         new CompactInvertedCoaster().Build(),
+        new InvertedRollerCoaster().Build(),
         new BobsleighCoaster().Build(),
     ];
 

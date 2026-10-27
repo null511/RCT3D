@@ -12,6 +12,7 @@ internal class LoopingRollerCoaster : RideDefinition
         CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.MetalTubes;
+        SupportTrackOffset = 0.20f;
     }
 
     protected override TrackRailProfile CreateProfile()

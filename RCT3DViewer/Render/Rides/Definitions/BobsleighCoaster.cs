@@ -9,7 +9,7 @@ internal sealed class BobsleighCoaster : RideDefinition
 {
     public BobsleighCoaster() : base(RCTRideType.BobsleighCoaster)
     {
-        SmoothMovement = true;
+        //SmoothMovement = true;
         CenterlineHeightOffset = 0.6f;
         //CarVerticalOffset = 0.5f;
 
@@ -19,7 +19,6 @@ internal sealed class BobsleighCoaster : RideDefinition
 
     protected override TrackRailProfile CreateProfile()
     {
-        var colorBedding = new TrackRgba8(200, 200, 200, 255);
         var specularRails = new TrackRailSpecularData(120, 10);
         var specularMeshing = new TrackRailSpecularData(200, 0);
 
@@ -51,7 +50,7 @@ internal sealed class BobsleighCoaster : RideDefinition
                 new Vector2(-0.70f, -0.14f),
                 new Vector2(-0.88f,  0.40f),
             ], false) {
-                Color = colorBedding,
+                Swatch = TrackRailSwatch.Main,
                 Specular = specularMeshing,
             },
 
@@ -64,7 +63,7 @@ internal sealed class BobsleighCoaster : RideDefinition
                 new Vector2( 0.72f, -0.15f),
                 new Vector2( 0.91f,  0.40f),
             ], false) {
-                Color = colorBedding,
+                Swatch = TrackRailSwatch.Main,
                 Specular = specularMeshing,
             },
         ]);

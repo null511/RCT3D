@@ -8,8 +8,7 @@ internal delegate bool TryGetCenterlinePoseDelegate(
     in RCTVehicleData current,
     float amount,
     out Vector3 position,
-    out Vector3 tangent,
-    out float rollRadians);
+    out TrackCenterlineFrame frame);
 
 internal static class TrackCenterlinePoseResolver
 {
@@ -17,12 +16,10 @@ internal static class TrackCenterlinePoseResolver
         in RCTVehicleData vehicle,
         ReadOnlySpan<TrackCenterlinePiece> pieces,
         out Vector3 position,
-        out Vector3 tangent,
-        out float rollRadians)
+        out TrackCenterlineFrame frame)
     {
         position = default;
-        tangent = default;
-        rollRadians = 0.0f;
+        frame = default;
 
         if (vehicle.TrackProgressTotal == 0 || vehicle.TrackProgress >= vehicle.TrackProgressTotal)
             return false;
@@ -42,7 +39,7 @@ internal static class TrackCenterlinePoseResolver
                     continue;
 
                 var progress = (float)vehicle.TrackProgress / vehicle.TrackProgressTotal;
-                return TrySample(sequence.Path, progress, out position, out tangent, out rollRadians);
+                return TrySample(sequence.Path, progress, out position, out frame);
             }
         }
 
@@ -55,40 +52,42 @@ internal static class TrackCenterlinePoseResolver
         float amount,
         ReadOnlySpan<TrackCenterlinePiece> pieces,
         out Vector3 position,
-        out Vector3 tangent,
-        out float rollRadians)
+        out TrackCenterlineFrame frame)
     {
-        if (!TryResolve(current, pieces, out var currentPosition, out var currentTangent, out var currentRoll)) {
+        if (!TryResolve(current, pieces, out var currentPosition, out var currentFrame)) {
             position = default;
-            tangent = default;
-            rollRadians = 0.0f;
+            frame = default;
             return false;
         }
 
-        if (!TryResolve(previous, pieces, out var previousPosition, out var previousTangent, out var previousRoll)) {
+        if (!TryResolve(previous, pieces, out var previousPosition, out var previousFrame)) {
             position = currentPosition;
-            tangent = currentTangent;
-            rollRadians = currentRoll;
+            frame = currentFrame;
             return true;
         }
 
         position = Vector3.Lerp(previousPosition, currentPosition, amount);
-        tangent = Vector3.Lerp(previousTangent, currentTangent, amount);
-        if (tangent.LengthSquared() > float.Epsilon)
-            tangent = Vector3.Normalize(tangent);
-        else
-            tangent = currentTangent;
-        rollRadians = LerpAngle(previousRoll, currentRoll, amount);
+        var tangent = NormalizeLerp(previousFrame.Tangent, currentFrame.Tangent, amount, currentFrame.Tangent);
+        var side = NormalizeLerp(previousFrame.Side, currentFrame.Side, amount, currentFrame.Side);
+        side -= tangent * Vector3.Dot(side, tangent);
+        if (side.LengthSquared() <= float.Epsilon)
+            side = currentFrame.Side - tangent * Vector3.Dot(currentFrame.Side, tangent);
+        side = Vector3.Normalize(side);
+        var up = Vector3.Normalize(Vector3.Cross(tangent, side));
+        if (Vector3.Dot(up, currentFrame.Up) < 0.0f) {
+            side = -side;
+            up = -up;
+        }
+        frame = new TrackCenterlineFrame(tangent, side, up);
         return true;
     }
 
-    private static bool TrySample(TrackCenterlinePath path, float progress, out Vector3 position, out Vector3 tangent, out float rollRadians)
+    private static bool TrySample(TrackCenterlinePath path, float progress, out Vector3 position, out TrackCenterlineFrame frame)
     {
         position = default;
-        tangent = default;
-        rollRadians = 0.0f;
+        frame = default;
         var points = path.Points.AsSpan();
-        var rolls = path.RollRadians.AsSpan();
+        var frames = path.Frames.AsSpan();
         if (points.Length < 2 || !float.IsFinite(progress) || progress < 0.0f || progress > 1.0f)
             return false;
 
@@ -108,22 +107,34 @@ internal static class TrackCenterlinePoseResolver
             if (targetDistance <= traversedDistance + segmentLength || i == points.Length - 2) {
                 var segmentProgress = Math.Clamp((targetDistance - traversedDistance) / segmentLength, 0.0f, 1.0f);
                 position = Vector3.Lerp(points[i], points[i + 1], segmentProgress);
-                tangent = segment / segmentLength;
-                if (rolls.Length == points.Length)
-                    rollRadians = rolls[i] + (rolls[i + 1] - rolls[i]) * segmentProgress;
+                if (frames.Length != points.Length) return false;
+
+                var tangent = NormalizeLerp(frames[i].Tangent, frames[i + 1].Tangent, segmentProgress, segment / segmentLength);
+                var side = NormalizeLerp(frames[i].Side, frames[i + 1].Side, segmentProgress, frames[i].Side);
+                side -= tangent * Vector3.Dot(side, tangent);
+                if (side.LengthSquared() <= float.Epsilon)
+                    side = frames[i + 1].Side - tangent * Vector3.Dot(frames[i + 1].Side, tangent);
+                side = Vector3.Normalize(side);
+                var up = Vector3.Normalize(Vector3.Cross(tangent, side));
+                var expectedUp = NormalizeLerp(frames[i].Up, frames[i + 1].Up, segmentProgress, frames[i].Up);
+                if (Vector3.Dot(up, expectedUp) < 0.0f) {
+                    side = -side;
+                    up = -up;
+                }
+                frame = new TrackCenterlineFrame(tangent, side, up);
                 return true;
             }
+
             traversedDistance += segmentLength;
         }
 
         return false;
     }
 
-    private static float LerpAngle(float start, float end, float amount)
+    private static Vector3 NormalizeLerp(Vector3 start, Vector3 end, float amount, Vector3 fallback)
     {
-        var delta = (end - start) % MathF.Tau;
-        if (delta > MathF.PI) delta -= MathF.Tau;
-        if (delta < -MathF.PI) delta += MathF.Tau;
-        return start + delta * amount;
+        var value = Vector3.Lerp(start, end, amount);
+        return value.LengthSquared() > float.Epsilon ? Vector3.Normalize(value) : fallback;
     }
+
 }
