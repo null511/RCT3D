@@ -31,6 +31,8 @@ internal sealed class ParkSceneController(
     private int loadedMapHeight;
     private Dictionary<(int TileX, int TileY), RCTTrackElementData[]> trackElementsByTile = new();
     private Dictionary<ushort, float> carVerticalOffsetsByRide = new();
+    private HashSet<ushort> smoothMovementRideIds = [];
+    private TrackCenterlinePiece[] rideCenterlines = [];
     private bool isDisposed;
 
     public TerrainMeshData? TerrainMesh { get; private set; }
@@ -52,6 +54,18 @@ internal sealed class ParkSceneController(
 
     public float GetCarVerticalOffset(ushort rideId) =>
         carVerticalOffsetsByRide.TryGetValue(rideId, out var offset) ? offset : 0.0f;
+
+    public bool UsesSmoothMovement(ushort rideId) =>
+        SmoothMovementSettings.EnableSmoothMovement && smoothMovementRideIds.Contains(rideId);
+
+    public bool TryGetCenterlinePose(
+        in RCTVehicleData previous,
+        in RCTVehicleData current,
+        float amount,
+        out Vector3 position,
+        out Vector3 tangent,
+        out float rollRadians) =>
+        TrackCenterlinePoseResolver.TryInterpolate(previous, current, amount, rideCenterlines, out position, out tangent, out rollRadians);
 
 
     public void LoadPark(string parkPath, float terrainSkirtFloor)
@@ -80,7 +94,8 @@ internal sealed class ParkSceneController(
             return new ParkLoadResult(
                 parkPath, snapshot.Width, snapshot.Height,
                 meshData.Terrain.Terrain, meshData.Terrain.Water, meshData.Paths, meshData.Navigation, meshData.PathAccessories,
-                meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, snapshot.TrackData, snapshot.RideEntranceData);
+                meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, snapshot.TrackData, snapshot.RideEntranceData,
+                meshData.Tracks.Centerlines);
         }
         catch (Exception ex) {
             throw new InvalidOperationException($"Failed to load '{parkPath}': {ex.Message}", ex);
@@ -147,6 +162,7 @@ internal sealed class ParkSceneController(
                 RideSupportMesh = result.RideSupports;
                 RideEntranceExitMesh = result.RideEntrances;
                 RideEntrances = result.RideEntranceData;
+                rideCenterlines = result.Centerlines;
                 trackElementsByTile = result.TrackElements
                     .GroupBy(track => (track.TileX, track.TileY))
                     .ToDictionary(group => group.Key, group => group.ToArray());
@@ -156,6 +172,14 @@ internal sealed class ParkSceneController(
                     .Where(track => carOffsetsByRideType.ContainsKey(track.RideType))
                     .GroupBy(track => track.RideId)
                     .ToDictionary(group => group.Key, group => carOffsetsByRideType[group.First().RideType]);
+                var smoothRideTypes = TrackRideConfigurations.All
+                    .Where(configuration => configuration.SmoothMovement)
+                    .Select(configuration => configuration.RideType)
+                    .ToHashSet();
+                smoothMovementRideIds = result.TrackElements
+                    .Where(track => smoothRideTypes.Contains(track.RideType))
+                    .Select(track => track.RideId)
+                    .ToHashSet();
                 loadedMapWidth = result.Width;
                 loadedMapHeight = result.Height;
 
@@ -188,6 +212,8 @@ internal sealed class ParkSceneController(
         RideEntrances = [];
         trackElementsByTile.Clear();
         carVerticalOffsetsByRide.Clear();
+        smoothMovementRideIds.Clear();
+        rideCenterlines = [];
         loadedMapWidth = 0;
         loadedMapHeight = 0;
         frameRenderer.InvalidateHistory();
@@ -224,7 +250,8 @@ internal sealed class ParkSceneController(
         var snapshots = parkLoadTask is null && pendingParkLoadResult is null
             ? simulation.VehicleSnapshots : null;
 
-        var instances = VehicleCubeRenderer.BuildInstances(snapshots, loadedMapWidth, loadedMapHeight, carVerticalOffsetsByRide);
+        var instances = VehicleCubeRenderer.BuildInstances(
+            snapshots, loadedMapWidth, loadedMapHeight, carVerticalOffsetsByRide, UsesSmoothMovement, TryGetCenterlinePose);
         vehicleResources[(int)currentFrame].UploadInstances(instances);
     }
 
@@ -268,5 +295,6 @@ internal sealed class ParkSceneController(
     private sealed record ParkLoadResult(
         string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water, PathMeshData Paths,
         PathNavigation Navigation, PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks, RideSupportMeshData RideSupports,
-        RideEntranceExitMeshData RideEntrances, RCTTrackElementData[] TrackElements, RCTRideEntranceData[] RideEntranceData);
+        RideEntranceExitMeshData RideEntrances, RCTTrackElementData[] TrackElements, RCTRideEntranceData[] RideEntranceData,
+        TrackCenterlinePiece[] Centerlines);
 }

@@ -8,11 +8,12 @@ internal class CorkscrewRollerCoaster : RideDefinition
 {
     public CorkscrewRollerCoaster() : base(RCTRideType.CorkscrewRollerCoaster)
     {
-        SupportStyle = RideSupportStyle.MetalTubes;
-        SupportTrackOffset = -0.24f;
-
+        SmoothMovement = true;
         CenterlineHeightOffset = 0.5f;
         CarVerticalOffset = 0.5f;
+
+        SupportStyle = RideSupportStyle.MetalTubes;
+        SupportTrackOffset = -0.24f;
     }
 
     protected override TrackRailProfile CreateProfile()

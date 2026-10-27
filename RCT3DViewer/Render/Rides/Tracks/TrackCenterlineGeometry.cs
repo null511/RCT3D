@@ -193,11 +193,11 @@ internal static class TrackCenterlineGeometry
 
     public static void AddParts(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries, float rollBegin = 0.0f, float rollEnd = 0.0f, Vector3? startTangent = null, Vector3? endTangent = null, Vector3? preferredSide = null, bool smoothRollTransition = false)
     {
-        geometry.CaptureCenterline(in track, centerline);
+        geometry.CaptureCenterline(in track, centerline, rollBegin, rollEnd, smoothRollTransition);
 
         foreach (var partGenerator in partGenerators)
             partGenerator.Add(in track, geometry, centerline, paletteEntries, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
     }
 }
 
-internal readonly record struct TrackCenterlinePath(byte Sequence, Vector3[] Points);
+internal readonly record struct TrackCenterlinePath(byte Sequence, Vector3[] Points, float[] RollRadians);

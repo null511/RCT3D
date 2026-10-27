@@ -9,8 +9,10 @@ internal class WoodenWildMouse : RideDefinition
 {
     public WoodenWildMouse() : base(RCTRideType.WoodenWildMouse)
     {
-        SupportStyle = RideSupportStyle.WoodenTruss;
+        SmoothMovement = true;
         CarVerticalOffset = 0.5f;
+
+        SupportStyle = RideSupportStyle.WoodenTruss;
     }
 
     protected override TrackRailProfile CreateProfile()

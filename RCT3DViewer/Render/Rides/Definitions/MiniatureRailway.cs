@@ -9,8 +9,10 @@ internal class MiniatureRailway : RideDefinition
 {
     public MiniatureRailway() : base(RCTRideType.MiniatureRailway)
     {
-        SupportStyle = RideSupportStyle.WoodenTruss;
+        SmoothMovement = true;
         CarVerticalOffset = 0.5f;
+
+        SupportStyle = RideSupportStyle.WoodenTruss;
     }
 
     protected override TrackRailProfile CreateProfile()

@@ -75,7 +75,8 @@ internal sealed class TrackMeshBuilder
 
         var geometry = new TrackMeshGeometry();
         var supportGeometry = new RideSupportMeshGeometry();
-        var piecesByRegion = new Dictionary<RenderRegionCoordinate, List<(TrackRideConfiguration Configuration, List<RCTTrackElementData> Elements)>>();
+        var rideCenterlines = new List<TrackCenterlinePiece>();
+        var piecesByRegion = new Dictionary<RenderRegionCoordinate, List<(TrackPieceKey Key, TrackRideConfiguration Configuration, List<RCTTrackElementData> Elements)>>();
         
         foreach (var (key, pieceElements) in pieces) {
             pieceElements.Sort((left, right) => left.Sequence.CompareTo(right.Sequence));
@@ -90,11 +91,11 @@ internal sealed class TrackMeshBuilder
                 Math.Clamp(key.OriginTileY / RenderRegionLayout.RegionSizeInTiles, 0, Math.Max(0, RenderRegionLayout.GetRegionCount(mapHeight) - 1)));
             
             if (!piecesByRegion.TryGetValue(region, out var regionPieces)) {
-                regionPieces = new List<(TrackRideConfiguration, List<RCTTrackElementData>)>();
+                regionPieces = new List<(TrackPieceKey, TrackRideConfiguration, List<RCTTrackElementData>)>();
                 piecesByRegion.Add(region, regionPieces);
             }
 
-            regionPieces.Add((configuration, pieceElements));
+            regionPieces.Add((key, configuration, pieceElements));
         }
 
         foreach (var region in RenderRegionLayout.Enumerate(mapWidth, mapHeight)) {
@@ -103,13 +104,14 @@ internal sealed class TrackMeshBuilder
             geometry.BeginRegion(region);
             supportGeometry.BeginRegion(region);
 
-            foreach (var (configuration, piece) in regionPieces) {
+            foreach (var (key, configuration, piece) in regionPieces) {
                 var track = piece[0];
                 pieceBuilders.TryResolve(track.TrackType, out var pieceBuilder);
                 var pieceSpan = CollectionsMarshal.AsSpan(piece);
                 var hasSupportPlacements = configuration.HasSupportPlacements;
+                var captureCenterline = hasSupportPlacements || configuration.SmoothMovement;
                 geometry.SetVerticalOffset(configuration.CenterlineHeightOffset);
-                if (hasSupportPlacements)
+                if (captureCenterline)
                     geometry.BeginCenterlineCapture();
 
                 try {
@@ -119,8 +121,32 @@ internal sealed class TrackMeshBuilder
                     geometry.SetVerticalOffset(0.0f);
                 }
 
+                var centerlines = captureCenterline ? geometry.EndCenterlineCapture() : [];
+                if (configuration.SmoothMovement && centerlines.Length > 0) {
+                    var sequences = new TrackCenterlineSequence[centerlines.Length];
+                    for (var i = 0; i < centerlines.Length; i++) {
+                        var sequenceTrack = pieceSpan[0];
+                        foreach (ref readonly var candidate in pieceSpan) {
+                            if (candidate.Sequence != centerlines[i].Sequence) continue;
+                            sequenceTrack = candidate;
+                            break;
+                        }
+                        sequences[i] = new TrackCenterlineSequence(
+                            sequenceTrack.TileX, sequenceTrack.TileY, sequenceTrack.BaseHeight, centerlines[i]);
+                    }
+
+                    rideCenterlines.Add(new TrackCenterlinePiece(
+                        key.RideId,
+                        track.RideType,
+                        track.TrackType,
+                        key.OriginTileX,
+                        key.OriginTileY,
+                        key.Direction,
+                        key.OriginBaseHeight,
+                        sequences));
+                }
+
                 if (hasSupportPlacements && configuration.SupportMeshBuilder is { } supportMeshBuilder) {
-                    var centerlines = geometry.EndCenterlineCapture();
                     if (centerlines.Length == 0)
                         throw new InvalidDataException($"Track piece {track.TrackType} did not expose a centerline for support placement.");
 
@@ -159,7 +185,7 @@ internal sealed class TrackMeshBuilder
             supportGeometry.EndRegion();
         }
 
-        return new TrackMeshBuildData(geometry.Build(), supportGeometry.Build());
+        return new TrackMeshBuildData(geometry.Build(), supportGeometry.Build(), rideCenterlines.ToArray());
     }
 
     private static TrackSupportAnchor ResolveSupportAnchor(

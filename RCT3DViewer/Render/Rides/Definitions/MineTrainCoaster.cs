@@ -8,6 +8,7 @@ internal sealed class MineTrainCoaster : RideDefinition
 {
     public MineTrainCoaster() : base(RCTRideType.MineTrainCoaster)
     {
+        SmoothMovement = true;
         CenterlineHeightOffset = 0.2f;
         CarVerticalOffset = 0.5f;
     }

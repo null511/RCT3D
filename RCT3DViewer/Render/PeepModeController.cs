@@ -305,14 +305,20 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
         var yaw = GetVehicleYaw(currentVehicle.Orientation);
         var pitch = currentVehicle.PitchRadians;
         var roll = currentVehicle.RollRadians;
+        var snapshotAlpha = 1.0f;
+        var previousVehicleForCenterline = currentVehicle;
+        var hasPreviousVehicle = false;
         if (snapshots.Previous is { } previousSnapshot) {
             foreach (var previousVehicle in previousSnapshot.Vehicles.Span) {
                 if (previousVehicle.EntityId != currentVehicle.EntityId) continue;
+                previousVehicleForCenterline = previousVehicle;
+                hasPreviousVehicle = true;
 
                 var previousTimestamp = previousSnapshot.Timestamp;
                 var interval = snapshots.Current.Timestamp - previousTimestamp;
                 var targetTimestamp = Stopwatch.GetTimestamp() - Stopwatch.Frequency / 40;
                 var alpha = interval <= 0 ? 1.0f : Math.Clamp((float)(targetTimestamp - previousTimestamp) / interval, 0.0f, 1.0f);
+                snapshotAlpha = alpha;
                 nativeX = previousVehicle.X + (currentVehicle.X - previousVehicle.X) * alpha;
                 nativeY = previousVehicle.Y + (currentVehicle.Y - previousVehicle.Y) * alpha;
                 nativeZ = previousVehicle.Z + (currentVehicle.Z - previousVehicle.Z) * alpha;
@@ -321,6 +327,17 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
                 roll = LerpAngle(previousVehicle.RollRadians, roll, alpha);
                 break;
             }
+        }
+
+        if (scene.UsesSmoothMovement(currentVehicle.RideId)
+            && hasPreviousVehicle
+            && scene.TryGetCenterlinePose(previousVehicleForCenterline, currentVehicle, snapshotAlpha, out var centerlinePosition, out var centerlineTangent, out var centerlineRoll)) {
+            nativeX = centerlinePosition.X * NativeUnitsPerWorldUnit;
+            nativeY = centerlinePosition.Z * NativeUnitsPerWorldUnit;
+            nativeZ = centerlinePosition.Y / WorldUnitsPerNativeHeightUnit;
+            yaw = MathF.Atan2(centerlineTangent.X, centerlineTangent.Z);
+            pitch = MathF.Atan2(centerlineTangent.Y, MathF.Sqrt(centerlineTangent.X * centerlineTangent.X + centerlineTangent.Z * centerlineTangent.Z));
+            roll = centerlineRoll;
         }
 
         position = new Vector3(

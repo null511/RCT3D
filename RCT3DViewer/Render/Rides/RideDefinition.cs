@@ -12,6 +12,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
     protected float SupportTrackOffset = 0.0f;
     protected float CarVerticalOffset = 0.0f;
     protected bool HasSupportPlacement = false;
+    protected bool SmoothMovement = false;
 
 
     public TrackRideConfiguration Build()
@@ -21,7 +22,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
         return new TrackRideConfiguration(rideType, [
             new SweptRailProfileGenerator(profile),
         ], SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
-            HasSupportPlacement ? GetSupportPlacements : null);
+            HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement);
     }
 
     protected abstract TrackRailProfile CreateProfile();

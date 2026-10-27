@@ -12,7 +12,8 @@ internal class TrackRideConfiguration(
     float centerlineHeightOffset,
     float supportTrackOffset,
     float carVerticalOffset,
-    Action<RCTTrackElementData, List<TrackSupportPlacement>>? getSupportPlacements)
+    Action<RCTTrackElementData, List<TrackSupportPlacement>>? getSupportPlacements,
+    bool smoothMovement = false)
 {
     public RCTRideType RideType { get; } = rideType;
     public IReadOnlyList<ITrackPartGenerator> PartGenerators { get; } = partGenerators;
@@ -20,6 +21,7 @@ internal class TrackRideConfiguration(
     public float CenterlineHeightOffset { get; } = centerlineHeightOffset;
     public float SupportTrackOffset { get; } = supportTrackOffset;
     public float CarVerticalOffset { get; } = carVerticalOffset;
+    public bool SmoothMovement { get; } = smoothMovement;
     public IRideSupportMeshBuilder? SupportMeshBuilder { get; } = RideSupportMeshBuilders.Resolve(supportStyle);
     public Action<RCTTrackElementData, List<TrackSupportPlacement>>? GetSupportPlacements { get; } = getSupportPlacements;
 
@@ -55,6 +57,7 @@ internal static class TrackRideConfigurations
         new LoopingRollerCoaster().Build(),
         new CorkscrewRollerCoaster().Build(),
         new CompactInvertedCoaster().Build(),
+        new BobsleighCoaster().Build(),
     ];
 
     public static IReadOnlyList<TrackRideConfiguration> All => configurations;

@@ -6,7 +6,7 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 24;
+    private const uint ExpectedAbiVersion = 25;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -139,8 +139,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (Marshal.SizeOf<RCTTilePathData>() != 28)
                 throw new InvalidOperationException("RCTTilePathData must be 28 bytes to match the OpenRCT2 adapter ABI.");
             
-            if (Marshal.SizeOf<RCTVehicleData>() != 36)
-                throw new InvalidOperationException("RCTVehicleData must be 36 bytes to match the OpenRCT2 adapter ABI.");
+            if (Marshal.SizeOf<RCTVehicleData>() != 56)
+                throw new InvalidOperationException("RCTVehicleData must be 56 bytes to match the OpenRCT2 adapter ABI.");
 
             if (Marshal.SizeOf<RCTPeepData>() != 24)
                 throw new InvalidOperationException("RCTPeepData must be 24 bytes to match the OpenRCT2 adapter ABI.");
@@ -422,6 +422,14 @@ public struct RCTVehicleData
     public ushort TrainHeadEntityId;
     public byte CurrentStation;
     public byte Status;
+    public int TrackLocationX;
+    public int TrackLocationY;
+    public int TrackLocationZ;
+    public ushort TrackProgress;
+    public ushort TrackProgressTotal;
+    public ushort TrackTypeAndDirection;
+    public byte TrackSubposition;
+    public byte TrackReserved;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]

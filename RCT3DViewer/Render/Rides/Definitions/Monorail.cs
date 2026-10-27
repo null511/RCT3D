@@ -9,9 +9,11 @@ internal class Monorail : RideDefinition
 {
     public Monorail() : base(RCTRideType.Monorail)
     {
+        SmoothMovement = true;
+        CarVerticalOffset = 0.5f;
+
         SupportStyle = RideSupportStyle.MetalBoxed;
         SupportTrackOffset = 0.2f;
-        CarVerticalOffset = 0.5f;
     }
 
     protected override TrackRailProfile CreateProfile()

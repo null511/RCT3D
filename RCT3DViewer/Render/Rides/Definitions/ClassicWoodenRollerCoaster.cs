@@ -14,8 +14,10 @@ internal sealed class ClassicWoodenRollerCoaster : RideDefinition
 
     public ClassicWoodenRollerCoaster() : base(RCTRideType.ClassicWoodenRollerCoaster)
     {
+        SmoothMovement = true;
         CenterlineHeightOffset = 0.25f;
         CarVerticalOffset = 0.5f;
+
         SupportStyle = RideSupportStyle.WoodenTruss;
         SupportTrackOffset = CenterlineHeightOffset - RailHalfHeight - SupportTopClearance;
     }

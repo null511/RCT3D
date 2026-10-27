@@ -101,21 +101,29 @@ internal sealed class RideSupportMeshGeometry
 
         var bottomRing = new Vector3[sideCount];
         var topRing = new Vector3[sideCount];
+        var bottomIndices = new uint[sideCount];
+        var topIndices = new uint[sideCount];
         for (var i = 0; i < sideCount; i++) {
             var angle = 2.0f * MathF.PI * i / sideCount;
-            var offset = new Vector3(MathF.Cos(angle) * radius, 0.0f, MathF.Sin(angle) * radius);
+            var normal = new Vector3(MathF.Cos(angle), 0.0f, MathF.Sin(angle));
+            var offset = normal * radius;
             bottomRing[i] = new Vector3(center.X, bottomHeight, center.Z) + offset;
             topRing[i] = new Vector3(center.X, topHeight, center.Z) + offset;
+            bottomIndices[i] = (uint)vertices.Count;
+            vertices.Add(new TrackVertex(bottomRing[i], normal, color, specular.Roughness, specular.Metalness));
+            topIndices[i] = (uint)vertices.Count;
+            vertices.Add(new TrackVertex(topRing[i], normal, color, specular.Roughness, specular.Metalness));
         }
 
         for (var i = 0; i < sideCount; i++) {
             var next = (i + 1) % sideCount;
             var middleAngle = 2.0f * MathF.PI * (i + 0.5f) / sideCount;
             var normal = new Vector3(MathF.Cos(middleAngle), 0.0f, MathF.Sin(middleAngle));
-            AddFace(bottomRing[i], bottomRing[next], topRing[next], topRing[i], normal, color, specular);
+            AddTriangle(bottomIndices[i], bottomIndices[next], topIndices[next], normal);
+            AddTriangle(bottomIndices[i], topIndices[next], topIndices[i], normal);
         }
 
-        AddCap(new Vector3(center.X, bottomHeight, center.Z), bottomRing, -Vector3.UnitY, color, specular);
+        //AddCap(new Vector3(center.X, bottomHeight, center.Z), bottomRing, -Vector3.UnitY, color, specular);
         AddCap(new Vector3(center.X, topHeight, center.Z), topRing, Vector3.UnitY, color, specular);
     }
 

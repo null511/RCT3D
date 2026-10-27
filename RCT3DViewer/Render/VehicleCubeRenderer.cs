@@ -1,4 +1,6 @@
 using RCT3D.Render.Paths;
+using RCT3D.Interop;
+using RCT3D.Render.Rides.Tracks;
 using RCT3D.Simulation;
 using System.Diagnostics;
 using System.Numerics;
@@ -64,7 +66,9 @@ internal static class VehicleCubeRenderer
         VehicleSnapshotPair? snapshots,
         int mapWidth,
         int mapHeight,
-        IReadOnlyDictionary<ushort, float>? carVerticalOffsets = null)
+        IReadOnlyDictionary<ushort, float>? carVerticalOffsets = null,
+        Func<ushort, bool>? usesSmoothMovement = null,
+        TryGetCenterlinePoseDelegate? tryGetCenterlinePose = null)
     {
         if (snapshots is null || mapWidth <= 0 || mapHeight <= 0)
             return Array.Empty<ModelRegionBatch>();
@@ -100,6 +104,19 @@ internal static class VehicleCubeRenderer
                 yaw = LerpAngle(GetYawRadians(previous.Orientation), yaw, alpha);
                 pitch = LerpAngle(previous.PitchRadians, pitch, alpha);
                 roll = LerpAngle(previous.RollRadians, roll, alpha);
+            }
+
+            if (usesSmoothMovement?.Invoke(current.RideId) == true
+                && tryGetCenterlinePose is not null
+                && previousVehicles is not null
+                && previousVehicles.TryGetValue(current.EntityId, out var previousVehicle)
+                && tryGetCenterlinePose(previousVehicle, current, alpha, out var centerlinePosition, out var tangent, out var centerlineRoll)) {
+                x = centerlinePosition.X * UnitsPerTile / TileSize;
+                y = centerlinePosition.Z * UnitsPerTile / TileSize;
+                z = centerlinePosition.Y * 8.0f / HeightPerStep;
+                yaw = MathF.Atan2(tangent.X, tangent.Z);
+                pitch = MathF.Atan2(tangent.Y, MathF.Sqrt(tangent.X * tangent.X + tangent.Z * tangent.Z));
+                roll = centerlineRoll;
             }
 
             var tileX = (int)MathF.Floor(x / UnitsPerTile);
