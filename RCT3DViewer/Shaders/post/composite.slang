@@ -7,9 +7,11 @@ import lib.sky;
 import lib.sky_transmit;
 import lib.sky_view;
 import lib.sky_irradiance;
+import lib.shadow;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
+[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
 
 struct ComputeInput {
     uint2 globalPos : SV_DispatchThreadID;
@@ -22,8 +24,9 @@ struct ComputeInput {
 [[vk::binding(4, 1)]] Texture2D<float4> sky_transmit;
 [[vk::binding(5, 1)]] Texture2D<float4> sky_view;
 [[vk::binding(6, 1)]] Texture2D<float4> texSkyIrradiance;
-[[vk::binding(7, 1)]] SamplerState linearSampler;
-[[vk::binding(8, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
+[[vk::binding(7, 1)]] Texture2D<float> shadowDepth;
+[[vk::binding(8, 1)]] SamplerState linearSampler;
+[[vk::binding(9, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
 
 [shader("compute")]
 [numthreads(16, 16)]
@@ -53,6 +56,7 @@ void main(ComputeInput input) {
         float emission = fract(specularMap.a);
 
         float3 sunDir = normalize(sceneUniforms.sunDirection.xyz);
+        float shadowVisibility = getShadowVisibility(worldPosition);
 
         float3 viewDirection = normalize(cameraUniforms.cameraPosition.xyz - worldPosition);
         float3 halfDirection = normalize(sunDir + viewDirection);
@@ -68,16 +72,16 @@ void main(ComputeInput input) {
         float3 fresnel_sun = FresnelSchlick(hDotV, f0);
         float distribution = DistributionGgx(nDotH, roughness);
         float geometry = GeometrySchlickGgx(nDotV, roughness) * GeometrySchlickGgx(nDotL, roughness);
-        float3 specular = distribution * geometry * fresnel_sun / max(4.0 * nDotV * nDotL, 0.0001);
+        float3 directSpecular = distribution * geometry * fresnel_sun / max(4.0 * nDotV * nDotL, 0.0001);
 
         // Sky Reflections
         float3 reflectDir = normalize(reflect(-viewDirection, texNormal));
         float3 reflectColor = getValFromSkyLUT(sky_view, linearSampler, reflectDir, localSunDir);
         float3 fresnel_sky = FresnelSchlick(nDotV, f0);
-        specular += reflectColor * fresnel_sky * smoothness;
+        float3 skySpecular = reflectColor * fresnel_sky * smoothness;
 
         float3 sunLight = SunLux * getValFromTLUT(sky_transmit, linearSampler, sky_viewPos, sunDir);
-        specular *= nDotL * sunLight;
+        float3 specular = (directSpecular * nDotL * shadowVisibility + skySpecular) * sunLight;
 
         // Metal Diffuse Weighting
         // float3 diffuseWeight = (1.0 - fresnel) * (1.0 - metalness);
@@ -96,7 +100,7 @@ void main(ComputeInput input) {
 
         color = ambientLight * (1.0 - fresnel_sky) * ao;
 
-        color += (1.0 - fresnel_sun) * (diffuseNdotL / PI) * sunLight;
+        color += (1.0 - fresnel_sun) * (diffuseNdotL / PI) * sunLight * shadowVisibility;
 
         color *= diffuseWeight;
 
@@ -131,6 +135,19 @@ void main(ComputeInput input) {
     }
 
     sceneOutput[input.globalPos] = float4(color, 1.0);
+}
+
+float getShadowVisibility(float3 worldPosition) {
+    float4 shadowClip = mul(float4(worldPosition, 1.0), shadowUniforms.shadowViewProjection);
+    shadowClip = distortShadowClip(shadowClip, shadowUniforms.distortionFactor);
+    float3 shadowNdc = shadowClip.xyz / shadowClip.w;
+    float2 shadowUv = shadowNdc.xy * 0.5 + 0.5;
+
+    if (any(shadowUv < 0.0) || any(shadowUv > 1.0) || shadowNdc.z < 0.0 || shadowNdc.z > 1.0)
+        return 1.0;
+
+    float storedDepth = shadowDepth.SampleLevel(linearSampler, shadowUv, 0.0);
+    return shadowNdc.z <= storedDepth + 0.0015 ? 1.0 : 0.0;
 }
 
 float3 reconstructWorldPosition(uint2 pixelPosition, float depth) {

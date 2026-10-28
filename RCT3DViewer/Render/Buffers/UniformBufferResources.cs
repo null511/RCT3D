@@ -14,6 +14,8 @@ internal sealed unsafe class UniformBufferResources : IDisposable
     private readonly DeviceMemory[] _temporalMemories;
     private readonly Buffer[] _sceneBuffers;
     private readonly DeviceMemory[] _sceneMemories;
+    private readonly Buffer[] _shadowBuffers;
+    private readonly DeviceMemory[] _shadowMemories;
     private DescriptorPool _descriptorPool;
     private DescriptorSet[] _descriptorSets;
     private bool _disposed;
@@ -33,6 +35,8 @@ internal sealed unsafe class UniformBufferResources : IDisposable
         _temporalMemories = new DeviceMemory[framesInFlight];
         _sceneBuffers = new Buffer[framesInFlight];
         _sceneMemories = new DeviceMemory[framesInFlight];
+        _shadowBuffers = new Buffer[framesInFlight];
+        _shadowMemories = new DeviceMemory[framesInFlight];
         _descriptorSets = new DescriptorSet[framesInFlight];
 
         try {
@@ -54,7 +58,7 @@ internal sealed unsafe class UniformBufferResources : IDisposable
         return _descriptorSets[frameIndex];
     }
 
-    public void Update(uint frameIndex, in CameraUniforms camera, in TemporalUniforms temporal, in SceneUniforms scene)
+    public void Update(uint frameIndex, in CameraUniforms camera, in TemporalUniforms temporal, in SceneUniforms scene, in ShadowUniforms shadow)
     {
         if (frameIndex >= _descriptorSets.Length)
             throw new ArgumentOutOfRangeException(nameof(frameIndex));
@@ -62,6 +66,7 @@ internal sealed unsafe class UniformBufferResources : IDisposable
         Write(_cameraMemories[frameIndex], camera);
         Write(_temporalMemories[frameIndex], temporal);
         Write(_sceneMemories[frameIndex], scene);
+        Write(_shadowMemories[frameIndex], shadow);
     }
 
     private void CreateDescriptorSetLayout()
@@ -81,6 +86,12 @@ internal sealed unsafe class UniformBufferResources : IDisposable
             },
             new DescriptorSetLayoutBinding {
                 Binding = 2,
+                DescriptorType = DescriptorType.UniformBuffer,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit | ShaderStageFlags.ComputeBit
+            },
+            new DescriptorSetLayoutBinding {
+                Binding = 3,
                 DescriptorType = DescriptorType.UniformBuffer,
                 DescriptorCount = 1,
                 StageFlags = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit | ShaderStageFlags.ComputeBit
@@ -107,6 +118,7 @@ internal sealed unsafe class UniformBufferResources : IDisposable
             CreateBuffer((ulong)Marshal.SizeOf<CameraUniforms>(), out _cameraBuffers[i], out _cameraMemories[i]);
             CreateBuffer((ulong)Marshal.SizeOf<TemporalUniforms>(), out _temporalBuffers[i], out _temporalMemories[i]);
             CreateBuffer((ulong)Marshal.SizeOf<SceneUniforms>(), out _sceneBuffers[i], out _sceneMemories[i]);
+            CreateBuffer((ulong)Marshal.SizeOf<ShadowUniforms>(), out _shadowBuffers[i], out _shadowMemories[i]);
         }
     }
 
@@ -117,7 +129,7 @@ internal sealed unsafe class UniformBufferResources : IDisposable
         var frameCount = _descriptorSets.Length;
         var poolSize = new DescriptorPoolSize {
             Type = DescriptorType.UniformBuffer,
-            DescriptorCount = checked((uint)(frameCount * 3))
+            DescriptorCount = checked((uint)(frameCount * 4))
         };
 
         var poolInfo = new DescriptorPoolCreateInfo {
@@ -157,6 +169,10 @@ internal sealed unsafe class UniformBufferResources : IDisposable
                 new DescriptorBufferInfo {
                     Buffer = _sceneBuffers[i],
                     Range = (ulong)Marshal.SizeOf<SceneUniforms>(),
+                },
+                new DescriptorBufferInfo {
+                    Buffer = _shadowBuffers[i],
+                    Range = (ulong)Marshal.SizeOf<ShadowUniforms>(),
                 },
             };
 
@@ -253,6 +269,7 @@ internal sealed unsafe class UniformBufferResources : IDisposable
             DestroyBuffer(_cameraBuffers[i], _cameraMemories[i]);
             DestroyBuffer(_temporalBuffers[i], _temporalMemories[i]);
             DestroyBuffer(_sceneBuffers[i], _sceneMemories[i]);
+            DestroyBuffer(_shadowBuffers[i], _shadowMemories[i]);
         }
 
         if (DescriptorSetLayout.Handle != 0)

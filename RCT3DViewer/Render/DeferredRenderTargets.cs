@@ -27,6 +27,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
     public RenderPass WaterRenderPass { get; private set; }
     public Framebuffer GBufferFramebuffer { get; private set; }
     public Framebuffer WaterFramebuffer { get; private set; }
+    public ShadowRenderTargets? ShadowTargets { get; private set; }
 
     public DeferredRenderTargets(VulkanDeviceContext context, Extent2D extent)
     {
@@ -36,6 +37,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
 
         try {
             ValidateFormats();
+            ShadowTargets = new ShadowRenderTargets(context, DepthFormat);
             CreateImages();
             CreateRenderPasses();
             CreateFramebuffers();
@@ -56,9 +58,10 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
         ValidateColorFormat(Format.R16G16B16A16Sfloat, requireStorage: true);
 
         _context.Api.GetPhysicalDeviceFormatProperties(_context.PhysicalDevice, DepthFormat, out var depthProperties);
-        var requiredDepthFeatures = FormatFeatureFlags.DepthStencilAttachmentBit | FormatFeatureFlags.SampledImageBit;
+        var requiredDepthFeatures = FormatFeatureFlags.DepthStencilAttachmentBit | FormatFeatureFlags.SampledImageBit
+            | FormatFeatureFlags.SampledImageFilterLinearBit;
         if ((depthProperties.OptimalTilingFeatures & requiredDepthFeatures) != requiredDepthFeatures)
-            throw new NotSupportedException($"Depth format {DepthFormat} cannot be used as a sampled attachment.");
+            throw new NotSupportedException($"Depth format {DepthFormat} cannot be used as a linearly sampled attachment.");
     }
 
     private void ValidateColorFormat(Format format, bool requireStorage = false)
@@ -75,7 +78,8 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
     {
         foreach (var format in new[] { Format.D32Sfloat, Format.D32SfloatS8Uint, Format.D24UnormS8Uint }) {
             _context.Api.GetPhysicalDeviceFormatProperties(_context.PhysicalDevice, format, out var properties);
-            var requiredFeatures = FormatFeatureFlags.DepthStencilAttachmentBit | FormatFeatureFlags.SampledImageBit;
+            var requiredFeatures = FormatFeatureFlags.DepthStencilAttachmentBit | FormatFeatureFlags.SampledImageBit
+                | FormatFeatureFlags.SampledImageFilterLinearBit;
             if ((properties.OptimalTilingFeatures & requiredFeatures) == requiredFeatures)
                 return format;
         }
@@ -414,6 +418,8 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
 
         var vk = _context.Api;
         var device = _context.LogicalDevice;
+        ShadowTargets?.Dispose();
+        ShadowTargets = null;
         DestroyFramebuffers();
 
         if (WaterRenderPass.Handle != 0) vk.DestroyRenderPass(device, WaterRenderPass, null);

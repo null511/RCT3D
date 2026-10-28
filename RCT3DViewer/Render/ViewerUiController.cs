@@ -28,6 +28,7 @@ internal sealed class ViewerUiController
     private int _debugView;
     private float _sharpening = 0.5f;
     private float _mipBias = -1.0f;
+    private float _shadowDistortionFactor = 0.65f;
     private static readonly string[] DebugViewOptions = { "None", "Albedo", "Geometry Normal", "Texture Normal" };
 
     //public float TimeOfDayHours => _timeOfDayHours;
@@ -41,6 +42,7 @@ internal sealed class ViewerUiController
     public uint DebugView => (uint)_debugView;
     public float Sharpening => _sharpening;
     public float MipBias => _mipBias;
+    public float ShadowDistortionFactor => _shadowDistortionFactor;
     //public string? LoadedParkPath => _loadedParkPath;
     //public bool HasParkLoadError => _parkLoadError is not null;
     public bool IsParkLoading => _isParkLoading;
@@ -178,6 +180,7 @@ internal sealed class ViewerUiController
                 ImGui.Combo("Debug View", ref _debugView, DebugViewOptions, DebugViewOptions.Length);
                 ImGui.SliderFloat("Sharpening", ref _sharpening, 0.0f, 1.0f, "%.2f");
                 ImGui.SliderFloat("Mip Bias", ref _mipBias, -2.0f, 0.0f, "%.2f");
+                ImGui.SliderFloat("Shadow Distortion", ref _shadowDistortionFactor, 0.0f, 1.0f, "%.2f");
             }
             ImGui.End();
         }

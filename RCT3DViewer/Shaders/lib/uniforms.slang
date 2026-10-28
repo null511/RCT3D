@@ -21,6 +21,12 @@ struct SceneUniforms {
     DebugView debugView;
 };
 
+struct ShadowUniforms {
+	float4x4 shadowViewProjection;
+	float distortionFactor;
+	float3 padding;
+};
+
 enum DebugView : uint {
     None = 0,
     Albedo = 1,

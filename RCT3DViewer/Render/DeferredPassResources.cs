@@ -52,6 +52,7 @@ internal sealed class DeferredPassResources : IDisposable
                         skyTargets.SkyTransmitView,
                         skyTargets.SkyViewView,
                         skyTargets.SkyIrradianceView,
+                        targets.ShadowTargets!.DepthView,
                     },
                 },
                 new[] {
@@ -66,6 +67,7 @@ internal sealed class DeferredPassResources : IDisposable
                         ImageLayout.ShaderReadOnlyOptimal,
                         ImageLayout.ShaderReadOnlyOptimal,
                         ImageLayout.General,
+                        ImageLayout.DepthStencilReadOnlyOptimal,
                     },
                 });
 

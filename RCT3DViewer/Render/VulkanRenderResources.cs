@@ -19,6 +19,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
     public VulkanDeviceContext? DeviceContext { get; private set; }
     public SwapchainResources? SwapchainResources { get; private set; }
     public DeferredRenderTargets? DeferredTargets { get; private set; }
+    public ShadowGraphicsResources? ShadowGraphicsResources { get; private set; }
     public SkyRenderTargets? SkyTargets { get; private set; }
     public DeferredPassResources? DeferredPassResources { get; private set; }
     public UniformBufferResources? UniformBufferResources { get; private set; }
@@ -136,6 +137,8 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         DeferredTargets = new DeferredRenderTargets(DeviceContext, SwapchainExtent);
         SkyTargets = new SkyRenderTargets(DeviceContext);
         UniformBufferResources = new UniformBufferResources(DeviceContext, MaxFramesInFlight);
+        ShadowGraphicsResources = new ShadowGraphicsResources(DeviceContext, DeferredTargets.ShadowTargets!.RenderPass,
+            UniformBufferResources.DescriptorSetLayout);
         DeferredPassResources = new DeferredPassResources(DeviceContext, RenderPass, DeferredTargets, SkyTargets, UniformBufferResources);
         TerrainGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, TerrainMaterials,
             shaderNameOverride: Path.Combine("object", "terrain"), createWireframePipeline: true, colorAttachmentCount: 3);
@@ -448,6 +451,10 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         var terrainResources = TerrainGraphicsResources;
         TerrainGraphicsResources = null;
         terrainResources?.Dispose();
+
+        var shadowGraphicsResources = ShadowGraphicsResources;
+        ShadowGraphicsResources = null;
+        shadowGraphicsResources?.Dispose();
 
         var deferredPassResources = DeferredPassResources;
         DeferredPassResources = null;
