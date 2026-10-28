@@ -37,7 +37,9 @@ void main(ComputeInput input) {
     float depth = defer_depth.Load(pos);
     float3 color;
 
-    float3 worldPosition = reconstructWorldPosition(input.globalPos, depth);
+    float3 viewPosition = reconstructViewPosition(
+        input.globalPos, depth, sceneUniforms.renderDimensions, cameraUniforms.projectionInverse);
+    float3 worldPosition = mul(float4(viewPosition, 1.0), cameraUniforms.viewToWorld).xyz;
     float3 localSunDir = normalize(sceneUniforms.sunDirection.xyz);
 
     if (depth < 1.0) {
@@ -148,13 +150,6 @@ float getShadowVisibility(float3 worldPosition) {
 
     float storedDepth = shadowDepth.SampleLevel(linearSampler, shadowUv, 0.0);
     return shadowNdc.z <= storedDepth + 0.0015 ? 1.0 : 0.0;
-}
-
-float3 reconstructWorldPosition(uint2 pixelPosition, float depth) {
-    float2 uv = (pixelPosition + 0.5) / float2(sceneUniforms.renderDimensions);
-
-    float3 clipPosition = float3(uv * 2.0 - 1.0, depth);
-    return mul_project(clipPosition, cameraUniforms.viewProjectionInverse);
 }
 
 float3 FresnelSchlick(float cosine, float3 f0) {

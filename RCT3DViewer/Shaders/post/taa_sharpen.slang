@@ -68,9 +68,10 @@ void main(ComputeInput input) {
         float3 color = ((b + d + f + h) * w + e) * weight_inv;
 
         color = e;
+        float mixRate = taaResolved[input.globalPos].a;
 
         sceneOutput.Store(input.globalPos, float4(color, 1.0));
-        taaHistory.Store(input.globalPos, float4(e, 1.0));
+        taaHistory.Store(input.globalPos, float4(e, mixRate));
     }
 }
 

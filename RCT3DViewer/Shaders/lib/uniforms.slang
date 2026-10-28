@@ -3,12 +3,12 @@ public module uniforms;
 struct CameraUniforms {
 	float4 cameraPosition;
 	float4x4 viewProjection;
-	float4x4 viewProjectionInverse;
+	float4x4 projectionInverse;
+	float4x4 viewToWorld;
 };
 
 struct TemporalUniforms {
-	float4 cameraPositionLast;
-	float4x4 viewProjectionLast;
+	float4x4 currentViewToPreviousClip;
 };
 
 struct SceneUniforms {

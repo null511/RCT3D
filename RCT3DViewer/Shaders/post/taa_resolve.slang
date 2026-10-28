@@ -50,31 +50,24 @@ void main(ComputeInput input) {
     GroupMemoryBarrierWithGroupSync();
 
     if (all(input.globalPos < sceneUniforms.renderDimensions)) {
-        float2 texcoord = (input.globalPos + 0.5) / sceneUniforms.renderDimensions;
         float depth = defer_depth.Load(int3(input.globalPos, 0));
 
-        depth = input.globalPos.y / float(sceneUniforms.renderDimensions.y);
-
-        float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
-
-        // float3 localPos = mul_project(clipPos, cameraUniforms.viewProjectionInverse);
-        // float3 clipPosLast = mul_project(localPos, temporalUniforms.viewProjectionLast);
-        float4 localPos = mul(float4(clipPos, 1.0), cameraUniforms.viewProjectionInverse);
-        //localPos.xyz /= localPos.w;
-        //localPos.w = 1.0;
-
-        float4 clipPosLast = mul(localPos, temporalUniforms.viewProjectionLast);
-        //float4 clipPosLast = mul(localPos, cameraUniforms.viewProjection);
+        float3 viewPosition = reconstructViewPosition(
+            input.globalPos, depth, sceneUniforms.renderDimensions, cameraUniforms.projectionInverse);
+        float4 clipPosLast = mul(float4(viewPosition, 1.0), temporalUniforms.currentViewToPreviousClip);
         clipPosLast.xyz /= clipPosLast.w;
 
         float2 uv_prev = clipPosLast.xy;
         uv_prev = uv_prev * 0.5 + 0.5;
 
         float4 lastColor = taaHistory.SampleLevel(linearSampler, uv_prev, 0);
-        //float4 lastColor = taaHistory.Load(int3(uv_prev * sceneUniforms.renderDimensions, 0));
 
-        float mixRate = TAA_MaxAccumFrames; // clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
+        float mixRate = clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
         if (!all(saturate(uv_prev) == uv_prev)) mixRate = 0.0;
+
+        if (sceneUniforms.frameCounter == 0) {
+            mixRate = 0.0;
+        }
 
         int2 luv = input.localPos + 1;
         float3 in0 = sharedBuffer[getSharedIndex(luv)];
@@ -89,19 +82,21 @@ void main(ComputeInput input) {
             color_max = max(color_max, in1);
         }
 
-        float3 colorFinal = lerp(lastColor.rgb, in0, 1.0 / ++mixRate);
+        float3 colorFinal = lerp(lastColor.rgb, in0, 1.0 / (1.0 + mixRate));
 
-        if (sceneUniforms.frameCounter == 0) colorFinal = in0;
+        float3 clamped = clamp(colorFinal, color_min, color_max);
+        if (!all(clamped == colorFinal)) {
+            colorFinal = clamped;
+            mixRate *= 0.5;
+        }
 
-        //colorFinal = clamp(colorFinal, color_min, color_max);
-
-        if (input.globalPos.x > sceneUniforms.renderDimensions.x / 2) {
-            colorFinal = float3(abs(texcoord - uv_prev) * sceneUniforms.renderDimensions, 0.0);
+        if (sceneUniforms.frameCounter == 0) {
+            colorFinal = in0;
         }
 
         colorFinal = clamp(colorFinal, 0.0, 65504.0);
 
-        resolvedOutput.Store(input.globalPos, float4(colorFinal, 1.0));
+        resolvedOutput.Store(input.globalPos, float4(colorFinal, mixRate+1.0));
     }
 }
 
@@ -118,11 +113,11 @@ int getSharedIndex(const in int2 uv) {
 
 static const int2 sample_offsets[] = {
     int2(-1, -1),
-    int2(0, -1),
-    int2(1, -1),
-    int2(-1, 0),
-    int2(1, 0),
-    int2(-1, 1),
-    int2(0, 1),
-    int2(1, 1),
+    int2( 0, -1),
+    int2( 1, -1),
+    int2(-1,  0),
+    int2( 1,  0),
+    int2(-1,  1),
+    int2( 0,  1),
+    int2( 1,  1),
 };

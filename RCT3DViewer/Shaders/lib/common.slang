@@ -11,6 +11,13 @@ float3 mul_project(const in float3 vector, const in float4x4 matrix) {
     return result.xyz / result.w;
 }
 
+float3 reconstructViewPosition(const in uint2 pixelPosition, const in float depth,
+    const in uint2 renderDimensions, const in float4x4 projectionInverse) {
+    float2 uv = (pixelPosition + 0.5) / float2(renderDimensions);
+    float3 clipPosition = float3(uv * 2.0 - 1.0, depth);
+    return mul_project(clipPosition, projectionInverse);
+}
+
 float3 maxOf(float3 x, float3 y, float3 z) {
     return max(x, max(y, z));
 }

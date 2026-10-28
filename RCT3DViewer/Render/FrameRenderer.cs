@@ -1,9 +1,8 @@
 using RCT3D.Render.Buffers;
-using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
+using RCT3D.Render.Rides.Entrances;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
-using RCT3D.Render.Rides.Entrances;
 using RCT3D.Render.Terrain;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
@@ -15,7 +14,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 {
     private uint frameCounter;
     private Vector3 cameraPositionLast;
-    private Matrix4x4 viewProjectionLast = Matrix4x4.Identity;
+    private Matrix4x4 viewRotationLast = Matrix4x4.Identity;
+    private Matrix4x4 projectionLast = Matrix4x4.Identity;
     private bool taaHistoryValid;
     private bool taaEnabledLastFrame = true;
     private bool sceneOutputInitialized;
@@ -25,7 +25,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
     private bool taaResolveInitialized;
     private ulong taaFrameIndex;
     private Vector3 cameraPositionCurrent;
-    private Matrix4x4 viewProjectionCurrent = Matrix4x4.Identity;
+    private Matrix4x4 viewRotationCurrent = Matrix4x4.Identity;
+    private Matrix4x4 projectionCurrent = Matrix4x4.Identity;
 
     private Vk Vk => resources.Vk!;
 
@@ -58,12 +59,30 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         var deferredTargets = resources.DeferredTargets!;
         var deferredPassResources = resources.DeferredPassResources!;
         var aspect = (float)extent.Width / extent.Height;
-        var viewProjection = camera.GetViewMatrix() * camera.GetProjectionMatrix(aspect);
-        if (!Matrix4x4.Invert(viewProjection, out var inverseViewProjection))
-            throw new InvalidOperationException("The camera view-projection matrix is not invertible.");
+        var view = camera.GetViewMatrix();
+        var projection = camera.GetProjectionMatrix(aspect);
+        var viewProjection = view * projection;
+        if (!Matrix4x4.Invert(projection, out var projectionInverse))
+            throw new InvalidOperationException("The camera projection matrix is not invertible.");
+        if (!Matrix4x4.Invert(view, out var viewToWorld))
+            throw new InvalidOperationException("The camera view matrix is not invertible.");
 
         CalculateSunDirection(out _, out var sunDirection);
         var cameraPosition = camera.Position;
+        var viewRotation = view;
+        viewRotation.M41 = 0.0f;
+        viewRotation.M42 = 0.0f;
+        viewRotation.M43 = 0.0f;
+        var previousViewRotation = frameCounter == 0 ? viewRotation : viewRotationLast;
+        var previousProjection = frameCounter == 0 ? projection : projectionLast;
+        var previousCameraPosition = frameCounter == 0 ? cameraPosition : cameraPositionLast;
+        if (!Matrix4x4.Invert(viewRotation, out var inverseViewRotation))
+            throw new InvalidOperationException("The camera view rotation matrix is not invertible.");
+        var previousCameraDeltaInView = Vector3.TransformNormal(previousCameraPosition - cameraPosition, viewRotation);
+        var currentViewToPreviousView = Matrix4x4.CreateTranslation(-previousCameraDeltaInView)
+            * inverseViewRotation
+            * previousViewRotation;
+        var currentViewToPreviousClip = currentViewToPreviousView * previousProjection;
         var shadowViewProjection = CreateShadowViewProjection(cameraPosition, sunDirection, ui.ShadowRadius);
         var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
         var shadowFrustum = ViewFrustum.FromViewProjection(shadowViewProjection);
@@ -72,13 +91,13 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         CameraUniforms cameraUniforms = new() {
             CameraPosition = new Vector4(cameraPosition, 1.0f),
             ViewProjection = viewProjection,
-            ViewProjectionInverse = inverseViewProjection,
+            ProjectionInverse = projectionInverse,
+            ViewToWorld = viewToWorld,
         };
 
-        var taaJitter = Vector2.Zero;// ui.TaaEnabled ? GetR2Jitter(taaFrameIndex + 1) : Vector2.Zero;
+        var taaJitter = ui.TaaEnabled ? GetR2Jitter(taaFrameIndex + 1) : Vector2.Zero;
         TemporalUniforms temporalUniforms = new() {
-            CameraPositionLast = new Vector4(frameCounter == 0 ? cameraPosition : cameraPositionLast, 1.0f),
-            ViewProjectionLast = frameCounter == 0 ? viewProjection : viewProjectionLast,
+            CurrentViewToPreviousClip = currentViewToPreviousClip,
         };
 
         SceneUniforms sceneUniforms = new() {
@@ -379,13 +398,15 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         Vk.EndCommandBuffer(commandBuffer);
 
         cameraPositionCurrent = cameraPosition;
-        viewProjectionCurrent = viewProjection;
+        viewRotationCurrent = viewRotation;
+        projectionCurrent = projection;
     }
 
     public void FrameSubmitted()
     {
         cameraPositionLast = cameraPositionCurrent;
-        viewProjectionLast = viewProjectionCurrent;
+        viewRotationLast = viewRotationCurrent;
+        projectionLast = projectionCurrent;
         frameCounter = frameCounter == uint.MaxValue ? 1u : frameCounter + 1u;
         taaFrameIndex++;
         taaHistoryValid = ui.TaaEnabled;

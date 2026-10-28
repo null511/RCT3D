@@ -8,5 +8,6 @@ public struct CameraUniforms
 {
     public Vector4 CameraPosition;
     public Matrix4x4 ViewProjection;
-    public Matrix4x4 ViewProjectionInverse;
+    public Matrix4x4 ProjectionInverse;
+    public Matrix4x4 ViewToWorld;
 }
