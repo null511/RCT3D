@@ -9,13 +9,14 @@ internal class WoodenWildMouse : RideDefinition
 {
     public WoodenWildMouse() : base(RCTRideType.WoodenWildMouse)
     {
+        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
         CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
     {
         const float centerY = 0.2f;
 

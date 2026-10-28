@@ -9,14 +9,15 @@ internal class Monorail : RideDefinition
 {
     public Monorail() : base(RCTRideType.Monorail)
     {
+        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
-        CarVerticalOffset = 0.5f;
+        CarVerticalOffset = 1.0f;
 
         SupportStyle = RideSupportStyle.MetalBoxed;
         SupportTrackOffset = 0.2f;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
     {
         return [
             new TrackRailProfileShape([

@@ -471,7 +471,7 @@ public struct RCTTrackElementData
 {
     public int TileX;
     public int TileY;
-    public RCTTrackElementType TrackType;
+    public RCTTrackElementType Part;
     public byte Sequence;
     public byte Direction;
     public byte BaseHeight;
@@ -490,6 +490,7 @@ public struct RCTTrackElementData
     public RCTRideType RideType;
     public sbyte RollBegin;
     public sbyte RollEnd;
+    public byte HasChainLift;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]

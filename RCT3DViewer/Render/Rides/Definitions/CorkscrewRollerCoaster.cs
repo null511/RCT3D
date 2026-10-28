@@ -8,6 +8,7 @@ internal class CorkscrewRollerCoaster : RideDefinition
 {
     public CorkscrewRollerCoaster() : base(RCTRideType.CorkscrewRollerCoaster)
     {
+        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
         CenterlineHeightOffset = 0.5f;
         CarVerticalOffset = 0.5f;
@@ -16,7 +17,7 @@ internal class CorkscrewRollerCoaster : RideDefinition
         SupportTrackOffset = -0.24f;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
     {
         const float railSeparation = 0.42f;
 

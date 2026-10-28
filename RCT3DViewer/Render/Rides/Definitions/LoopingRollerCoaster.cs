@@ -8,14 +8,15 @@ internal class LoopingRollerCoaster : RideDefinition
 {
     public LoopingRollerCoaster() : base(RCTRideType.LoopingRollerCoaster)
     {
+        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
-        CarVerticalOffset = 0.5f;
+        CarVerticalOffset = 0.85f;
 
         SupportStyle = RideSupportStyle.MetalTubes;
         SupportTrackOffset = 0.20f;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
     {
         return [
             new TrackRailProfileShape(CreateCircle(-0.42f, 0.28f, 0.06f, 5), true) {

@@ -8,6 +8,7 @@ namespace RCT3D.Render.Rides;
 internal abstract class RideDefinition(RCTRideType rideType)
 {
     protected RideSupportStyle SupportStyle;
+    protected IStationBuilder? StationBuilder;
 
     /// <summary>
     /// The vertical offset in world-space for the tracks generation.
@@ -27,19 +28,57 @@ internal abstract class RideDefinition(RCTRideType rideType)
     /// </summary>
     protected bool SmoothMovement = false;
 
+
     public TrackRideConfiguration Build()
     {
         return new TrackRideConfiguration(rideType, [
             new SweptRailProfileGenerator(GetRailParts),
         ], SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
-            HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement);
+            HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder);
     }
 
-    protected abstract IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType);
+    protected abstract IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track);
 
     protected virtual void GetSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements)
     {
         placements.Clear();
+    }
+
+    #region Rail Profile Helpers
+
+    protected static IEnumerable<TrackRailProfileShape> CreateBox(float centerX, float centerY, float halfWidth, float halfHeight, Action<TrackRailProfileShape>? partAction)
+    {
+        // top
+        yield return BuildPart([
+            new Vector2(centerX + halfWidth, centerY + halfHeight),
+            new Vector2(centerX - halfWidth, centerY + halfHeight),
+        ]);
+
+        // left
+        yield return BuildPart([
+            new Vector2(centerX - halfWidth, centerY + halfHeight),
+            new Vector2(centerX - halfWidth, centerY - halfHeight),
+        ]);
+
+        // bottom
+        yield return BuildPart([
+            new Vector2(centerX - halfWidth, centerY - halfHeight),
+            new Vector2(centerX + halfWidth, centerY - halfHeight),
+        ]);
+
+        // right
+        yield return BuildPart([
+            new Vector2(centerX + halfWidth, centerY - halfHeight),
+            new Vector2(centerX + halfWidth, centerY + halfHeight),
+        ]);
+
+        yield break;
+
+        TrackRailProfileShape BuildPart(Vector2[] line) {
+            var shape = new TrackRailProfileShape(line, false);
+            partAction?.Invoke(shape);
+            return shape;
+        }
     }
 
     protected static Vector2[] CreateCircle(float centerX, float centerY, float radius, int vertexCount)
@@ -54,4 +93,6 @@ internal abstract class RideDefinition(RCTRideType rideType)
 
         return vertices;
     }
+
+    #endregion
 }

@@ -4,14 +4,18 @@ using System.Numerics;
 
 namespace RCT3D.Render.Rides.Tracks;
 
-internal sealed class SweptRailProfileGenerator(Func<RCTTrackElementType, IEnumerable<TrackRailProfileShape>> getRailParts) : ITrackPartGenerator
+internal sealed class SweptRailProfileGenerator(Func<RCTTrackElementData, IEnumerable<TrackRailProfileShape>> getRailParts) : ITrackPartGenerator
 {
-    private readonly ConcurrentDictionary<RCTTrackElementType, TrackRailProfileShape[]> partsByTrackType = new();
+    private readonly ConcurrentDictionary<(RCTTrackElementType TrackType, byte HasChainLift), TrackRailProfileShape[]> partsByTrackType = new();
 
     public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd, Vector3? startTangent, Vector3? endTangent, Vector3? preferredSide, bool smoothRollTransition)
     {
-        var trackType = track.TrackType;
-        var parts = partsByTrackType.GetOrAdd(trackType, type => getRailParts(type).ToArray());
+        var cacheKey = (TrackType: track.Part, track.HasChainLift);
+        var trackData = track;
+        var parts = partsByTrackType.GetOrAdd(
+            cacheKey,
+            static (_, state) => state.GetRailParts(state.Track).ToArray(),
+            (Track: trackData, GetRailParts: getRailParts));
         if (parts.Length == 0) return;
 
         TrackMeshPartGenerator.AddSweptProfile(

@@ -32,7 +32,7 @@ internal static class TrackBasedSupportProgressMap
         };
 
     public static float[] GetProgresses(in RCTTrackElementData track) =>
-        mappings.TryGetValue(track.TrackType, out var getProgresses)
+        mappings.TryGetValue(track.Part, out var getProgresses)
             ? getProgresses(track)
             : defaultProgress;
 

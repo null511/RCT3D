@@ -18,6 +18,7 @@ internal sealed class MetalForkSupportMeshBuilder : IRideSupportMeshBuilder
 
     public TrackSupportPlacementMode PlacementMode => TrackSupportPlacementMode.TrackBased;
 
+
     public void AddSupport(
         RCTTrackElementData track,
         TrackSupportPlacement placement,
@@ -28,27 +29,24 @@ internal sealed class MetalForkSupportMeshBuilder : IRideSupportMeshBuilder
         float trackHeightOffset)
     {
         var trackDirection = new Vector3(anchor.Tangent.X, 0.0f, anchor.Tangent.Z);
-        if (trackDirection.LengthSquared() <= float.Epsilon)
-            trackDirection = TrackCenterlineGeometry.GetTrackDirection(track.Direction);
-        else
-            trackDirection = Vector3.Normalize(trackDirection);
-        var lateralDirection = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, trackDirection));
 
-        var center = new Vector3(
-            anchor.Position.X,
-            0.0f,
-            anchor.Position.Z);
+        trackDirection = trackDirection.LengthSquared() <= float.Epsilon
+            ? TrackCenterlineGeometry.GetTrackDirection(track.Direction)
+            : Vector3.Normalize(trackDirection);
+
+        var lateralDirection = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, trackDirection));
+        var center = new Vector3(anchor.Position.X, 0f, anchor.Position.Z);
 
         var groundHeight = GetSurfaceHeight(surface, anchor.SurfaceTileX, anchor.SurfaceTileY, center.X, center.Z) + SupportSurfaceOffset;
         var topHeight = anchor.Position.Y
             + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f
             + trackHeightOffset;
+
         if (topHeight <= groundHeight + ForkBaseRise) return;
 
         center.Y = groundHeight;
-        var beamStart = center;// + Vector3.UnitY * ForkBaseRise;
         var beamEnd = new Vector3(center.X, topHeight, center.Z);
-        geometry.AddBeam(beamStart, beamEnd, lateralDirection, BeamHalfWidth, BeamHalfWidth, color, supportSpecular);
+        geometry.AddBeam(center, beamEnd, lateralDirection, BeamHalfWidth, BeamHalfWidth, color, supportSpecular);
 
         var forkTop = center + Vector3.UnitY * ForkBaseRise;
         var leftFoot = center - lateralDirection * ForkHalfSpan;
@@ -56,7 +54,7 @@ internal sealed class MetalForkSupportMeshBuilder : IRideSupportMeshBuilder
         geometry.AddBeam(leftFoot, forkTop, trackDirection, BeamHalfWidth, BeamHalfWidth, color, supportSpecular);
         geometry.AddBeam(rightFoot, forkTop, trackDirection, BeamHalfWidth, BeamHalfWidth, color, supportSpecular);
 
-        var supportHeight = beamStart.Y;
+        var supportHeight = center.Y;
         while (supportHeight + CouplingSpacing < topHeight) {
             supportHeight += CouplingSpacing;
             var couplingCenter = new Vector3(center.X, supportHeight, center.Z);

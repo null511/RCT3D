@@ -9,15 +9,51 @@ internal sealed class BobsleighCoaster : RideDefinition
 {
     public BobsleighCoaster() : base(RCTRideType.BobsleighCoaster)
     {
+        StationBuilder = new DefaultStationBuilder();
         //SmoothMovement = true;
-        CenterlineHeightOffset = 0.6f;
+        CenterlineHeightOffset = 0.65f;
         //CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.MetalTubes;
         SupportTrackOffset = -0.45f;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    {
+        return track.HasChainLift != 0 || track.Part.IsStationPlatform()
+            ? GetTrackedRailParts(track.Part) : GetBeddedRailParts();
+    }
+
+    private IEnumerable<TrackRailProfileShape> GetTrackedRailParts(RCTTrackElementType part)
+    {
+        var specularRails = new TrackRailSpecularData(120, 10);
+
+        // lower
+        yield return new TrackRailProfileShape(CreateCircle(-0.32f, -0.50f, 0.05f, 4), true) {
+            Swatch = TrackRailSwatch.Main,
+            Specular = specularRails,
+        };
+        yield return new TrackRailProfileShape(CreateCircle( 0.32f, -0.50f, 0.05f, 4), true) {
+            Swatch = TrackRailSwatch.Main,
+            Specular = specularRails,
+        };
+
+        if (!part.IsStationPlatform()) {
+            // upper-left
+            yield return new TrackRailProfileShape(CreateCircle(-0.74f, -0.15f, 0.03f, 4), true) {
+                Swatch = TrackRailSwatch.Main,
+                Specular = specularRails,
+            };
+
+            // upper-right
+            yield return new TrackRailProfileShape(CreateCircle( 0.74f, -0.15f, 0.03f, 4), true) {
+                Swatch = TrackRailSwatch.Main,
+                Specular = specularRails,
+            };
+        }
+    }
+
+    private IEnumerable<TrackRailProfileShape> GetBeddedRailParts()
     {
         var specularRails = new TrackRailSpecularData(120, 10);
         var specularMeshing = new TrackRailSpecularData(200, 0);

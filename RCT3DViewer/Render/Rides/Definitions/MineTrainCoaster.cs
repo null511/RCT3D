@@ -8,12 +8,13 @@ internal sealed class MineTrainCoaster : RideDefinition
 {
     public MineTrainCoaster() : base(RCTRideType.MineTrainCoaster)
     {
+        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
         CenterlineHeightOffset = 0.2f;
         CarVerticalOffset = 0.5f;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
     {
         const float RailSeparation = 0.48f;
 
@@ -28,29 +29,31 @@ internal sealed class MineTrainCoaster : RideDefinition
         const float halfWidth = 0.02f;
         const float halfHeight = 0.03f;
 
-        // top
-        yield return CreateRailFace([
-            new Vector2(centerX + halfWidth, halfHeight),
+        return [
+            // top
+            CreateRailFace([
+                new Vector2(centerX + halfWidth, halfHeight),
+                new Vector2(centerX - halfWidth, halfHeight),
+            ], 40),
+
+            // left
+            CreateRailFace([
             new Vector2(centerX - halfWidth, halfHeight),
-        ], 40);
-
-        // left
-        yield return CreateRailFace([
-            new Vector2(centerX - halfWidth,  halfHeight),
             new Vector2(centerX - halfWidth, -halfHeight),
-        ], 90);
+            ], 90),
 
-        // bottom
-        yield return CreateRailFace([
+            // bottom
+            CreateRailFace([
             new Vector2(centerX - halfWidth, -halfHeight),
             new Vector2(centerX + halfWidth, -halfHeight),
-        ], 90);
+            ], 90),
 
-        // right
-        yield return CreateRailFace([
+            // right
+            CreateRailFace([
             new Vector2(centerX + halfWidth, -halfHeight),
-            new Vector2(centerX + halfWidth,  halfHeight),
-        ], 90);
+            new Vector2(centerX + halfWidth, halfHeight),
+            ], 90),
+        ];
     }
 
     private static TrackRailProfileShape CreateRailFace(Vector2[] vertices, byte roughness)

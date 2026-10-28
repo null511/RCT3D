@@ -219,7 +219,7 @@ internal sealed class ViewerUiController
             }
             else {
                 foreach (var track in trackElements) {
-                    ImGui.TextUnformatted($"{track.TrackType} | sequence {track.Sequence}/{track.SequenceCount} | direction {track.Direction} | height {track.BaseHeight} | ride {track.RideId} ({track.RideType})");
+                    ImGui.TextUnformatted($"{track.Part} | sequence {track.Sequence}/{track.SequenceCount} | direction {track.Direction} | height {track.BaseHeight} | ride {track.RideId} ({track.RideType})");
                 }
             }
         }

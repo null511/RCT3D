@@ -20,8 +20,7 @@ internal readonly record struct TrackRgba8(byte Red, byte Green, byte Blue, byte
 
 internal sealed record TrackRailProfileShape(Vector2[] Vertices, bool Closed)
 {
-    public TrackRailSwatch Swatch { get; init; } = TrackRailSwatch.None;
-    public TrackRgba8 Color { get; init; } = TrackRgba8.White;
-    public TrackRailSpecularData Specular { get; init; } = new(250, 0);
+    public TrackRailSwatch Swatch { get; set; } = TrackRailSwatch.None;
+    public TrackRgba8 Color { get; set; } = TrackRgba8.White;
+    public TrackRailSpecularData Specular { get; set; } = new(250, 0);
 }
-

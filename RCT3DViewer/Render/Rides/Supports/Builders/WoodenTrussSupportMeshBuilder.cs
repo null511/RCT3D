@@ -21,7 +21,7 @@ internal sealed class WoodenTrussSupportMeshBuilder : IRideSupportMeshBuilder
     public void GetDefaultSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements)
     {
         placements.Clear();
-        if (loopTrackTypes.Contains(track.TrackType)) return;
+        if (loopTrackTypes.Contains(track.Part)) return;
 
         placements.Add(TrackSupportPlacement.AtTile());
     }
@@ -70,20 +70,125 @@ internal sealed class WoodenTrussSupportMeshBuilder : IRideSupportMeshBuilder
 
         // alignment
         if (wholeSegmentUnits >= 1 && terrainBaseGameUnits % 4 >= 2) {
-            AddBoxSegment(geometry, west, east, south, north, segmentBaseHeight, 2f * WorldUnits.HeightPerBaseUnit, color);
+            AddShortBoxSegment(geometry, west, east, south, north, segmentBaseHeight, track.Direction, color);
             segmentBaseHeight += 2f * WorldUnits.HeightPerBaseUnit;
             wholeSegmentUnits -= 1;
         }
 
         while (wholeSegmentUnits >= 2) {
-            AddBoxSegment(geometry, west, east, south, north, segmentBaseHeight, 4f * WorldUnits.HeightPerBaseUnit, color);
+            AddTallBoxSegment(geometry, west, east, south, north, segmentBaseHeight, track.Direction, color);
             segmentBaseHeight += 4f * WorldUnits.HeightPerBaseUnit;
             wholeSegmentUnits -= 2;
         }
 
         if (wholeSegmentUnits >= 1) {
-            AddBoxSegment(geometry, west, east, south, north, segmentBaseHeight, 2f * WorldUnits.HeightPerBaseUnit, color);
+            AddShortBoxSegment(geometry, west, east, south, north, segmentBaseHeight, track.Direction, color);
         }
+    }
+
+    private static void AddTallBoxSegment(
+        RideSupportMeshGeometry geometry,
+        float west,
+        float east,
+        float south,
+        float north,
+        float baseHeight,
+        byte trackDirection,
+        TrackRgba8 color)
+    {
+        AddBoxSegment(geometry, west, east, south, north, baseHeight, 4f * WorldUnits.HeightPerBaseUnit, color);
+
+        var trackVector = TrackCenterlineGeometry.GetDirection(trackDirection);
+        var leftDirection = Vector3.Normalize(Vector3.Cross(trackVector, Vector3.UnitY));
+        var topHeight = baseHeight + 4f * WorldUnits.HeightPerBaseUnit;
+        var center = new Vector3((west + east) * 0.5f, -BeamHalfWidth, (south + north) * 0.5f);
+        var halfExtent = (east - west) * 0.5f;
+        var leftOffset = leftDirection * halfExtent;
+
+        AddDiagonalBracePair(
+            geometry, center, trackVector, leftOffset, leftDirection, halfExtent,
+            baseHeight, topHeight, color);
+
+        AddDiagonalBracePair(
+            geometry, center, trackVector, -leftOffset, leftDirection, halfExtent,
+            baseHeight, topHeight, color);
+    }
+
+    private static void AddDiagonalBracePair(
+        RideSupportMeshGeometry geometry,
+        Vector3 center,
+        Vector3 trackDirection,
+        Vector3 sideOffset,
+        Vector3 widthDirection,
+        float halfLength,
+        float baseHeight,
+        float topHeight,
+        TrackRgba8 color)
+    {
+        var lowerStart = center - trackDirection * halfLength + sideOffset;
+        var upperEnd = center + trackDirection * halfLength + sideOffset;
+        lowerStart.Y = baseHeight + center.Y;
+        upperEnd.Y = topHeight + center.Y;
+        geometry.AddBeam(lowerStart, upperEnd, widthDirection, BeamHalfWidth, BeamHalfWidth, color, supportSpecular);
+
+        var upperStart = center - trackDirection * halfLength + sideOffset;
+        var lowerEnd = center + trackDirection * halfLength + sideOffset;
+        upperStart.Y = topHeight + center.Y;
+        lowerEnd.Y = baseHeight + center.Y;
+        geometry.AddBeam(upperStart, lowerEnd, widthDirection, BeamHalfWidth, BeamHalfWidth, color, supportSpecular);
+    }
+
+    private static void AddShortBoxSegment(
+        RideSupportMeshGeometry geometry,
+        float west,
+        float east,
+        float south,
+        float north,
+        float baseHeight,
+        byte trackDirection,
+        TrackRgba8 color)
+    {
+        AddBoxSegment(geometry, west, east, south, north, baseHeight, 2f * WorldUnits.HeightPerBaseUnit, color);
+
+        // TODO: add short cross-section
+        var trackVector = TrackCenterlineGeometry.GetDirection(trackDirection);
+        var leftDirection = Vector3.Normalize(Vector3.Cross(trackVector, Vector3.UnitY));
+        var topHeight = baseHeight + 2f * WorldUnits.HeightPerBaseUnit;
+        var center = new Vector3((west + east) * 0.5f, -BeamHalfWidth, (south + north) * 0.5f);
+        var halfExtent = (east - west) * 0.5f;
+        var leftOffset = leftDirection * halfExtent;
+
+        AddHalfDiagonalBracePair(
+            geometry, center, trackVector, leftOffset, leftDirection, halfExtent,
+            baseHeight, topHeight, color);
+
+        AddHalfDiagonalBracePair(
+            geometry, center, trackVector, -leftOffset, leftDirection, halfExtent,
+            baseHeight, topHeight, color);
+    }
+
+    private static void AddHalfDiagonalBracePair(
+        RideSupportMeshGeometry geometry,
+        Vector3 center,
+        Vector3 trackDirection,
+        Vector3 sideOffset,
+        Vector3 widthDirection,
+        float halfLength,
+        float baseHeight,
+        float topHeight,
+        TrackRgba8 color)
+    {
+        var lowerStart = center - trackDirection * halfLength + sideOffset;
+        lowerStart.Y = baseHeight + center.Y;
+
+        var upperCenter = center + sideOffset;
+        upperCenter.Y = topHeight + center.Y;
+
+        var lowerEnd = center + trackDirection * halfLength + sideOffset;
+        lowerEnd.Y = baseHeight + center.Y;
+
+        geometry.AddBeam(lowerStart, upperCenter, widthDirection, BeamHalfWidth, BeamHalfWidth, color, supportSpecular);
+        geometry.AddBeam(upperCenter, lowerEnd, widthDirection, BeamHalfWidth, BeamHalfWidth, color, supportSpecular);
     }
 
     private static void AddBoxSegment(

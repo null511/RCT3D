@@ -8,6 +8,7 @@ internal sealed class CompactInvertedCoaster : RideDefinition
 {
     public CompactInvertedCoaster() : base(RCTRideType.CompactInvertedCoaster)
     {
+        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
         CenterlineHeightOffset = 2.0f;
         CarVerticalOffset = -0.5f;
@@ -15,7 +16,7 @@ internal sealed class CompactInvertedCoaster : RideDefinition
         SupportStyle = RideSupportStyle.MetalTubesInverted;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
     {
         return [
             new TrackRailProfileShape(CreateCircle(-0.42f, 1.12f, 0.06f, 5), true) {

@@ -28,6 +28,7 @@ internal sealed class TrackMeshBuilder
 
     public TrackMeshBuildData Build(
         ReadOnlySpan<RCTTrackElementData> trackElements,
+        ReadOnlySpan<RCTRideEntranceData> entrances,
         ReadOnlySpan<RCTTileSurfaceData> surfaces,
         int mapWidth,
         int mapHeight,
@@ -39,6 +40,7 @@ internal sealed class TrackMeshBuilder
         if (surfaces.Length < checked(mapWidth * mapHeight))
             throw new InvalidDataException("OpenRCT2 returned fewer terrain surfaces than the map dimensions require.");
 
+        var entranceSideOpenings = BuildEntranceSideOpenings(trackElements, entrances);
         var pieces = new Dictionary<TrackPieceKey, List<RCTTrackElementData>>();
 
         foreach (var track in trackElements) {
@@ -52,14 +54,14 @@ internal sealed class TrackMeshBuilder
                 throw new InvalidDataException($"OpenRCT2 returned an invalid track sequence at ({track.TileX}, {track.TileY}).");
 
             if (!rideConfigurations.TryGetValue(track.RideType, out _)
-                || !pieceBuilders.TryResolve(track.TrackType, out _)) continue;
+                || !pieceBuilders.TryResolve(track.Part, out _)) continue;
 
             var offset = RotateSequenceOffset(track.SequenceOffsetX, track.SequenceOffsetY, track.Direction);
 
             var key = new TrackPieceKey(
                 track.RideId,
                 track.RideType,
-                track.TrackType,
+                track.Part,
                 track.TileX - offset.X,
                 track.TileY - offset.Y,
                 track.Direction,
@@ -106,7 +108,7 @@ internal sealed class TrackMeshBuilder
 
             foreach (var (key, configuration, piece) in regionPieces) {
                 var track = piece[0];
-                pieceBuilders.TryResolve(track.TrackType, out var pieceBuilder);
+                pieceBuilders.TryResolve(track.Part, out var pieceBuilder);
                 var pieceSpan = CollectionsMarshal.AsSpan(piece);
                 var hasSupportPlacements = configuration.HasSupportPlacements;
                 var captureCenterline = hasSupportPlacements || configuration.SmoothMovement;
@@ -119,6 +121,24 @@ internal sealed class TrackMeshBuilder
                 }
                 finally {
                     geometry.SetVerticalOffset(0.0f);
+                }
+
+                foreach (ref readonly var stationTrack in pieceSpan) {
+                    if (!stationTrack.Part.IsStationPlatform()) continue;
+
+                    configuration.StationBuilder?.AddStationTile(
+                        stationTrack.Part,
+                        stationTrack.TileX,
+                        stationTrack.TileY,
+                        stationTrack.Direction,
+                        stationTrack.BaseHeight,
+                        geometry,
+                        GetPaletteColor(stationTrack.SupportPaletteIndex, palette),
+                        entranceSideOpenings.GetValueOrDefault((
+                            stationTrack.RideId,
+                            stationTrack.TileX,
+                            stationTrack.TileY,
+                            stationTrack.BaseHeight)));
                 }
 
                 var centerlines = captureCenterline ? geometry.EndCenterlineCapture() : [];
@@ -138,7 +158,7 @@ internal sealed class TrackMeshBuilder
                     rideCenterlines.Add(new TrackCenterlinePiece(
                         key.RideId,
                         track.RideType,
-                        track.TrackType,
+                        track.Part,
                         key.OriginTileX,
                         key.OriginTileY,
                         key.Direction,
@@ -148,7 +168,7 @@ internal sealed class TrackMeshBuilder
 
                 if (hasSupportPlacements && configuration.SupportMeshBuilder is { } supportMeshBuilder) {
                     if (centerlines.Length == 0)
-                        throw new InvalidDataException($"Track piece {track.TrackType} did not expose a centerline for support placement.");
+                        throw new InvalidDataException($"Track piece {track.Part} did not expose a centerline for support placement.");
 
                     var placements = new List<TrackSupportPlacement>();
 
@@ -285,6 +305,61 @@ internal sealed class TrackMeshBuilder
 
         var entry = palette[paletteIndex];
         return new TrackRgba8(entry.Red, entry.Green, entry.Blue, entry.Alpha);
+    }
+
+    private static Dictionary<(ushort RideId, int TileX, int TileY, byte BaseHeight), StationSideOpenings>
+        BuildEntranceSideOpenings(
+            ReadOnlySpan<RCTTrackElementData> trackElements,
+            ReadOnlySpan<RCTRideEntranceData> entrances)
+    {
+        var tracksByTile = new Dictionary<(int X, int Y), List<RCTTrackElementData>>();
+        foreach (ref readonly var track in trackElements) {
+            if (!tracksByTile.TryGetValue((track.TileX, track.TileY), out var tileTracks)) {
+                tileTracks = new List<RCTTrackElementData>();
+                tracksByTile.Add((track.TileX, track.TileY), tileTracks);
+            }
+            tileTracks.Add(track);
+        }
+
+        var openings = new Dictionary<(ushort RideId, int TileX, int TileY, byte BaseHeight), StationSideOpenings>();
+        foreach (ref readonly var entrance in entrances) {
+            if (entrance.Direction > 3)
+                throw new InvalidDataException($"OpenRCT2 returned an invalid ride entrance direction {entrance.Direction}.");
+
+            var (offsetX, offsetY) = entrance.Direction switch {
+                0 => (-1, 0),
+                1 => (0, 1),
+                2 => (1, 0),
+                3 => (0, -1),
+                _ => throw new InvalidDataException($"OpenRCT2 returned invalid ride entrance direction {entrance.Direction}.")
+            };
+            if (!tracksByTile.TryGetValue((entrance.TileX + offsetX, entrance.TileY + offsetY), out var tileTracks))
+                continue;
+
+            foreach (var track in tileTracks) {
+                if (track.RideId != entrance.RideId
+                    || track.BaseHeight != entrance.BaseHeight
+                    || !track.Part.IsStationPlatform())
+                    continue;
+
+                // OpenRCT2 uses (entrance direction - reverse track direction) & 3
+                // to identify the entrance side; relative directions 1 and 3 are
+                // the two lateral sides of the track.
+                var relativeDirection = (entrance.Direction - ((track.Direction + 2) & 3)) & 3;
+                var sideOpening = relativeDirection switch {
+                    1 => StationSideOpenings.PositiveSide,
+                    3 => StationSideOpenings.NegativeSide,
+                    _ => StationSideOpenings.None
+                };
+                if (sideOpening == StationSideOpenings.None)
+                    continue;
+
+                var key = (track.RideId, track.TileX, track.TileY, track.BaseHeight);
+                openings[key] = openings.GetValueOrDefault(key) | sideOpening;
+            }
+        }
+
+        return openings;
     }
 
     private static void ValidatePieceSequences(TrackPieceKey key, List<RCTTrackElementData> elements)

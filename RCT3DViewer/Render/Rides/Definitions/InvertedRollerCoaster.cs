@@ -1,7 +1,7 @@
-using System.Numerics;
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
 
@@ -9,6 +9,7 @@ internal sealed class InvertedRollerCoaster : RideDefinition
 {
     public InvertedRollerCoaster() : base(RCTRideType.InvertedRollerCoaster)
     {
+        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
         CenterlineHeightOffset = 2.0f;
         CarVerticalOffset = -0.3f;
@@ -16,7 +17,7 @@ internal sealed class InvertedRollerCoaster : RideDefinition
         SupportStyle = RideSupportStyle.MetalBoxed;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
     {
         const float railSeparation = 0.53f;
         const float railRadius = 0.07f;

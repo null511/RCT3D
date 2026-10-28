@@ -1,64 +1,70 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
-using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
 
 internal sealed class ClassicWoodenRollerCoaster : RideDefinition
 {
-    private const float RailHalfHeight = 0.03f;
     private const float SupportTopClearance = 0.02f;
-    private const float RailSeparation = 0.64f;
+
+    private const float RailHalfSeparation = 0.72f;
+    private const float RailHalfWidth = 0.08f;
+    private const float RailHalfHeight = 0.03f;
+    private const float RailWoodInset = 0.2f;
 
 
     public ClassicWoodenRollerCoaster() : base(RCTRideType.ClassicWoodenRollerCoaster)
     {
+        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
-        CenterlineHeightOffset = 0.25f;
+        CenterlineHeightOffset = 0.65f;
         CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
         SupportTrackOffset = CenterlineHeightOffset - RailHalfHeight - SupportTopClearance;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementType elementType)
+    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
     {
-        return [
-            .. CreateRail(-RailSeparation * 0.5f),
-            .. CreateRail( RailSeparation * 0.5f),
-        ];
+        foreach (var part in CreateRail(-RailHalfSeparation, -0.2f)) yield return part;
+        foreach (var part in CreateRail( RailHalfSeparation, -0.2f)) yield return part;
+
+        if (!track.Part.IsStationPlatform() && !track.Part.IsLoop()) {
+            const float woodHalfMargin = (1.5f - (RailHalfSeparation - RailWoodInset)) * 0.5f;
+            const float woodHeight = 0.06f;
+
+            const float woodPlatformCenterX = 1.5f - woodHalfMargin;
+            const float woodPlatformCenterY = -0.26f;
+
+            // side platforms
+            foreach (var part in CreateWood(-woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight)) yield return part;
+            foreach (var part in CreateWood( woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight)) yield return part;
+
+            const float WoodRailingWidth = 0.04f;
+
+            var woodRailingCenterX = 1.5f - 0.5f*WoodRailingWidth;
+            var woodRailingCenterY = 0.36f;
+
+            // side railing
+            foreach (var part in CreateWood(-woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth)) yield return part;
+            foreach (var part in CreateWood( woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth)) yield return part;
+        }
     }
 
-    private static IEnumerable<TrackRailProfileShape> CreateRail(float centerX)
+    private static IEnumerable<TrackRailProfileShape> CreateRail(float centerX, float centerY)
     {
-        const float halfWidth = 0.04f;
-        const float halfHeight = 0.03f;
-
-        yield return CreateRailFace([
-            new Vector2(centerX + halfWidth, halfHeight),
-            new Vector2(centerX - halfWidth, halfHeight),
-        ], 40);
-
-        yield return CreateRailFace([
-            new Vector2(centerX - halfWidth, halfHeight),
-            new Vector2(centerX - halfWidth, -halfHeight),
-        ], 90);
-
-        yield return CreateRailFace([
-            new Vector2(centerX - halfWidth, -halfHeight),
-            new Vector2(centerX + halfWidth, -halfHeight),
-        ], 90);
-
-        yield return CreateRailFace([
-            new Vector2(centerX + halfWidth, -halfHeight),
-            new Vector2(centerX + halfWidth, halfHeight),
-        ], 90);
+        return CreateBox(centerX, centerY, RailHalfWidth, RailHalfHeight, shape => {
+            shape.Color = new TrackRgba8(149, 155, 158, 255);
+            shape.Specular = new TrackRailSpecularData(80, 255);
+        });
     }
 
-    private static TrackRailProfileShape CreateRailFace(Vector2[] vertices, byte roughness) =>
-        new(vertices, false) {
-            Color = new TrackRgba8(149, 155, 158, 255),
-            Specular = new TrackRailSpecularData(roughness, 255),
-        };
+    private static IEnumerable<TrackRailProfileShape> CreateWood(float centerX, float centerY, float halfWidth, float halfHeight)
+    {
+        return CreateBox(centerX, centerY, halfWidth, halfHeight, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = new TrackRailSpecularData(220, 0);
+        });
+    }
 }
