@@ -4,25 +4,35 @@ namespace RCT3D.Render;
 
 internal sealed unsafe class ShadowRenderTargets : IDisposable
 {
-    public const uint Resolution = 2048;
-    public const float Radius = 128.0f;
+    public const uint DefaultResolution = 2048;
+    public const float DefaultRadius = 128.0f;
 
     private readonly VulkanDeviceContext _context;
     private Image _image;
     private DeviceMemory _memory;
     private bool _disposed;
 
+    public uint Resolution { get; }
+    public float Radius { get; private set; }
     public Format DepthFormat { get; }
     public Image Image => _image;
     public ImageView DepthView { get; private set; }
     public RenderPass RenderPass { get; private set; }
     public Framebuffer Framebuffer { get; private set; }
-    public Extent2D Extent { get; } = new(Resolution, Resolution);
+    public Extent2D Extent { get; }
 
-    public ShadowRenderTargets(VulkanDeviceContext context, Format depthFormat)
+    public ShadowRenderTargets(VulkanDeviceContext context, Format depthFormat, uint resolution = DefaultResolution, float radius = DefaultRadius)
     {
+        if (resolution is not (512 or 1024 or 2048 or 4096))
+            throw new ArgumentOutOfRangeException(nameof(resolution));
+        if (!float.IsFinite(radius) || radius < 16.0f || radius > 512.0f)
+            throw new ArgumentOutOfRangeException(nameof(radius));
+
         _context = context;
         DepthFormat = depthFormat;
+        Resolution = resolution;
+        Radius = radius;
+        Extent = new Extent2D(resolution, resolution);
 
         try {
             CreateImage();
@@ -33,6 +43,14 @@ internal sealed unsafe class ShadowRenderTargets : IDisposable
             Dispose();
             throw;
         }
+    }
+
+    public void UpdateRadius(float radius)
+    {
+        if (!float.IsFinite(radius) || radius < 16.0f || radius > 512.0f)
+            throw new ArgumentOutOfRangeException(nameof(radius));
+
+        Radius = radius;
     }
 
     private void CreateImage()

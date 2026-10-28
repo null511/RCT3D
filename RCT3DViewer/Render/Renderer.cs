@@ -2,6 +2,7 @@ using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Terrain;
 using RCT3D.Simulation;
+using RCT3D.Configuration;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 
@@ -12,7 +13,8 @@ public sealed class Renderer : IDisposable
     private IWindow? window;
     private VulkanRenderResources? renderResources;
 
-    private readonly ViewerUiController ui = new();
+    private readonly GraphicsOptionsStore graphicsOptionsStore = new();
+    private ViewerUiController ui = null!;
     private readonly FlightCamera camera = new();
 
     private VulkanDeviceContext? deviceContext => renderResources?.DeviceContext;
@@ -63,6 +65,9 @@ public sealed class Renderer : IDisposable
 
     public void Initialize()
     {
+        var graphicsOptions = graphicsOptionsStore.Load();
+        ui = new ViewerUiController(graphicsOptions);
+
         if (string.IsNullOrEmpty(OpenRCT2Path))
             throw new InvalidOperationException("OpenRCT2Path is undefined!");
 
@@ -98,7 +103,7 @@ public sealed class Renderer : IDisposable
         }
 
         Console.WriteLine("Initializing Graphics Subsystems via Silk.NET Vulkan...");
-        renderResources = new VulkanRenderResources(window!, terrainMaterials, pathMaterials, pathAccessoryAssets);
+        renderResources = new VulkanRenderResources(window!, terrainMaterials, pathMaterials, pathAccessoryAssets, graphicsOptions);
         frameRenderer = new FrameRenderer(renderResources, ui, camera);
         frameCoordinator = new FrameCoordinator(window!, renderResources);
         parkScene = new ParkSceneController(simulation!, renderResources, ui, camera, frameRenderer);
@@ -126,6 +131,14 @@ public sealed class Renderer : IDisposable
             () => imguiRenderer?.WantCaptureMouse ?? false, () => parkScene?.TogglePause(), ui.ToggleDebug);
     }
 
+    private void ApplyShadowSettings(uint resolution, float radius)
+    {
+        var currentResolution = renderResources!.DeferredTargets!.ShadowTargets!.Resolution;
+        renderResources.ApplyShadowSettings(resolution, radius);
+        if (currentResolution != resolution)
+            frameRenderer!.InvalidateShadowMap();
+    }
+
     private void OnUpdateFrame(double deltaTime)
     {
         if (exitRequested) {
@@ -151,7 +164,7 @@ public sealed class Renderer : IDisposable
                     cameraTileX, cameraTileY, parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
                     parkPath => parkScene.LoadPark(parkPath, TerrainSkirtFloor), parkScene.TogglePause,
                     () => exitRequested = true, peepMode!.IsEnabled, peepMode.StatusMessage, peepMode.Toggle,
-                    deviceContext!.SupportsWireframe);
+                    ApplyShadowSettings, graphicsOptionsStore.Save, deviceContext!.SupportsWireframe);
             },
             (commandBuffer, imageIndex, currentFrame) => frameRenderer!.Record(commandBuffer, imageIndex, currentFrame,
                 parkScene.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh, parkScene.RideSupportMesh,

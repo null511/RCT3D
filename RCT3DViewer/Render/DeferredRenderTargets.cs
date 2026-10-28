@@ -29,7 +29,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
     public Framebuffer WaterFramebuffer { get; private set; }
     public ShadowRenderTargets? ShadowTargets { get; private set; }
 
-    public DeferredRenderTargets(VulkanDeviceContext context, Extent2D extent)
+    public DeferredRenderTargets(VulkanDeviceContext context, Extent2D extent, uint shadowResolution, float shadowRadius)
     {
         _context = context;
         Extent = extent;
@@ -37,7 +37,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
 
         try {
             ValidateFormats();
-            ShadowTargets = new ShadowRenderTargets(context, DepthFormat);
+            ShadowTargets = new ShadowRenderTargets(context, DepthFormat, shadowResolution, shadowRadius);
             CreateImages();
             CreateRenderPasses();
             CreateFramebuffers();
@@ -46,6 +46,11 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
             Dispose();
             throw;
         }
+    }
+
+    public void SetShadowTargets(ShadowRenderTargets shadowTargets)
+    {
+        ShadowTargets = shadowTargets;
     }
 
     private void ValidateFormats()

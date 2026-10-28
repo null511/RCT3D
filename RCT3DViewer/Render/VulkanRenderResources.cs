@@ -2,6 +2,7 @@ using RCT3D.Render.Buffers;
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Terrain;
+using RCT3D.Configuration;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
@@ -62,14 +63,15 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         IWindow window,
         TerrainMaterialLibrary terrainMaterials,
         PathMaterialLibrary pathMaterials,
-        PathAccessoryAssetLibrary pathAccessoryAssets)
+        PathAccessoryAssetLibrary pathAccessoryAssets,
+        GraphicsOptionsSettings graphicsOptions)
     {
         TerrainMaterials = terrainMaterials;
         PathMaterials = pathMaterials;
         PathAccessoryAssets = pathAccessoryAssets;
 
         try {
-            Initialize(window);
+            Initialize(window, graphicsOptions);
         }
         catch {
             Dispose();
@@ -119,7 +121,45 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         }
     }
 
-    private void Initialize(IWindow window)
+    public void ApplyShadowSettings(uint resolution, float radius)
+    {
+        var deferredTargets = DeferredTargets ?? throw new InvalidOperationException("Deferred render targets are unavailable.");
+        var currentTargets = deferredTargets.ShadowTargets ?? throw new InvalidOperationException("Shadow render targets are unavailable.");
+        if (currentTargets.Resolution == resolution) {
+            currentTargets.UpdateRadius(radius);
+            return;
+        }
+
+        if (Vk!.DeviceWaitIdle(LogicalDevice) != Result.Success)
+            throw new InvalidOperationException("Failed to wait for the Vulkan device before applying shadow resolution.");
+
+        var replacementTargets = new ShadowRenderTargets(DeviceContext!, currentTargets.DepthFormat, resolution, radius);
+        ShadowGraphicsResources? replacementGraphics = null;
+        DeferredPassResources? replacementPasses = null;
+        try {
+            replacementGraphics = new ShadowGraphicsResources(DeviceContext!, replacementTargets.RenderPass,
+                UniformBufferResources!.DescriptorSetLayout);
+            deferredTargets.SetShadowTargets(replacementTargets);
+            replacementPasses = new DeferredPassResources(DeviceContext!, RenderPass, deferredTargets, SkyTargets!, UniformBufferResources!);
+        }
+        catch {
+            deferredTargets.SetShadowTargets(currentTargets);
+            replacementPasses?.Dispose();
+            replacementGraphics?.Dispose();
+            replacementTargets.Dispose();
+            throw;
+        }
+
+        var previousGraphics = ShadowGraphicsResources;
+        var previousPasses = DeferredPassResources;
+        ShadowGraphicsResources = replacementGraphics;
+        DeferredPassResources = replacementPasses;
+        previousPasses?.Dispose();
+        previousGraphics?.Dispose();
+        currentTargets.Dispose();
+    }
+
+    private void Initialize(IWindow window, GraphicsOptionsSettings graphicsOptions)
     {
         if (TerrainMaterials is null)
             throw new InvalidOperationException("TerrainMaterials is undefined!");
@@ -134,7 +174,8 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         SwapchainResources.CreateDepthResources();
         SwapchainResources.CreateRenderPass();
 
-        DeferredTargets = new DeferredRenderTargets(DeviceContext, SwapchainExtent);
+        DeferredTargets = new DeferredRenderTargets(DeviceContext, SwapchainExtent,
+            graphicsOptions.ShadowResolution, graphicsOptions.ShadowRadius);
         SkyTargets = new SkyRenderTargets(DeviceContext);
         UniformBufferResources = new UniformBufferResources(DeviceContext, MaxFramesInFlight);
         ShadowGraphicsResources = new ShadowGraphicsResources(DeviceContext, DeferredTargets.ShadowTargets!.RenderPass,

@@ -1,5 +1,6 @@
 using ImGuiNET;
 using NativeFileDialogSharp;
+using RCT3D.Configuration;
 using RCT3D.Interop.Models;
 using System.Numerics;
 
@@ -29,7 +30,27 @@ internal sealed class ViewerUiController
     private float _sharpening = 0.5f;
     private float _mipBias = -1.0f;
     private float _shadowDistortionFactor = 0.65f;
+    private float _shadowRadius = ShadowRenderTargets.DefaultRadius;
+    private uint _appliedShadowResolution = ShadowRenderTargets.DefaultResolution;
+    private uint _selectedShadowResolution = ShadowRenderTargets.DefaultResolution;
+    private string? _graphicsOptionsSaveError;
+    private GraphicsOptionsSettings _appliedGraphicsOptions = GraphicsOptionsSettings.Defaults;
+    private bool _editingGraphicsOptions;
     private static readonly string[] DebugViewOptions = { "None", "Albedo", "Geometry Normal", "Texture Normal" };
+    private static readonly string[] ShadowResolutionOptions = { "512", "1024", "2048", "4096" };
+
+    public ViewerUiController(GraphicsOptionsSettings settings)
+    {
+        _taaEnabled = settings.TaaEnabled;
+        _debugView = settings.DebugView;
+        _sharpening = settings.Sharpening;
+        _mipBias = settings.MipBias;
+        _shadowDistortionFactor = settings.ShadowDistortionFactor;
+        _shadowRadius = settings.ShadowRadius;
+        _appliedShadowResolution = settings.ShadowResolution;
+        _selectedShadowResolution = settings.ShadowResolution;
+        _appliedGraphicsOptions = settings;
+    }
 
     //public float TimeOfDayHours => _timeOfDayHours;
     public float EffectiveTimeOfDayHours => _useGameTime && _gameTimeOfDayHours is float gameTime
@@ -43,9 +64,60 @@ internal sealed class ViewerUiController
     public float Sharpening => _sharpening;
     public float MipBias => _mipBias;
     public float ShadowDistortionFactor => _shadowDistortionFactor;
+    public float ShadowRadius => _shadowRadius;
+    public uint ShadowResolution => _appliedShadowResolution;
     //public string? LoadedParkPath => _loadedParkPath;
     //public bool HasParkLoadError => _parkLoadError is not null;
     public bool IsParkLoading => _isParkLoading;
+
+    private bool HasPendingGraphicsOptions => CaptureGraphicsOptions() != _appliedGraphicsOptions
+        || _selectedShadowResolution != _appliedShadowResolution
+        || _graphicsOptionsSaveError is not null;
+
+    private void BeginGraphicsOptionsEdit()
+    {
+        _selectedShadowResolution = _appliedShadowResolution;
+        _editingGraphicsOptions = true;
+    }
+
+    private void CancelGraphicsOptionsEdit()
+    {
+        _taaEnabled = _appliedGraphicsOptions.TaaEnabled;
+        _debugView = _appliedGraphicsOptions.DebugView;
+        _sharpening = _appliedGraphicsOptions.Sharpening;
+        _mipBias = _appliedGraphicsOptions.MipBias;
+        _shadowDistortionFactor = _appliedGraphicsOptions.ShadowDistortionFactor;
+        _shadowRadius = _appliedGraphicsOptions.ShadowRadius;
+        _selectedShadowResolution = _appliedShadowResolution;
+        _editingGraphicsOptions = false;
+    }
+
+    private void ApplyGraphicsOptions(Action<uint, float> applyShadowSettings, Action<GraphicsOptionsSettings> saveGraphicsOptions)
+    {
+        applyShadowSettings(_selectedShadowResolution, _shadowRadius);
+
+        _appliedShadowResolution = _selectedShadowResolution;
+        _appliedGraphicsOptions = CaptureGraphicsOptions();
+        _editingGraphicsOptions = false;
+
+        try {
+            saveGraphicsOptions(_appliedGraphicsOptions);
+            _graphicsOptionsSaveError = null;
+        }
+        catch (Exception ex) {
+            _graphicsOptionsSaveError = ex.Message;
+        }
+    }
+
+    private GraphicsOptionsSettings CaptureGraphicsOptions() => new() {
+        TaaEnabled = _taaEnabled,
+        DebugView = _debugView,
+        Sharpening = _sharpening,
+        MipBias = _mipBias,
+        ShadowResolution = _selectedShadowResolution,
+        ShadowRadius = _shadowRadius,
+        ShadowDistortionFactor = _shadowDistortionFactor
+    };
 
     public void ToggleDebug() => _showDebug = !_showDebug;
 
@@ -91,7 +163,8 @@ internal sealed class ViewerUiController
 
     public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, bool? isPaused, int cameraTileX, int cameraTileY,
         IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit,
-        bool peepModeEnabled, string? peepModeStatus, Action togglePeepMode, bool wireframeAvailable = true)
+        bool peepModeEnabled, string? peepModeStatus, Action togglePeepMode, Action<uint, float> applyShadowSettings,
+        Action<GraphicsOptionsSettings> saveGraphicsOptions, bool wireframeAvailable = true)
     {
         _gameTimeOfDayHours = gameTimeOfDayHours;
         var instantFps = deltaTime > 0.0 ? (float)(1.0 / deltaTime) : 0.0f;
@@ -118,7 +191,12 @@ internal sealed class ViewerUiController
                     _wireframeEnabled = !_wireframeEnabled;
                 if (ImGui.MenuItem("Peep Mode", "P", peepModeEnabled))
                     togglePeepMode();
+                var graphicsOptionsWereOpen = _showGraphicsOptions;
                 ImGui.MenuItem("Graphics Options", string.Empty, ref _showGraphicsOptions);
+                if (!graphicsOptionsWereOpen && _showGraphicsOptions)
+                    BeginGraphicsOptionsEdit();
+                else if (graphicsOptionsWereOpen && !_showGraphicsOptions)
+                    CancelGraphicsOptionsEdit();
                 ImGui.MenuItem("Debug", string.Empty, ref _showDebug);
                 ImGui.EndMenu();
             }
@@ -174,15 +252,43 @@ internal sealed class ViewerUiController
         }
 
         if (_showGraphicsOptions) {
+            if (!_editingGraphicsOptions)
+                BeginGraphicsOptionsEdit();
+            var graphicsOptionsWereOpen = _showGraphicsOptions;
             var graphicsOptionsVisible = ImGui.Begin("Graphics Options", ref _showGraphicsOptions, ImGuiWindowFlags.AlwaysAutoResize);
             if (graphicsOptionsVisible) {
                 ImGui.Checkbox("TAA", ref _taaEnabled);
                 ImGui.Combo("Debug View", ref _debugView, DebugViewOptions, DebugViewOptions.Length);
                 ImGui.SliderFloat("Sharpening", ref _sharpening, 0.0f, 1.0f, "%.2f");
                 ImGui.SliderFloat("Mip Bias", ref _mipBias, -2.0f, 0.0f, "%.2f");
+                ImGui.SeparatorText("Shadows");
+                var shadowResolutionIndex = _selectedShadowResolution switch {
+                    512 => 0,
+                    1024 => 1,
+                    2048 => 2,
+                    4096 => 3,
+                    _ => 2
+                };
+                if (ImGui.Combo("Resolution", ref shadowResolutionIndex, ShadowResolutionOptions, ShadowResolutionOptions.Length))
+                    _selectedShadowResolution = (uint)(512 << shadowResolutionIndex);
+                ImGui.SliderFloat("Radius", ref _shadowRadius, 16.0f, 512.0f, "%.0f");
                 ImGui.SliderFloat("Shadow Distortion", ref _shadowDistortionFactor, 0.0f, 1.0f, "%.2f");
+                if (_graphicsOptionsSaveError is not null)
+                    ImGui.TextWrapped($"Settings are active but could not be saved: {_graphicsOptionsSaveError}");
+                ImGui.Separator();
+                ImGui.BeginDisabled(!HasPendingGraphicsOptions);
+                if (ImGui.Button("Apply"))
+                    ApplyGraphicsOptions(applyShadowSettings, saveGraphicsOptions);
+                ImGui.EndDisabled();
+                ImGui.SameLine();
+                if (ImGui.Button("Cancel")) {
+                    CancelGraphicsOptionsEdit();
+                    _showGraphicsOptions = false;
+                }
             }
             ImGui.End();
+            if (graphicsOptionsWereOpen && !_showGraphicsOptions)
+                CancelGraphicsOptionsEdit();
         }
 
         if (_isParkLoading)

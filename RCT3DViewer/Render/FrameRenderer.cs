@@ -64,7 +64,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
         CalculateSunDirection(out _, out var sunDirection);
         var cameraPosition = camera.Position;
-        var shadowViewProjection = CreateShadowViewProjection(cameraPosition, sunDirection);
+        var shadowViewProjection = CreateShadowViewProjection(cameraPosition, sunDirection, ui.ShadowRadius);
         var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
         var shadowFrustum = ViewFrustum.FromViewProjection(shadowViewProjection);
         var renderDimensions = new Vector2D<uint>(extent.Width, extent.Height);
@@ -407,6 +407,11 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         taaHistoryValid = false;
     }
 
+    public void InvalidateShadowMap()
+    {
+        shadowMapInitialized = false;
+    }
+
     private void RecordTaa(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, Vector2D<uint> renderDimensions,
         DeferredRenderTargets deferredTargets, DeferredPassResources deferredPassResources)
     {
@@ -569,9 +574,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         }
     }
 
-    private static Matrix4x4 CreateShadowViewProjection(Vector3 cameraPosition, Vector3 sunDirection)
+    private static Matrix4x4 CreateShadowViewProjection(Vector3 cameraPosition, Vector3 sunDirection, float radius)
     {
-        var radius = ShadowRenderTargets.Radius;
         var up = MathF.Abs(Vector3.Dot(sunDirection, Vector3.UnitY)) > 0.98f ? Vector3.UnitZ : Vector3.UnitY;
         var lightPosition = cameraPosition + sunDirection * radius;
         var lightView = Matrix4x4.CreateLookAt(lightPosition, cameraPosition, up);
