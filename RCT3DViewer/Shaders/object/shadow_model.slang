@@ -1,3 +1,4 @@
+import lib.common;
 import lib.uniforms;
 import lib.shadow;
 
@@ -5,15 +6,21 @@ import lib.shadow;
 
 struct VertexInput {
 	[[vk::location(0)]] float3 position;
-	[[vk::location(4)]] float4 transformRow0;
-	[[vk::location(5)]] float4 transformRow1;
-	[[vk::location(6)]] float4 transformRow2;
-	[[vk::location(7)]] float4 transformRow3;
+    [[vk::location(1)]] float3 normal;
+    [[vk::location(2)]] float2 texCoord;
+    [[vk::location(3)]] float4 transformRow0;
+    [[vk::location(4)]] float4 transformRow1;
+    [[vk::location(5)]] float4 transformRow2;
+    [[vk::location(6)]] float4 transformRow3;
 };
 
 struct VertexOutput {
-	float4 position : SV_Position;
+    float4 position : SV_Position;
+    float2 texCoord : TEXCOORD0;
 };
+
+[[vk::binding(0, 1)]] Texture2DArray<float4> modelTextures;
+[[vk::binding(1, 1)]] SamplerState modelSampler;
 
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput input)
@@ -24,11 +31,16 @@ VertexOutput vertexMain(VertexInput input)
 		+ input.transformRow3;
 
 	VertexOutput output;
-	output.position = distortShadowClip(mul(worldPosition, shadowUniforms.shadowViewProjection), shadowUniforms.distortionFactor);
-	return output;
+    output.position = distortShadowClip(mul(worldPosition, shadowUniforms.shadowViewProjection), shadowUniforms.distortionFactor);
+    output.texCoord = input.texCoord;
+    return output;
 }
 
 [shader("fragment")]
-void fragmentMain()
+void fragmentMain(VertexOutput input)
 {
+    float3 layer = float3(input.texCoord, 0.0);
+    float alpha = modelTextures.Sample(modelSampler, layer).a;
+
+    if (alpha < AlphaThreshold) discard;
 }

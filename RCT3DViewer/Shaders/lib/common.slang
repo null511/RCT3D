@@ -2,6 +2,8 @@ public module common;
 
 static const float PI = 3.14159265358979323846;
 
+static const float AlphaThreshold = 0.2;
+
 float3 mul3(const in float3 vector, const in float4x4 matrix) {
     return mul(float4(vector, 1.0), matrix).xyz;
 }

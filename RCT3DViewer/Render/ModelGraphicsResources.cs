@@ -1,5 +1,4 @@
 using RCT3D.Render.Paths;
-using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Terrain;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
@@ -29,7 +28,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
             context,
             renderPass,
             uniformDescriptorSetLayout,
-            TerrainMaterialLibrary.FromModelMaterial(material),
+            MaterialTextureArrayData.FromModel(ModelMaterialLibrary.FromImportedMaterial(material)),
             useInstances: true,
             shaderNameOverride: Path.Combine("object", unlit ? "vehicleCube" : "model"),
             colorAttachmentCount: 3u);
@@ -41,16 +40,14 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
 
     public void UploadMesh(ImportedModelMesh mesh)
     {
-        var vertices = new TerrainVertex[mesh.Vertices.Length];
+        var vertices = new ModelVertex[mesh.Vertices.Length];
         for (var index = 0; index < vertices.Length; index++) {
             var vertex = mesh.Vertices[index];
-            vertices[index] = new TerrainVertex(vertex.Position, vertex.Normal, vertex.TextureCoordinate, 0);
+            vertices[index] = new ModelVertex(vertex.Position, vertex.Normal, vertex.TextureCoordinate);
         }
 
-        _graphicsResources.UploadMesh(new PathMeshData(vertices, mesh.Indices));
+        _graphicsResources.UploadModelMesh(vertices, mesh.Indices);
     }
-
-    public void UploadMesh(PathMeshData mesh) => _graphicsResources.UploadMesh(mesh);
 
     public void UploadInstances(ModelRegionBatch[] regions)
     {

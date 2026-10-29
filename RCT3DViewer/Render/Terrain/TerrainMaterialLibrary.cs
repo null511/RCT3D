@@ -85,27 +85,6 @@ public sealed class TerrainMaterialLibrary
         return variants[(int)(variantHash % (uint)variants.Length)];
     }
 
-    internal static TerrainMaterialLibrary FromModelMaterial(ImportedModelMaterial material)
-    {
-        var texture = material.BaseColorTexture;
-        var width = texture?.Width ?? 1;
-        var height = texture?.Height ?? 1;
-        var pixels = texture?.Pixels.ToArray() ?? [255, 255, 255, 255];
-        var factor = material.BaseColorFactor;
-
-        for (var pixel = 0; pixel < pixels.Length; pixel += 4) {
-            pixels[pixel] = ScaleChannel(pixels[pixel], factor.X);
-            pixels[pixel + 1] = ScaleChannel(pixels[pixel + 1], factor.Y);
-            pixels[pixel + 2] = ScaleChannel(pixels[pixel + 2], factor.Z);
-            pixels[pixel + 3] = ScaleChannel(pixels[pixel + 3], factor.W);
-        }
-
-        return new TerrainMaterialLibrary(width, height, pixels,
-            CreateSolidPixels(width, height, 128, 128, 255, 255),
-            CreateSolidPixels(width, height, 255, 0, 0, 0),
-            new Dictionary<uint, uint>(), new Dictionary<uint, GrassTextureLayers>(), new Dictionary<uint, uint>(), 0);
-    }
-
     private static byte[] CreateSolidPixels(int width, int height, byte red, byte green, byte blue, byte alpha)
     {
         var pixels = new byte[checked(width * height * 4)];
@@ -117,11 +96,6 @@ public sealed class TerrainMaterialLibrary
         }
 
         return pixels;
-    }
-
-    private static byte ScaleChannel(byte channel, float factor)
-    {
-        return (byte)Math.Clamp((int)MathF.Round(channel * Math.Clamp(factor, 0.0f, 1.0f)), 0, 255);
     }
 
     public static TerrainMaterialLibrary Load(string assetDirectory)

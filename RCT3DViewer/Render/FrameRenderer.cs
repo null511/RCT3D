@@ -306,6 +306,12 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
                 if (viewFrustum.Intersects(region.Bounds))
                     resources1.DrawInstanced(commandBuffer, uniformDescriptorSet, region);
             }
+
+            foreach (var (_, treeResources) in resources.TreeSceneryGraphicsResources)
+            foreach (var region in treeResources.RegionBatches) {
+                if (viewFrustum.Intersects(region.Bounds))
+                    treeResources.DrawInstanced(commandBuffer, uniformDescriptorSet, region);
+            }
         }
 
         Vk.CmdEndRenderPass(commandBuffer);
@@ -551,10 +557,13 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
         var vehicleResources = resources.VehicleCubeGraphicsResources;
         if (vehicleResources.Length > 0)
-            DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, vehicleResources[(int)currentFrame], shadowFrustum);
+            DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout, vehicleResources[(int)currentFrame], shadowFrustum);
 
         foreach (var (_, modelResources) in resources.PathAccessoryGraphicsResources)
-            DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, modelResources, shadowFrustum);
+            DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout, modelResources, shadowFrustum);
+
+        foreach (var (_, modelResources) in resources.TreeSceneryGraphicsResources)
+            DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout, modelResources, shadowFrustum);
 
         Vk.CmdEndRenderPass(commandBuffer);
         shadowMapInitialized = true;
@@ -574,12 +583,15 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         }
     }
 
-    private void DrawShadowModels(CommandBuffer commandBuffer, Pipeline pipeline, ModelGraphicsResources modelResources, ViewFrustum shadowFrustum)
+    private void DrawShadowModels(CommandBuffer commandBuffer, Pipeline pipeline, PipelineLayout pipelineLayout,
+        ModelGraphicsResources modelResources, ViewFrustum shadowFrustum)
     {
         if (modelResources.IndexCount == 0 || modelResources.RegionBatches.Length == 0 || modelResources.InstanceBuffer.Handle == 0)
             return;
 
         Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, pipeline);
+        var materialDescriptorSet = modelResources.DescriptorSet;
+        Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 1, 1, &materialDescriptorSet, 0, null);
         var vertexBuffers = stackalloc Silk.NET.Vulkan.Buffer[2];
         vertexBuffers[0] = modelResources.VertexBuffer;
         vertexBuffers[1] = modelResources.InstanceBuffer;

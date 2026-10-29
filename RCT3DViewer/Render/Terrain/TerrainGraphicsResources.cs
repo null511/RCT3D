@@ -6,6 +6,7 @@ using Silk.NET.Vulkan;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace RCT3D.Render.Terrain;
@@ -14,7 +15,7 @@ internal sealed unsafe class TerrainGraphicsResources(
     VulkanDeviceContext context,
     RenderPass renderPass,
     DescriptorSetLayout uniformDescriptorSetLayout,
-    TerrainMaterialLibrary materials,
+    MaterialTextureArrayData materials,
     bool useInstances = false,
     string shaderNameOverride = "",
     bool createWireframePipeline = false,
@@ -103,7 +104,9 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var shaderStages = new[] { vertStageInfo, fragStageInfo };
 
-        var vertexStride = useTrackVertexColor ? Marshal.SizeOf<TrackVertex>() : Marshal.SizeOf<TerrainVertex>();
+        var vertexStride = useInstances
+            ? Marshal.SizeOf<ModelVertex>()
+            : useTrackVertexColor ? Marshal.SizeOf<TrackVertex>() : Marshal.SizeOf<TerrainVertex>();
         var bindingDescriptions = new List<VertexInputBindingDescription> {
             new() {
                 Binding = 0,
@@ -112,7 +115,13 @@ internal sealed unsafe class TerrainGraphicsResources(
             }
         };
 
-        var attributeDescriptions = useTrackVertexColor
+        var attributeDescriptions = useInstances
+            ? new List<VertexInputAttributeDescription> {
+                new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<ModelVertex>(nameof(ModelVertex.Position)) },
+                new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<ModelVertex>(nameof(ModelVertex.Normal)) },
+                new() { Binding = 0, Location = 2, Format = Format.R32G32Sfloat, Offset = (uint)Marshal.OffsetOf<ModelVertex>(nameof(ModelVertex.TextureCoordinate)) }
+            }
+            : useTrackVertexColor
             ? new List<VertexInputAttributeDescription> {
                 new() { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.Position)) },
                 new() { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<TrackVertex>(nameof(TrackVertex.Normal)) },
@@ -139,7 +148,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             for (uint row = 0; row < 4; row++) {
                 attributeDescriptions.Add(new VertexInputAttributeDescription {
                     Binding = 1,
-                    Location = 4 + row,
+                    Location = 3 + row,
                     Format = Format.R32G32B32A32Sfloat,
                     Offset = matrixOffset + row * (uint)Marshal.SizeOf<Vector4>()
                 });
@@ -207,6 +216,11 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var descriptorBindings = useTrackVertexColor
             ? Array.Empty<DescriptorSetLayoutBinding>()
+            : materials.NormalPixels is null
+            ? new DescriptorSetLayoutBinding[] {
+                new() { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+                new() { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
+            }
             : new DescriptorSetLayoutBinding[] {
                 new() { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
                 new() { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
@@ -304,9 +318,11 @@ internal sealed unsafe class TerrainGraphicsResources(
         var vk = context.Api;
         var device = context.LogicalDevice;
         var mipLevels = (uint)BitOperations.Log2((uint)Math.Max(materials.Width, materials.Height)) + 1;
-        (_textureImage, _textureMemory, _textureView) = CreateTextureArray(materials.Pixels, Format.R8G8B8A8Srgb, mipLevels, "base");
-        (_normalTextureImage, _normalTextureMemory, _normalTextureView) = CreateTextureArray(materials.NormalPixels, Format.R8G8B8A8Unorm, mipLevels, "normal/AO");
-        (_specularTextureImage, _specularTextureMemory, _specularTextureView) = CreateTextureArray(materials.SpecularPixels, Format.R8G8B8A8Unorm, mipLevels, "specular");
+        (_textureImage, _textureMemory, _textureView) = CreateTextureArray(materials.BaseColorPixels, Format.R8G8B8A8Srgb, mipLevels, "base");
+        if (materials.NormalPixels is { } normalPixels && materials.SpecularPixels is { } specularPixels) {
+            (_normalTextureImage, _normalTextureMemory, _normalTextureView) = CreateTextureArray(normalPixels, Format.R8G8B8A8Unorm, mipLevels, "normal/AO");
+            (_specularTextureImage, _specularTextureMemory, _specularTextureView) = CreateTextureArray(specularPixels, Format.R8G8B8A8Unorm, mipLevels, "specular");
+        }
 
         var samplerInfo = new SamplerCreateInfo {
             SType = StructureType.SamplerCreateInfo,
@@ -326,7 +342,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             throw new Exception("Failed to create terrain texture sampler.");
 
         var poolSizes = new DescriptorPoolSize[] {
-            new() { Type = DescriptorType.SampledImage, DescriptorCount = 3 },
+            new() { Type = DescriptorType.SampledImage, DescriptorCount = materials.NormalPixels is null ? 1u : 3u },
             new() { Type = DescriptorType.Sampler, DescriptorCount = 1 }
         };
 
@@ -364,7 +380,12 @@ internal sealed unsafe class TerrainGraphicsResources(
             Sampler = _textureSampler,
         };
 
-        var writes = new WriteDescriptorSet[] {
+        var writes = materials.NormalPixels is null
+            ? new WriteDescriptorSet[] {
+                new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
+                new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.Sampler }
+            }
+            : new WriteDescriptorSet[] {
                 new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
                 new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.Sampler },
                 new() { SType = StructureType.WriteDescriptorSet, DstSet = DescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage },
@@ -374,16 +395,18 @@ internal sealed unsafe class TerrainGraphicsResources(
         fixed (WriteDescriptorSet* writesPointer = writes) {
             writes[0].PImageInfo = &baseImageDescriptor;
             writes[1].PImageInfo = &samplerDescriptor;
-            var normalImageDescriptor = new DescriptorImageInfo {
-                ImageView = _normalTextureView,
-                ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
-            };
-            var specularImageDescriptor = new DescriptorImageInfo {
-                ImageView = _specularTextureView,
-                ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
-            };
-            writes[2].PImageInfo = &normalImageDescriptor;
-            writes[3].PImageInfo = &specularImageDescriptor;
+            if (writes.Length > 2) {
+                var normalImageDescriptor = new DescriptorImageInfo {
+                    ImageView = _normalTextureView,
+                    ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+                };
+                var specularImageDescriptor = new DescriptorImageInfo {
+                    ImageView = _specularTextureView,
+                    ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+                };
+                writes[2].PImageInfo = &normalImageDescriptor;
+                writes[3].PImageInfo = &specularImageDescriptor;
+            }
             vk.UpdateDescriptorSets(device, (uint)writes.Length, writesPointer, 0, null);
         }
     }
@@ -509,6 +532,14 @@ internal sealed unsafe class TerrainGraphicsResources(
         UploadMesh(mesh.Vertices, mesh.Indices);
     }
 
+    public void UploadModelMesh(ModelVertex[] vertices, uint[] indices)
+    {
+        if (!useInstances)
+            throw new InvalidOperationException("Model vertices can only be uploaded to an instanced model pipeline.");
+
+        UploadModelMeshBuffers(vertices, indices);
+    }
+
     public void UploadMesh(TrackMeshData mesh)
     {
         UploadMesh(mesh.Vertices, mesh.Indices);
@@ -583,6 +614,35 @@ internal sealed unsafe class TerrainGraphicsResources(
         vk.MapMemory(device, _indexBufferMemory, 0, indexBufferSize, 0, &indexData);
         var indexSpan = new Span<uint>(indexData, indices.Length);
         indices.AsSpan().CopyTo(indexSpan);
+        vk.UnmapMemory(device, _indexBufferMemory);
+        IndexCount = checked((uint)indices.Length);
+    }
+
+    private void UploadModelMeshBuffers(ModelVertex[] vertices, uint[] indices)
+    {
+        if (vertices.Length == 0 || indices.Length == 0) {
+            ClearMesh();
+            return;
+        }
+
+        var vk = context.Api;
+        var device = context.LogicalDevice;
+        var vertexBufferSize = checked((ulong)Marshal.SizeOf<ModelVertex>() * (ulong)vertices.Length);
+        AllocateBuffer(vertexBufferSize, BufferUsageFlags.VertexBufferBit,
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vertexBuffer, out _vertexBufferMemory);
+
+        void* vertexData;
+        vk.MapMemory(device, _vertexBufferMemory, 0, vertexBufferSize, 0, &vertexData);
+        vertices.AsSpan().CopyTo(new Span<ModelVertex>(vertexData, vertices.Length));
+        vk.UnmapMemory(device, _vertexBufferMemory);
+
+        var indexBufferSize = checked(sizeof(uint) * (ulong)indices.Length);
+        AllocateBuffer(indexBufferSize, BufferUsageFlags.IndexBufferBit,
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _indexBuffer, out _indexBufferMemory);
+
+        void* indexData;
+        vk.MapMemory(device, _indexBufferMemory, 0, indexBufferSize, 0, &indexData);
+        indices.AsSpan().CopyTo(new Span<uint>(indexData, indices.Length));
         vk.UnmapMemory(device, _indexBufferMemory);
         IndexCount = checked((uint)indices.Length);
     }

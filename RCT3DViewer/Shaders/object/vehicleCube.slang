@@ -5,14 +5,13 @@ import lib.uniforms;
 import lib.octohedral;
 
 struct VertexInput {
-	float3 position : POSITION;
-	float3 normal : NORMAL;
-	float2 texCoord : TEXCOORD0;
-	float materialId : TEXCOORD1;
-	float4 transformRow0 : TEXCOORD2;
-	float4 transformRow1 : TEXCOORD3;
-	float4 transformRow2 : TEXCOORD4;
-	float4 transformRow3 : TEXCOORD5;
+	[[vk::location(0)]] float3 position;
+	[[vk::location(1)]] float3 normal;
+	[[vk::location(2)]] float2 texCoord;
+	[[vk::location(3)]] float4 transformRow0;
+	[[vk::location(4)]] float4 transformRow1;
+	[[vk::location(5)]] float4 transformRow2;
+	[[vk::location(6)]] float4 transformRow3;
 };
 
 struct VertexStageOutput {

@@ -8,6 +8,7 @@ using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Entrances;
 using RCT3D.Render.Rides;
 using RCT3D.Interop.Models;
+using RCT3D.Render.Scenery;
 
 namespace RCT3D.Render;
 
@@ -21,6 +22,7 @@ internal sealed class ParkSceneController(
     private readonly TerrainMeshBuilder terrainMeshBuilder = new(resources.TerrainMaterials!);
     private readonly PathMeshBuilder pathMeshBuilder = new(resources.PathMaterials!);
     private readonly PathAccessoryMeshBuilder pathAccessoryMeshBuilder = new(resources.PathAccessoryAssets!);
+    private readonly TreeSceneryMeshBuilder treeSceneryMeshBuilder = new(resources.TreeSceneryAssets!);
     private readonly TrackMeshBuilder trackMeshBuilder = new();
     private readonly RideEntranceExitMeshBuilder rideEntranceExitMeshBuilder = new();
 
@@ -80,20 +82,21 @@ internal sealed class ParkSceneController(
     {
         try {
             var snapshot = await simulation.LoadParkAsync(parkPath, progress => Volatile.Write(ref parkLoadProgress, progress));
-            Volatile.Write(ref parkLoadProgress, "Generating terrain, water, path, accessory, track, support, and station meshes...");
+            Volatile.Write(ref parkLoadProgress, "Generating terrain, water, path, accessory, tree, track, support, and station meshes...");
 
             var meshData = await Task.Run(() => (
                 Terrain: terrainMeshBuilder.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height, terrainSkirtFloor),
                 Paths: pathMeshBuilder.Build(snapshot.PathData, snapshot.SurfaceData, snapshot.Width, snapshot.Height),
                 Navigation: new PathNavigation(snapshot.PathData),
                 PathAccessories: pathAccessoryMeshBuilder.Build(snapshot.PathData, snapshot.Width, snapshot.Height),
+                Trees: treeSceneryMeshBuilder.Build(snapshot.TreeData, snapshot.Width, snapshot.Height),
                 Tracks: trackMeshBuilder.Build(snapshot.TrackData, snapshot.PathData, snapshot.RideEntranceData, snapshot.SurfaceData, snapshot.Width, snapshot.Height, snapshot.PaletteData),
                 RideEntrances: rideEntranceExitMeshBuilder.Build(snapshot.RideEntranceData, snapshot.Width, snapshot.Height)));
 
             return new ParkLoadResult(
                 parkPath, snapshot.Width, snapshot.Height,
                 meshData.Terrain.Terrain, meshData.Terrain.Water, meshData.Paths, meshData.Navigation, meshData.PathAccessories,
-                meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, snapshot.TrackData, snapshot.RideEntranceData,
+                meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, meshData.Trees, snapshot.TrackData, snapshot.RideEntranceData,
                 meshData.Tracks.Centerlines);
         }
         catch (Exception ex) {
@@ -110,7 +113,7 @@ internal sealed class ParkSceneController(
 
             try {
                 pendingParkLoadResult = completedTask.GetAwaiter().GetResult();
-                ui.SetParkLoadStatus("Uploading terrain, water, path, accessory, track, support, and station meshes...");
+                ui.SetParkLoadStatus("Uploading terrain, water, path, accessory, tree, track, support, and station meshes...");
                 loadCompletedThisFrame = true;
             }
             catch (Exception ex) {
@@ -135,6 +138,7 @@ internal sealed class ParkSceneController(
                 resources.CreateRideEntranceGraphicsResources();
                 resources.RideEntranceGraphicsResources!.UploadMesh(result.RideEntrances);
                 DisposePathAccessoryResources();
+                DisposeTreeSceneryResources();
 
                 foreach (var batch in result.PathAccessories) {
                     var accessoryResources = new ModelGraphicsResources(resources.DeviceContext!, resources.DeferredTargets!.GBufferRenderPass,
@@ -149,6 +153,23 @@ internal sealed class ParkSceneController(
                     }
                     catch {
                         accessoryResources.Dispose();
+                        throw;
+                    }
+                }
+
+                foreach (var batch in result.Trees) {
+                    var treeResources = new ModelGraphicsResources(resources.DeviceContext!, resources.DeferredTargets!.GBufferRenderPass,
+                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Material);
+
+                    try {
+                        treeResources.CreatePipeline();
+                        treeResources.CreateTextureResources(resources.CommandPool);
+                        treeResources.UploadMesh(batch.Mesh);
+                        treeResources.UploadInstances(batch.Regions);
+                        resources.TreeSceneryGraphicsResources.Add((batch, treeResources));
+                    }
+                    catch {
+                        treeResources.Dispose();
                         throw;
                     }
                 }
@@ -230,6 +251,7 @@ internal sealed class ParkSceneController(
                     throw new InvalidOperationException("Could not wait for the Vulkan device before clearing park meshes.");
 
                 DisposePathAccessoryResources();
+                DisposeTreeSceneryResources();
                 resources.TerrainGraphicsResources?.ClearMesh();
                 resources.PathGraphicsResources?.ClearMesh();
                 resources.WaterGraphicsResources?.ClearMesh();
@@ -273,6 +295,14 @@ internal sealed class ParkSceneController(
         resources.PathAccessoryGraphicsResources.Clear();
     }
 
+    private void DisposeTreeSceneryResources()
+    {
+        foreach (var (_, resources1) in resources.TreeSceneryGraphicsResources)
+            resources1.Dispose();
+
+        resources.TreeSceneryGraphicsResources.Clear();
+    }
+
     public void Dispose()
     {
         if (isDisposed) return;
@@ -299,6 +329,6 @@ internal sealed class ParkSceneController(
     private sealed record ParkLoadResult(
         string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water, PathMeshData Paths,
         PathNavigation Navigation, PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks, RideSupportMeshData RideSupports,
-        RideEntranceExitMeshData RideEntrances, RCTTrackElementData[] TrackElements, RCTRideEntranceData[] RideEntranceData,
+        RideEntranceExitMeshData RideEntrances, TreeSceneryBatch[] Trees, RCTTrackElementData[] TrackElements, RCTRideEntranceData[] RideEntranceData,
         TrackCenterlinePiece[] Centerlines);
 }

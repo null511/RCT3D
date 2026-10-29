@@ -1,6 +1,7 @@
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Terrain;
+using RCT3D.Render.Scenery;
 using RCT3D.Simulation;
 using RCT3D.Configuration;
 using Silk.NET.Maths;
@@ -83,6 +84,7 @@ public sealed class Renderer : IDisposable
         TerrainMaterialLibrary? terrainMaterials;
         PathMaterialLibrary? pathMaterials;
         PathAccessoryAssetLibrary? pathAccessoryAssets;
+        TreeSceneryAssetLibrary? treeSceneryAssets;
 
         try {
             if (!Path.IsPathRooted(OpenRCT2Path))
@@ -94,6 +96,7 @@ public sealed class Renderer : IDisposable
             terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(textureRoot, "Terrain"), null, missingTexturePath);
             pathMaterials = PathMaterialLibrary.Load(Path.Combine(textureRoot, "Paths"), missingTexturePath);
             pathAccessoryAssets = PathAccessoryAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
+            treeSceneryAssets = TreeSceneryAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
         }
         catch (Exception ex) {
             simulation?.Dispose();
@@ -103,7 +106,8 @@ public sealed class Renderer : IDisposable
         }
 
         Console.WriteLine("Initializing Graphics Subsystems via Silk.NET Vulkan...");
-        renderResources = new VulkanRenderResources(window!, terrainMaterials, pathMaterials, pathAccessoryAssets, graphicsOptions);
+        renderResources = new VulkanRenderResources(window!, terrainMaterials, pathMaterials, pathAccessoryAssets,
+            treeSceneryAssets, graphicsOptions);
         frameRenderer = new FrameRenderer(renderResources, ui, camera);
         frameCoordinator = new FrameCoordinator(window!, renderResources);
         parkScene = new ParkSceneController(simulation!, renderResources, ui, camera, frameRenderer);

@@ -10,6 +10,7 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
 {
     private readonly VulkanDeviceContext _context;
     private bool _disposed;
+    private DescriptorSetLayout _modelMaterialDescriptorSetLayout;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline TerrainPipeline { get; private set; }
@@ -32,11 +33,27 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
 
     private void CreatePipelineLayout(DescriptorSetLayout uniformDescriptorSetLayout)
     {
-        var descriptorLayout = uniformDescriptorSetLayout;
+        var modelMaterialBindings = new[] {
+            new DescriptorSetLayoutBinding { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+            new DescriptorSetLayoutBinding { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
+        };
+        fixed (DescriptorSetLayoutBinding* bindings = modelMaterialBindings) {
+            var descriptorLayoutInfo = new DescriptorSetLayoutCreateInfo {
+                SType = StructureType.DescriptorSetLayoutCreateInfo,
+                BindingCount = (uint)modelMaterialBindings.Length,
+                PBindings = bindings
+            };
+            Check(_context.Api.CreateDescriptorSetLayout(_context.LogicalDevice, in descriptorLayoutInfo, null,
+                out _modelMaterialDescriptorSetLayout), "model shadow material descriptor-set layout");
+        }
+
+        var descriptorLayouts = stackalloc DescriptorSetLayout[2];
+        descriptorLayouts[0] = uniformDescriptorSetLayout;
+        descriptorLayouts[1] = _modelMaterialDescriptorSetLayout;
         var createInfo = new PipelineLayoutCreateInfo {
             SType = StructureType.PipelineLayoutCreateInfo,
-            SetLayoutCount = 1,
-            PSetLayouts = &descriptorLayout
+            SetLayoutCount = 2,
+            PSetLayouts = descriptorLayouts
         };
 
         Check(_context.Api.CreatePipelineLayout(_context.LogicalDevice, in createInfo, null, out var layout), "shadow pipeline layout");
@@ -47,23 +64,29 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
     {
         var meshShader = default(ShaderModule);
         var modelShader = default(ShaderModule);
+        var modelFragmentShader = default(ShaderModule);
 
         try {
             meshShader = CreateVertexShader("shadow_mesh");
-            modelShader = CreateVertexShader("shadow_model");
+            modelShader = CreateShader("shadow_model.vert.spv");
+            modelFragmentShader = CreateShader("shadow_model.frag.spv");
             TerrainPipeline = CreatePipeline(meshShader, renderPass, (uint)Marshal.SizeOf<TerrainVertex>(), false);
             TrackPipeline = CreatePipeline(meshShader, renderPass, (uint)Marshal.SizeOf<TrackVertex>(), false);
-            ModelPipeline = CreatePipeline(modelShader, renderPass, (uint)Marshal.SizeOf<TerrainVertex>(), true);
+            ModelPipeline = CreatePipeline(modelShader, renderPass, (uint)Marshal.SizeOf<ModelVertex>(), true, modelFragmentShader);
         }
         finally {
             if (meshShader.Handle != 0) _context.Api.DestroyShaderModule(_context.LogicalDevice, meshShader, null);
             if (modelShader.Handle != 0) _context.Api.DestroyShaderModule(_context.LogicalDevice, modelShader, null);
+            if (modelFragmentShader.Handle != 0) _context.Api.DestroyShaderModule(_context.LogicalDevice, modelFragmentShader, null);
         }
     }
 
     private ShaderModule CreateVertexShader(string shaderName)
+        => CreateShader($"{shaderName}.vert.spv");
+
+    private ShaderModule CreateShader(string fileName)
     {
-        var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", "object", $"{shaderName}.vert.spv");
+        var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", "object", fileName);
         if (!File.Exists(path))
             throw new FileNotFoundException($"Shadow vertex shader is missing: {path}");
 
@@ -75,12 +98,12 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
                 PCode = (uint*)codePointer
             };
 
-            Check(_context.Api.CreateShaderModule(_context.LogicalDevice, in createInfo, null, out var shader), $"{shaderName} shadow shader module");
+            Check(_context.Api.CreateShaderModule(_context.LogicalDevice, in createInfo, null, out var shader), $"{fileName} shadow shader module");
             return shader;
         }
     }
 
-    private Pipeline CreatePipeline(ShaderModule vertexShader, RenderPass renderPass, uint vertexStride, bool useInstances)
+    private Pipeline CreatePipeline(ShaderModule vertexShader, RenderPass renderPass, uint vertexStride, bool useInstances, ShaderModule fragmentShader = default)
     {
         var bindings = useInstances
             ? new[] {
@@ -94,10 +117,11 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
         var attributes = useInstances
             ? new[] {
                 new VertexInputAttributeDescription { Location = 0, Binding = 0, Format = Format.R32G32B32Sfloat, Offset = 0 },
-                new VertexInputAttributeDescription { Location = 4, Binding = 1, Format = Format.R32G32B32A32Sfloat, Offset = 0 },
-                new VertexInputAttributeDescription { Location = 5, Binding = 1, Format = Format.R32G32B32A32Sfloat, Offset = 16 },
-                new VertexInputAttributeDescription { Location = 6, Binding = 1, Format = Format.R32G32B32A32Sfloat, Offset = 32 },
-                new VertexInputAttributeDescription { Location = 7, Binding = 1, Format = Format.R32G32B32A32Sfloat, Offset = 48 }
+                new VertexInputAttributeDescription { Location = 2, Binding = 0, Format = Format.R32G32Sfloat, Offset = (uint)Marshal.OffsetOf<ModelVertex>(nameof(ModelVertex.TextureCoordinate)) },
+                new VertexInputAttributeDescription { Location = 3, Binding = 1, Format = Format.R32G32B32A32Sfloat, Offset = 0 },
+                new VertexInputAttributeDescription { Location = 4, Binding = 1, Format = Format.R32G32B32A32Sfloat, Offset = 16 },
+                new VertexInputAttributeDescription { Location = 5, Binding = 1, Format = Format.R32G32B32A32Sfloat, Offset = 32 },
+                new VertexInputAttributeDescription { Location = 6, Binding = 1, Format = Format.R32G32B32A32Sfloat, Offset = 48 }
             }
             : new[] {
                 new VertexInputAttributeDescription { Location = 0, Binding = 0, Format = Format.R32G32B32Sfloat, Offset = 0 }
@@ -105,12 +129,21 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
 
         var stageName = Marshal.StringToHGlobalAnsi("main");
         try {
-            var stage = new PipelineShaderStageCreateInfo {
+            var stages = fragmentShader.Handle == 0 ? new PipelineShaderStageCreateInfo[1] : new PipelineShaderStageCreateInfo[2];
+            stages[0] = new PipelineShaderStageCreateInfo {
                 SType = StructureType.PipelineShaderStageCreateInfo,
                 Stage = ShaderStageFlags.VertexBit,
                 Module = vertexShader,
                 PName = (byte*)stageName
             };
+            if (fragmentShader.Handle != 0) {
+                stages[1] = new PipelineShaderStageCreateInfo {
+                    SType = StructureType.PipelineShaderStageCreateInfo,
+                    Stage = ShaderStageFlags.FragmentBit,
+                    Module = fragmentShader,
+                    PName = (byte*)stageName
+                };
+            }
             var vertexInput = new PipelineVertexInputStateCreateInfo {
                 SType = StructureType.PipelineVertexInputStateCreateInfo,
                 VertexBindingDescriptionCount = (uint)bindings.Length,
@@ -154,7 +187,7 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
             };
             var pipelineInfo = new GraphicsPipelineCreateInfo {
                 SType = StructureType.GraphicsPipelineCreateInfo,
-                StageCount = 1,
+                StageCount = (uint)stages.Length,
                 Layout = PipelineLayout,
                 RenderPass = renderPass,
                 Subpass = 0,
@@ -170,11 +203,12 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
 
             fixed (VertexInputBindingDescription* bindingsPointer = bindings)
             fixed (VertexInputAttributeDescription* attributesPointer = attributes)
+            fixed (PipelineShaderStageCreateInfo* stagesPointer = stages)
             fixed (DynamicState* dynamicStatesPointer = dynamicStates) {
                 vertexInput.PVertexBindingDescriptions = bindingsPointer;
                 vertexInput.PVertexAttributeDescriptions = attributesPointer;
                 dynamicState.PDynamicStates = dynamicStatesPointer;
-                pipelineInfo.PStages = &stage;
+                pipelineInfo.PStages = stagesPointer;
                 Check(_context.Api.CreateGraphicsPipelines(_context.LogicalDevice, default, 1, in pipelineInfo, null, out var pipeline), "shadow graphics pipeline");
                 return pipeline;
             }
@@ -200,11 +234,14 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
         if (TerrainPipeline.Handle != 0) vk.DestroyPipeline(device, TerrainPipeline, null);
         if (TrackPipeline.Handle != 0) vk.DestroyPipeline(device, TrackPipeline, null);
         if (ModelPipeline.Handle != 0) vk.DestroyPipeline(device, ModelPipeline, null);
+        // Destroy pipeline layout before descriptor-set layouts it references.
         if (PipelineLayout.Handle != 0) vk.DestroyPipelineLayout(device, PipelineLayout, null);
+        if (_modelMaterialDescriptorSetLayout.Handle != 0) vk.DestroyDescriptorSetLayout(device, _modelMaterialDescriptorSetLayout, null);
 
         TerrainPipeline = default;
         TrackPipeline = default;
         ModelPipeline = default;
         PipelineLayout = default;
+        _modelMaterialDescriptorSetLayout = default;
     }
 }

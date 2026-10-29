@@ -80,6 +80,14 @@ public sealed class SimulationBridge : IDisposable
                     var pathData = new RCTTilePathData[(int)pathCount];
                     openRCT2.CopyPathData(pathData);
 
+                    reportProgress("Reading tree scenery data...");
+                    var treeCount = openRCT2.GetTreeCount();
+                    if (treeCount > int.MaxValue)
+                        throw new InvalidOperationException($"OpenRCT2 returned too many tree scenery elements: {treeCount}.");
+
+                    var treeData = new RCTTreeSceneryData[(int)treeCount];
+                    openRCT2.CopyTreeData(treeData);
+
                     reportProgress("Reading ride track and palette data...");
                     var trackCount = openRCT2.GetTrackCount();
                     if (trackCount > int.MaxValue)
@@ -103,7 +111,7 @@ public sealed class SimulationBridge : IDisposable
                     Volatile.Write(ref gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                     Volatile.Write(ref vehicleSnapshots, new VehicleSnapshotPair(null, ReadVehicleSnapshot(openRCT2)));
                     Volatile.Write(ref parkLoaded, true);
-                    completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData, trackData, rideEntranceData, paletteData));
+                    completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData, treeData, trackData, rideEntranceData, paletteData));
                 }
                 catch (Exception ex) {
                     completion.TrySetException(ex);
@@ -389,6 +397,7 @@ public sealed record ParkSnapshot(
     int Height,
     RCTTileSurfaceData[] SurfaceData,
     RCTTilePathData[] PathData,
+    RCTTreeSceneryData[] TreeData,
     RCTTrackElementData[] TrackData,
     RCTRideEntranceData[] RideEntranceData,
     RCTPaletteEntry[] PaletteData);

@@ -1,3 +1,4 @@
+import lib.common;
 import lib.uniforms;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
@@ -7,14 +8,13 @@ import lib.octohedral;
 
 
 struct VertexInput {
-	float3 position : POSITION;
-	float3 normal : NORMAL;
-	float2 texCoord : TEXCOORD0;
-	float materialId : TEXCOORD1;
-	float4 transformRow0 : TEXCOORD2;
-	float4 transformRow1 : TEXCOORD3;
-	float4 transformRow2 : TEXCOORD4;
-	float4 transformRow3 : TEXCOORD5;
+    [[vk::location(0)]] float3 position;
+    [[vk::location(1)]] float3 normal;
+    [[vk::location(2)]] float2 texCoord;
+    [[vk::location(3)]] float4 transformRow0;
+    [[vk::location(4)]] float4 transformRow1;
+    [[vk::location(5)]] float4 transformRow2;
+    [[vk::location(6)]] float4 transformRow3;
 };
 
 struct VertexStageOutput {
@@ -22,7 +22,6 @@ struct VertexStageOutput {
     float3 worldPosition : TEXCOORD2;
     float3 normal : NORMAL;
 	float2 texCoord : TEXCOORD0;
-	nointerpolation uint materialId : TEXCOORD1;
 };
 
 struct GBufferOutput {
@@ -51,7 +50,6 @@ VertexStageOutput vertexMain(VertexInput input)
     output.worldPosition = worldPosition.xyz;
     output.normal = normalize(worldNormal);
 	output.texCoord = input.texCoord;
-    output.materialId = (uint)input.materialId;
 
     output.position.xy += (sceneUniforms.taa_jitter / sceneUniforms.renderDimensions) * (2.0 * output.position.w);
 
@@ -61,12 +59,16 @@ VertexStageOutput vertexMain(VertexInput input)
 [shader("fragment")]
 GBufferOutput fragmentMain(VertexStageOutput input)
 {
-    float3 layer = float3(input.texCoord, input.materialId);
+    float3 layer = float3(input.texCoord, 0.0);
     float4 albedo = terrainTextures.Sample(terrainSampler, layer);
+
+    if (albedo.a < AlphaThreshold) discard;
+
     // float4 normalMap = terrainNormalTextures.Sample(terrainSampler, layer);
     // float4 specularMap = terrainSpecularTextures.Sample(terrainSampler, layer);
     float4 normalMap = float4(0.5, 0.5, 1.0, 1.0);
     float4 specularMap = float4(0.5, 0.0, 0.0, 1.0);
+
 
     float3 geoNormal = normalize(input.normal);
     //float3 tangentNormal = restoreNormal(normalMap.rg * 2.0 - 1.0);

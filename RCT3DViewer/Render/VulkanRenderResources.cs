@@ -2,6 +2,7 @@ using RCT3D.Render.Buffers;
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Terrain;
+using RCT3D.Render.Scenery;
 using RCT3D.Configuration;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
@@ -34,7 +35,9 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
     public TerrainMaterialLibrary? TerrainMaterials { get; private set; }
     public PathMaterialLibrary? PathMaterials { get; private set; }
     public PathAccessoryAssetLibrary? PathAccessoryAssets { get; private set; }
+    public TreeSceneryAssetLibrary? TreeSceneryAssets { get; private set; }
     public List<(PathAccessoryBatch Batch, ModelGraphicsResources Resources)> PathAccessoryGraphicsResources { get; } = new();
+    public List<(TreeSceneryBatch Batch, ModelGraphicsResources Resources)> TreeSceneryGraphicsResources { get; } = new();
     public CommandPool CommandPool { get; private set; }
     public CommandBuffer[] CommandBuffers { get; private set; } = Array.Empty<CommandBuffer>();
     public Semaphore[] ImageAvailableSemaphores { get; private set; } = Array.Empty<Semaphore>();
@@ -64,11 +67,13 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         TerrainMaterialLibrary terrainMaterials,
         PathMaterialLibrary pathMaterials,
         PathAccessoryAssetLibrary pathAccessoryAssets,
+        TreeSceneryAssetLibrary treeSceneryAssets,
         GraphicsOptionsSettings graphicsOptions)
     {
         TerrainMaterials = terrainMaterials;
         PathMaterials = pathMaterials;
         PathAccessoryAssets = pathAccessoryAssets;
+        TreeSceneryAssets = treeSceneryAssets;
 
         try {
             Initialize(window, graphicsOptions);
@@ -85,7 +90,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         RideSupportGraphicsResources = null;
 
         var supportResources = new TerrainGraphicsResources(
-            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, TerrainMaterials!,
+            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, MaterialTextureArrayData.FromTerrain(TerrainMaterials!),
             shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true, colorAttachmentCount: 3,
             useTrackVertexColor: true);
 
@@ -106,7 +111,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         RideEntranceGraphicsResources = null;
 
         var entranceResources = new TerrainGraphicsResources(
-            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, TerrainMaterials!,
+            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, MaterialTextureArrayData.FromTerrain(TerrainMaterials!),
             shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true, colorAttachmentCount: 3,
             useTrackVertexColor: true);
 
@@ -181,10 +186,10 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         ShadowGraphicsResources = new ShadowGraphicsResources(DeviceContext, DeferredTargets.ShadowTargets!.RenderPass,
             UniformBufferResources.DescriptorSetLayout);
         DeferredPassResources = new DeferredPassResources(DeviceContext, RenderPass, DeferredTargets, SkyTargets, UniformBufferResources);
-        TerrainGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, TerrainMaterials,
+        TerrainGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, MaterialTextureArrayData.FromTerrain(TerrainMaterials),
             shaderNameOverride: Path.Combine("object", "terrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         TerrainGraphicsResources.CreatePipeline();
-        PathGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, PathMaterials.TextureLibrary,
+        PathGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, MaterialTextureArrayData.FromTerrain(PathMaterials.TextureLibrary),
             shaderNameOverride: Path.Combine("object", "terrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         PathGraphicsResources.CreatePipeline();
         WaterGraphicsResources = new WaterGraphicsResources(DeviceContext, DeferredTargets.WaterRenderPass, UniformBufferResources.DescriptorSetLayout, SkyTargets);
@@ -208,7 +213,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         TrackGraphicsResources = null;
 
         var trackResources = new TerrainGraphicsResources(
-            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, TerrainMaterials!,
+            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, MaterialTextureArrayData.FromTerrain(TerrainMaterials!),
             shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true, colorAttachmentCount: 3,
             useTrackVertexColor: true);
 
@@ -463,6 +468,11 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
             resources.Dispose();
 
         PathAccessoryGraphicsResources.Clear();
+
+        foreach (var (_, resources) in TreeSceneryGraphicsResources)
+            resources.Dispose();
+
+        TreeSceneryGraphicsResources.Clear();
 
         foreach (var resources in VehicleCubeGraphicsResources)
             resources.Dispose();
