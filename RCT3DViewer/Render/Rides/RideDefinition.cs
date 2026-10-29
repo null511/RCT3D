@@ -15,6 +15,8 @@ internal abstract class RideDefinition(RCTRideType rideType)
     /// </summary>
     protected float CenterlineHeightOffset = 0.0f;
 
+    protected float TrackBankAngleDegrees = 45f;
+
     /// <summary>
     /// The offset from the support-top to the track-bottom.
     /// </summary>
@@ -34,7 +36,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
         return new TrackRideConfiguration(rideType, [
             new SweptRailProfileGenerator(GetRailParts),
         ], SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
-            HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder);
+            HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder, TrackBankAngleDegrees);
     }
 
     protected abstract IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track);

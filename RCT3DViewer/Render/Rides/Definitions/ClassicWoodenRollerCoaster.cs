@@ -16,13 +16,15 @@ internal sealed class ClassicWoodenRollerCoaster : RideDefinition
 
     public ClassicWoodenRollerCoaster() : base(RCTRideType.ClassicWoodenRollerCoaster)
     {
-        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
+        TrackBankAngleDegrees = 30f;
         CenterlineHeightOffset = 0.65f;
         CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
         SupportTrackOffset = CenterlineHeightOffset - RailHalfHeight - SupportTopClearance;
+
+        StationBuilder = new DefaultStationBuilder();
     }
 
     protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)

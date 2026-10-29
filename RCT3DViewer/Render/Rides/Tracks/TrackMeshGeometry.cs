@@ -11,10 +11,15 @@ internal sealed class TrackMeshGeometry
     private RenderRegionCoordinate? _region;
     private List<TrackCenterlinePath>? _centerlineCapture;
     private float _verticalOffset;
+    private float _trackBankAngleDegrees = 22.5f;
     private int _firstVertex;
     private int _firstIndex;
 
     public void SetVerticalOffset(float offset) => _verticalOffset = offset;
+
+    public void SetTrackBankAngleDegrees(float angle) => _trackBankAngleDegrees = angle;
+
+    public float TrackBankAngleDegrees => _trackBankAngleDegrees;
 
     public void BeginCenterlineCapture()
     {

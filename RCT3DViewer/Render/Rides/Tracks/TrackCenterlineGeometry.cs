@@ -185,10 +185,10 @@ internal static class TrackCenterlineGeometry
         return points;
     }
 
-    public static float GetRollRadians(sbyte roll) => roll switch {
+    public static float GetRollRadians(sbyte roll, float bankAngleDegrees) => roll switch {
         0 => 0.0f,
-        > 0 => MathF.PI / 8.0f,
-        < 0 => -MathF.PI / 8.0f,
+        > 0 => bankAngleDegrees * (MathF.PI / 180.0f),
+        < 0 => -bankAngleDegrees * (MathF.PI / 180.0f),
     };
 
     public static void AddParts(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries, float rollBegin = 0.0f, float rollEnd = 0.0f, Vector3? startTangent = null, Vector3? endTangent = null, Vector3? preferredSide = null, bool smoothRollTransition = false)

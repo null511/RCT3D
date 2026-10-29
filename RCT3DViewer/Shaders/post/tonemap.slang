@@ -34,6 +34,8 @@ float4 fragmentMain(FullscreenVertexOutput input) : SV_Target
     //color = max(color, 0.0);
     //color /= max(exposure[0].average, 1e-8);
 
+    color *= 0.6;
+
     //color = getColorSpace().toLinear(color);
 
     color = aces_fit_tonemap(color);

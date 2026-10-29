@@ -13,8 +13,9 @@ internal class TrackRideConfiguration(
     float supportTrackOffset,
     float carVerticalOffset,
     Action<RCTTrackElementData, List<TrackSupportPlacement>>? getSupportPlacements,
-    bool smoothMovement = false,
-    IStationBuilder? stationBuilder = null)
+    bool smoothMovement,
+    IStationBuilder? stationBuilder,
+    float trackBankAngleDegrees)
 {
     public RCTRideType RideType { get; } = rideType;
     public IReadOnlyList<ITrackPartGenerator> PartGenerators { get; } = partGenerators;
@@ -23,6 +24,7 @@ internal class TrackRideConfiguration(
     public float SupportTrackOffset { get; } = supportTrackOffset;
     public float CarVerticalOffset { get; } = carVerticalOffset;
     public bool SmoothMovement { get; } = smoothMovement;
+    public float TrackBankAngleDegrees { get; } = trackBankAngleDegrees;
     public IStationBuilder? StationBuilder { get; } = stationBuilder;
     public IRideSupportMeshBuilder? SupportMeshBuilder { get; } = RideSupportMeshBuilders.Resolve(supportStyle);
     public Action<RCTTrackElementData, List<TrackSupportPlacement>>? GetSupportPlacements { get; } = getSupportPlacements;

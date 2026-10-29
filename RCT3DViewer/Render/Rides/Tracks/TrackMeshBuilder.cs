@@ -113,6 +113,7 @@ internal sealed class TrackMeshBuilder
                 var hasSupportPlacements = configuration.HasSupportPlacements;
                 var captureCenterline = hasSupportPlacements || configuration.SmoothMovement;
                 geometry.SetVerticalOffset(configuration.CenterlineHeightOffset);
+                geometry.SetTrackBankAngleDegrees(configuration.TrackBankAngleDegrees);
                 if (captureCenterline)
                     geometry.BeginCenterlineCapture();
 

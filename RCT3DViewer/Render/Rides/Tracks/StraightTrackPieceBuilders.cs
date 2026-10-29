@@ -19,7 +19,8 @@ internal sealed class StraightTrackPieceBuilder(RCTTrackElementType pieceType, f
         var tangent = Vector3.Normalize(points[1] - points[0]);
 
         TrackCenterlineGeometry.AddParts(track, geometry, points, partGenerators, paletteEntries,
-            TrackCenterlineGeometry.GetRollRadians(track.RollBegin), TrackCenterlineGeometry.GetRollRadians(track.RollEnd),
+            TrackCenterlineGeometry.GetRollRadians(track.RollBegin, geometry.TrackBankAngleDegrees),
+            TrackCenterlineGeometry.GetRollRadians(track.RollEnd, geometry.TrackBankAngleDegrees),
             startTangent: tangent, endTangent: tangent);
     }
 }
@@ -44,7 +45,8 @@ internal sealed class BankedSlopeTrackPieceBuilder(RCTTrackElementType pieceType
             WorldUnits.TileSize / 3.0f, TrackCenterlineGeometry.CurveSubdivisionsPerTile);
 
         TrackCenterlineGeometry.AddParts(track, geometry, points, partGenerators, paletteEntries,
-            TrackCenterlineGeometry.GetRollRadians(track.RollBegin), TrackCenterlineGeometry.GetRollRadians(track.RollEnd),
+            TrackCenterlineGeometry.GetRollRadians(track.RollBegin, geometry.TrackBankAngleDegrees),
+            TrackCenterlineGeometry.GetRollRadians(track.RollEnd, geometry.TrackBankAngleDegrees),
             startTangent: startDirection, endTangent: endDirection);
     }
 }
@@ -119,7 +121,8 @@ internal sealed class SlopeTrackPieceBuilder(RCTTrackElementType pieceType, floa
         }
 
         TrackCenterlineGeometry.AddParts(track, geometry, points, partGenerators, paletteEntries,
-            TrackCenterlineGeometry.GetRollRadians(track.RollBegin), TrackCenterlineGeometry.GetRollRadians(track.RollEnd),
+            TrackCenterlineGeometry.GetRollRadians(track.RollBegin, geometry.TrackBankAngleDegrees),
+            TrackCenterlineGeometry.GetRollRadians(track.RollEnd, geometry.TrackBankAngleDegrees),
             startTangent: startTangent, endTangent: endTangent);
     }
 

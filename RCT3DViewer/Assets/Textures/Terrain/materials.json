@@ -5,7 +5,8 @@
     { "objectId": "rct2.terrain_surface.grass_clumps", "texture": "grass_clumps.png" },
     { "objectId": "rct2.terrain_surface.rock", "texture": "rock.png" },
     { "objectId": "rct2.terrain_surface.sand", "texture": "sand.png" },
-    { "objectId": "rct2.terrain_surface.sand_brown", "texture": "sand_brown.png" }
+    { "objectId": "rct2.terrain_surface.sand_brown", "texture": "sand_brown.png" },
+    { "objectId": "rct2.terrain_surface.sand_red", "texture": "sand_red.png" }
   ],
   "sidingMaterials": [
     { "objectId": "rct2.terrain_edge.wood_red", "texture": "wood_red.png" },

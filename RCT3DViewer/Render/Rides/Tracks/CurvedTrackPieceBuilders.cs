@@ -10,8 +10,8 @@ internal class CurveTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPiec
     public override void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries) =>
         throw new InvalidOperationException("Curved track geometry must be built from a complete piece.");
 
-    protected virtual float GetRollBegin(in RCTTrackElementData track) => 0.0f;
-    protected virtual float GetRollEnd(in RCTTrackElementData track) => 0.0f;
+    protected virtual float GetRollBegin(in RCTTrackElementData track, float bankAngleDegrees) => 0.0f;
+    protected virtual float GetRollEnd(in RCTTrackElementData track, float bankAngleDegrees) => 0.0f;
     protected virtual bool SmoothRollTransition => false;
     protected virtual float GetControlLength(Vector3 start, Vector3 end) => Vector3.Distance(start, end) * 0.4f;
     protected virtual int GetSubdivisions(int trackCount) => trackCount * TrackCenterlineGeometry.CurveSubdivisionsPerTile;
@@ -46,7 +46,7 @@ internal class CurveTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPiec
             GetControlLength(start, end), GetSubdivisions(tracks.Length));
 
         TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, paletteEntries,
-            GetRollBegin(first), GetRollEnd(first),
+            GetRollBegin(first, geometry.TrackBankAngleDegrees), GetRollEnd(first, geometry.TrackBankAngleDegrees),
             startTangent: pitchedStartDirection, endTangent: pitchedEndDirection,
             smoothRollTransition: SmoothRollTransition);
     }
@@ -60,8 +60,10 @@ internal sealed class SteepQuarterTurnTrackPieceBuilder(RCTTrackElementType piec
 
 internal sealed class BankedCurveTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
 {
-    protected override float GetRollBegin(in RCTTrackElementData track) => TrackCenterlineGeometry.GetRollRadians(track.RollBegin);
-    protected override float GetRollEnd(in RCTTrackElementData track) => TrackCenterlineGeometry.GetRollRadians(track.RollEnd);
+    protected override float GetRollBegin(in RCTTrackElementData track, float bankAngleDegrees) =>
+        TrackCenterlineGeometry.GetRollRadians(track.RollBegin, bankAngleDegrees);
+    protected override float GetRollEnd(in RCTTrackElementData track, float bankAngleDegrees) =>
+        TrackCenterlineGeometry.GetRollRadians(track.RollEnd, bankAngleDegrees);
 }
 
 internal sealed class CorkscrewTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
@@ -79,15 +81,17 @@ internal sealed class CorkscrewTrackPieceBuilder(RCTTrackElementType pieceType) 
         ? HalfTwist
         : -HalfTwist;
 
-    protected override float GetRollBegin(in RCTTrackElementData track) => IsUp ? 0.0f : SignedHalfTwist;
-    protected override float GetRollEnd(in RCTTrackElementData track) => IsUp ? SignedHalfTwist : 0.0f;
+    protected override float GetRollBegin(in RCTTrackElementData track, float bankAngleDegrees) => IsUp ? 0.0f : SignedHalfTwist;
+    protected override float GetRollEnd(in RCTTrackElementData track, float bankAngleDegrees) => IsUp ? SignedHalfTwist : 0.0f;
     protected override bool SmoothRollTransition => true;
 }
 
 internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
 {
-    protected override float GetRollBegin(in RCTTrackElementData track) => TrackCenterlineGeometry.GetRollRadians(track.RollBegin);
-    protected override float GetRollEnd(in RCTTrackElementData track) => TrackCenterlineGeometry.GetRollRadians(track.RollEnd);
+    protected override float GetRollBegin(in RCTTrackElementData track, float bankAngleDegrees) =>
+        TrackCenterlineGeometry.GetRollRadians(track.RollBegin, bankAngleDegrees);
+    protected override float GetRollEnd(in RCTTrackElementData track, float bankAngleDegrees) =>
+        TrackCenterlineGeometry.GetRollRadians(track.RollEnd, bankAngleDegrees);
 
     public override void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries)
     {
@@ -118,7 +122,8 @@ internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveT
             Vector3.Distance(start, end) * 0.4f, tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
 
         TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, paletteEntries,
-            TrackCenterlineGeometry.GetRollRadians(first.RollBegin), TrackCenterlineGeometry.GetRollRadians(first.RollEnd),
+            TrackCenterlineGeometry.GetRollRadians(first.RollBegin, geometry.TrackBankAngleDegrees),
+            TrackCenterlineGeometry.GetRollRadians(first.RollEnd, geometry.TrackBankAngleDegrees),
             startTangent: pitchedStartDirection, endTangent: pitchedEndDirection,
             smoothRollTransition: smoothTransition);
     }
@@ -158,7 +163,8 @@ internal sealed class HelixTrackPieceBuilder(RCTTrackElementType pieceType) : Cu
             start, end, startDirection, endDirection, turnLeft, tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
 
         TrackCenterlineGeometry.AddParts(first, geometry, centerline, partGenerators, paletteEntries,
-            TrackCenterlineGeometry.GetRollRadians(first.RollBegin), TrackCenterlineGeometry.GetRollRadians(first.RollEnd),
+            TrackCenterlineGeometry.GetRollRadians(first.RollBegin, geometry.TrackBankAngleDegrees),
+            TrackCenterlineGeometry.GetRollRadians(first.RollEnd, geometry.TrackBankAngleDegrees),
             startTangent: startDirection, endTangent: endDirection);
     }
 }
