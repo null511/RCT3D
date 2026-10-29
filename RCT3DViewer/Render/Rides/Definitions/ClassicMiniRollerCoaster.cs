@@ -8,12 +8,13 @@ internal class ClassicMiniRollerCoaster : RideDefinition
 {
     public ClassicMiniRollerCoaster() : base(RCTRideType.ClassicMiniRollerCoaster)
     {
-        StationBuilder = new DefaultStationBuilder();
         SmoothMovement = true;
         CarVerticalOffset = 0.85f;
 
-        SupportStyle = RideSupportStyle.MetalFork;
         SupportTrackOffset = 0.25f;
+        SupportStyle = RideSupportStyle.MetalFork;
+
+        StationBuilder = new DefaultStationBuilder();
     }
 
     protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)

@@ -176,8 +176,12 @@ internal sealed class TrackMeshBuilder
                     foreach (ref readonly var supportTrack in pieceSpan) {
                         if (supportMeshBuilder.PlacementMode == TrackSupportPlacementMode.TrackBased) {
                             placements.Clear();
-                            foreach (var progress in TrackBasedSupportProgressMap.GetProgresses(supportTrack))
-                                placements.Add(TrackSupportPlacement.OnTrack(trackProgress: progress));
+                            var centerline = GetCenterlineForSequence(supportTrack.Sequence, centerlines);
+                            foreach (var progress in TrackBasedSupportProgressMap.GetProgresses(supportTrack)) {
+                                var lateralOffset = supportMeshBuilder.GetTrackLateralOffset(
+                                    supportTrack, centerline.Points, progress);
+                                placements.Add(TrackSupportPlacement.OnTrack(lateralOffset, trackProgress: progress));
+                            }
                         }
                         else {
                             configuration.PopulateSupportPlacements(supportTrack, placements);
@@ -232,8 +236,14 @@ internal sealed class TrackMeshBuilder
             tangent = TrackCenterlineGeometry.GetTrackDirection(track.Direction);
         }
 
-        var surfaceTileX = Math.Clamp((int)MathF.Floor(position.X / WorldUnits.TileSize), 0, mapWidth - 1);
-        var surfaceTileY = Math.Clamp((int)MathF.Floor(position.Z / WorldUnits.TileSize), 0, mapHeight - 1);
+        var supportPosition = position;
+        if (placementMode == TrackSupportPlacementMode.TrackBased && placement.TrackLateralOffset != 0.0f) {
+            var leftDirection = TrackCenterlineGeometry.GetTrackLeftDirection(tangent, track.Direction);
+            supportPosition += leftDirection * placement.TrackLateralOffset;
+        }
+
+        var surfaceTileX = Math.Clamp((int)MathF.Floor(supportPosition.X / WorldUnits.TileSize), 0, mapWidth - 1);
+        var surfaceTileY = Math.Clamp((int)MathF.Floor(supportPosition.Z / WorldUnits.TileSize), 0, mapHeight - 1);
         return new TrackSupportAnchor(position, tangent, surfaceTileX, surfaceTileY);
     }
 

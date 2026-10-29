@@ -69,7 +69,8 @@ internal sealed class DeferredPassResources : IDisposable
                         ImageLayout.General,
                         ImageLayout.DepthStencilReadOnlyOptimal,
                     },
-                });
+                },
+                useComparisonSampler: true);
 
             taaResolve = new ComputePassResources(context, "post/taa_resolve", uniformBuffers.DescriptorSetLayout,
                 new[] {

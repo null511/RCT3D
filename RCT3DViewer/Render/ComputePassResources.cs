@@ -13,20 +13,23 @@ internal sealed unsafe class ComputePassResources : IDisposable
 
     private DescriptorPool descriptorPool;
     private Sampler _sampler;
+    private Sampler _comparisonSampler;
     private DescriptorSet[] _descriptorSets = Array.Empty<DescriptorSet>();
     private bool isDisposed;
+    private readonly bool _useComparisonSampler;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline Pipeline { get; private set; }
 
 
-    public ComputePassResources(VulkanDeviceContext context, string shaderName, DescriptorSetLayout uniformDescriptorSetLayout, ImageView[][] sampledImageSets, ImageView[] storageImageViews, ImageLayout[][]? sampledImageLayouts = null)
-        : this(context, shaderName, uniformDescriptorSetLayout, sampledImageSets, storageImageViews.Select(view => new[] { view }).ToArray(), sampledImageLayouts) {}
+    public ComputePassResources(VulkanDeviceContext context, string shaderName, DescriptorSetLayout uniformDescriptorSetLayout, ImageView[][] sampledImageSets, ImageView[] storageImageViews, ImageLayout[][]? sampledImageLayouts = null, bool useComparisonSampler = false)
+        : this(context, shaderName, uniformDescriptorSetLayout, sampledImageSets, storageImageViews.Select(view => new[] { view }).ToArray(), sampledImageLayouts, useComparisonSampler) {}
 
-    public ComputePassResources(VulkanDeviceContext context, string shaderName, DescriptorSetLayout uniformDescriptorSetLayout, ImageView[][] sampledImageSets, ImageView[][] storageImageSets, ImageLayout[][]? sampledImageLayouts = null)
+    public ComputePassResources(VulkanDeviceContext context, string shaderName, DescriptorSetLayout uniformDescriptorSetLayout, ImageView[][] sampledImageSets, ImageView[][] storageImageSets, ImageLayout[][]? sampledImageLayouts = null, bool useComparisonSampler = false)
     {
         this.context = context;
         _uniformDescriptorSetLayout = uniformDescriptorSetLayout;
+        _useComparisonSampler = useComparisonSampler;
 
         if (sampledImageSets.Length == 0 || sampledImageSets.Length != storageImageSets.Length
             || sampledImageSets.Any(set => set.Length != sampledImageSets[0].Length))
@@ -34,6 +37,9 @@ internal sealed unsafe class ComputePassResources : IDisposable
 
         if (storageImageSets.Any(set => set.Length == 0 || set.Length != storageImageSets[0].Length))
             throw new ArgumentException("Compute descriptor sets require the same nonzero number of storage images.");
+
+        if (useComparisonSampler && sampledImageSets[0].Length == 0)
+            throw new ArgumentException("A comparison sampler requires a sampled image.", nameof(useComparisonSampler));
 
         if (sampledImageLayouts is not null && (sampledImageLayouts.Length != sampledImageSets.Length
             || sampledImageLayouts.Any(set => set.Length != sampledImageSets[0].Length)))
@@ -52,7 +58,7 @@ internal sealed unsafe class ComputePassResources : IDisposable
 
     private DescriptorSetLayout CreateDescriptorSetLayout(int sampledImageCount, int storageImageCount)
     {
-        var samplerBindingCount = sampledImageCount > 0 ? 1 : 0;
+        var samplerBindingCount = sampledImageCount > 0 ? 1 + (_useComparisonSampler ? 1 : 0) : 0;
         var storageBindingStart = sampledImageCount + samplerBindingCount;
         var bindings = new DescriptorSetLayoutBinding[sampledImageCount + storageImageCount + samplerBindingCount];
 
@@ -63,11 +69,20 @@ internal sealed unsafe class ComputePassResources : IDisposable
                 DescriptorCount = 1,
                 StageFlags = ShaderStageFlags.ComputeBit
             };
+
         }
 
         if (samplerBindingCount > 0)
             bindings[sampledImageCount] = new DescriptorSetLayoutBinding {
                 Binding = (uint)sampledImageCount,
+                DescriptorType = DescriptorType.Sampler,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.ComputeBit
+            };
+
+        if (_useComparisonSampler)
+            bindings[sampledImageCount + 1] = new DescriptorSetLayoutBinding {
+                Binding = (uint)(sampledImageCount + 1),
                 DescriptorType = DescriptorType.Sampler,
                 DescriptorCount = 1,
                 StageFlags = ShaderStageFlags.ComputeBit
@@ -102,6 +117,7 @@ internal sealed unsafe class ComputePassResources : IDisposable
         var sampledImageCount = sampledImageSets[0].Length;
         var storageImageCount = storageImageSets[0].Length;
         var setCount = sampledImageSets.Length;
+        var samplerBindingCount = sampledImageCount > 0 ? 1 + (_useComparisonSampler ? 1 : 0) : 0;
 
         if (sampledImageCount > 0) {
             var samplerInfo = new SamplerCreateInfo {
@@ -120,12 +136,33 @@ internal sealed unsafe class ComputePassResources : IDisposable
 
             if (vk.CreateSampler(device, in samplerInfo, null, out _sampler) != Result.Success)
                 throw new Exception("Failed to create compute-pass sampler.");
+
+            if (_useComparisonSampler) {
+                var comparisonSamplerInfo = new SamplerCreateInfo {
+                    SType = StructureType.SamplerCreateInfo,
+                    MagFilter = Filter.Linear,
+                    MinFilter = Filter.Linear,
+                    MipmapMode = SamplerMipmapMode.Nearest,
+                    AddressModeU = SamplerAddressMode.ClampToBorder,
+                    AddressModeV = SamplerAddressMode.ClampToBorder,
+                    AddressModeW = SamplerAddressMode.ClampToBorder,
+                    MaxAnisotropy = 1,
+                    CompareEnable = true,
+                    CompareOp = CompareOp.LessOrEqual,
+                    MinLod = 0,
+                    MaxLod = 0,
+                    BorderColor = BorderColor.FloatOpaqueWhite
+                };
+
+                if (vk.CreateSampler(device, in comparisonSamplerInfo, null, out _comparisonSampler) != Result.Success)
+                    throw new Exception("Failed to create compute-pass comparison sampler.");
+            }
         }
 
         var poolSizes = new List<DescriptorPoolSize>();
         if (sampledImageCount > 0) {
             poolSizes.Add(new DescriptorPoolSize { Type = DescriptorType.SampledImage, DescriptorCount = checked((uint)(sampledImageCount * setCount)) });
-            poolSizes.Add(new DescriptorPoolSize { Type = DescriptorType.Sampler, DescriptorCount = (uint)setCount });
+            poolSizes.Add(new DescriptorPoolSize { Type = DescriptorType.Sampler, DescriptorCount = checked((uint)(samplerBindingCount * setCount)) });
         }
         poolSizes.Add(new DescriptorPoolSize { Type = DescriptorType.StorageImage, DescriptorCount = checked((uint)(storageImageCount * setCount)) });
 
@@ -192,6 +229,20 @@ internal sealed unsafe class ComputePassResources : IDisposable
                 vk.UpdateDescriptorSets(device, 1, &samplerWrite, 0, null);
             }
 
+            if (_useComparisonSampler) {
+                var comparisonSamplerDescriptor = new DescriptorImageInfo { Sampler = _comparisonSampler };
+                var comparisonSamplerWrite = new WriteDescriptorSet {
+                    SType = StructureType.WriteDescriptorSet,
+                    DstSet = _descriptorSets[setIndex],
+                    DstBinding = (uint)(sampledImageCount + 1),
+                    DescriptorCount = 1,
+                    DescriptorType = DescriptorType.Sampler,
+                    PImageInfo = &comparisonSamplerDescriptor
+                };
+
+                vk.UpdateDescriptorSets(device, 1, &comparisonSamplerWrite, 0, null);
+            }
+
             for (var imageIndex = 0; imageIndex < storageImageCount; imageIndex++) {
                 var storageInfo = new DescriptorImageInfo {
                     ImageView = storageImageSets[setIndex][imageIndex],
@@ -201,7 +252,7 @@ internal sealed unsafe class ComputePassResources : IDisposable
                 var storageWrite = new WriteDescriptorSet {
                     SType = StructureType.WriteDescriptorSet,
                     DstSet = _descriptorSets[setIndex],
-                    DstBinding = (uint)(sampledImageCount + (sampledImageCount > 0 ? 1 : 0) + imageIndex),
+                    DstBinding = (uint)(sampledImageCount + samplerBindingCount + imageIndex),
                     DescriptorCount = 1,
                     DescriptorType = DescriptorType.StorageImage,
                     PImageInfo = &storageInfo
@@ -308,12 +359,14 @@ internal sealed unsafe class ComputePassResources : IDisposable
         if (PipelineLayout.Handle != 0) vk.DestroyPipelineLayout(device, PipelineLayout, null);
         if (descriptorPool.Handle != 0) vk.DestroyDescriptorPool(device, descriptorPool, null);
         if (_sampler.Handle != 0) vk.DestroySampler(device, _sampler, null);
+        if (_comparisonSampler.Handle != 0) vk.DestroySampler(device, _comparisonSampler, null);
         if (_descriptorSetLayout.Handle != 0) vk.DestroyDescriptorSetLayout(device, _descriptorSetLayout, null);
 
         Pipeline = default;
         PipelineLayout = default;
         descriptorPool = default;
         _sampler = default;
+        _comparisonSampler = default;
         _descriptorSets = Array.Empty<DescriptorSet>();
     }
 }

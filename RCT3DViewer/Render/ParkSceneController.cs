@@ -165,20 +165,25 @@ internal sealed class ParkSceneController(
                 trackElementsByTile = result.TrackElements
                     .GroupBy(track => (track.TileX, track.TileY))
                     .ToDictionary(group => group.Key, group => group.ToArray());
+
                 var carOffsetsByRideType = TrackRideConfigurations.All
-                    .ToDictionary(configuration => configuration.RideType, configuration => configuration.CarVerticalOffset);
+                    .ToDictionary(configuration => configuration.RideType, configuration => configuration.CenterlineHeightOffset + configuration.CarVerticalOffset);
+
                 carVerticalOffsetsByRide = result.TrackElements
                     .Where(track => carOffsetsByRideType.ContainsKey(track.RideType))
                     .GroupBy(track => track.RideId)
                     .ToDictionary(group => group.Key, group => carOffsetsByRideType[group.First().RideType]);
+
                 var smoothRideTypes = TrackRideConfigurations.All
                     .Where(configuration => configuration.SmoothMovement)
                     .Select(configuration => configuration.RideType)
                     .ToHashSet();
+
                 smoothMovementRideIds = result.TrackElements
                     .Where(track => smoothRideTypes.Contains(track.RideType))
                     .Select(track => track.RideId)
                     .ToHashSet();
+
                 loadedMapWidth = result.Width;
                 loadedMapHeight = result.Height;
 

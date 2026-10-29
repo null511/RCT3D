@@ -16,10 +16,9 @@ internal sealed class WoodenRollerCoaster : RideDefinition
 
     public WoodenRollerCoaster() : base(RCTRideType.WoodenRollerCoaster)
     {
-        //SmoothMovement = true;
-        //TrackBankAngleDegrees = 45.0f;
-        CenterlineHeightOffset = 0.65f;
-        CarVerticalOffset = 0.5f;
+        SmoothMovement = true;
+        CenterlineHeightOffset = 1f;
+        //CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
         SupportTrackOffset = CenterlineHeightOffset - RailHalfHeight - SupportTopClearance;

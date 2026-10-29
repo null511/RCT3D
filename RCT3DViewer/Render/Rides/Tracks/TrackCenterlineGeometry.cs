@@ -31,6 +31,60 @@ internal static class TrackCenterlineGeometry
         _ => throw new InvalidDataException($"OpenRCT2 returned invalid track direction {direction}.")
     };
 
+    public static Vector3 GetTrackLeftDirection(Vector3 tangent, byte fallbackDirection)
+    {
+        var horizontalTangent = new Vector3(tangent.X, 0.0f, tangent.Z);
+        if (horizontalTangent.LengthSquared() <= float.Epsilon)
+            horizontalTangent = GetTrackDirection(fallbackDirection);
+
+        return Vector3.Normalize(Vector3.Cross(Vector3.Normalize(horizontalTangent), Vector3.UnitY));
+    }
+
+    public static int GetHorizontalTurnDirection(ReadOnlySpan<Vector3> points, float progress)
+    {
+        if (points.Length < 3 || !float.IsFinite(progress) || progress < 0.0f || progress > 1.0f)
+            return 0;
+
+        var totalLength = 0.0f;
+        for (var i = 0; i < points.Length - 1; i++)
+            totalLength += Vector3.Distance(points[i], points[i + 1]);
+
+        if (totalLength <= float.Epsilon)
+            return 0;
+
+        var targetDistance = totalLength * progress;
+        var traversedDistance = 0.0f;
+        var segmentIndex = -1;
+        for (var i = 0; i < points.Length - 1; i++) {
+            var segmentLength = Vector3.Distance(points[i], points[i + 1]);
+            if (segmentLength <= float.Epsilon) continue;
+
+            if (targetDistance <= traversedDistance + segmentLength || i == points.Length - 2) {
+                segmentIndex = i;
+                break;
+            }
+
+            traversedDistance += segmentLength;
+        }
+
+        if (segmentIndex < 0)
+            return 0;
+
+        var beforeIndex = Math.Max(0, segmentIndex - 1);
+        var afterIndex = Math.Min(points.Length - 2, segmentIndex + 1);
+        var before = points[beforeIndex + 1] - points[beforeIndex];
+        var after = points[afterIndex + 1] - points[afterIndex];
+        before.Y = 0.0f;
+        after.Y = 0.0f;
+        if (before.LengthSquared() <= float.Epsilon || after.LengthSquared() <= float.Epsilon)
+            return 0;
+
+        before = Vector3.Normalize(before);
+        after = Vector3.Normalize(after);
+        var signedTurn = before.X * after.Z - before.Z * after.X;
+        return MathF.Abs(signedTurn) <= 1e-5f ? 0 : Math.Sign(signedTurn);
+    }
+
     public static Vector3 GetTileCenter(in RCTTrackElementData track) =>
         new((track.TileX + 0.5f) * WorldUnits.TileSize, 0.0f, (track.TileY + 0.5f) * WorldUnits.TileSize);
 
@@ -64,6 +118,30 @@ internal static class TrackCenterlineGeometry
             or RCTTrackElementType.RightBankedQuarterTurn5TileDown25)
             return -Pitch.Slope25;
 
+        if (pieceType is RCTTrackElementType.Up25LeftBanked
+            or RCTTrackElementType.Up25RightBanked
+            or RCTTrackElementType.Up25ToLeftBankedUp25
+            or RCTTrackElementType.Up25ToRightBankedUp25
+            or RCTTrackElementType.LeftBankedUp25ToUp25
+            or RCTTrackElementType.RightBankedUp25ToUp25
+            or RCTTrackElementType.LeftEighthBankToDiagUp25
+            or RCTTrackElementType.RightEighthBankToDiagUp25
+            or RCTTrackElementType.LeftEighthBankToOrthogonalUp25
+            or RCTTrackElementType.RightEighthBankToOrthogonalUp25)
+            return Pitch.Slope25;
+
+        if (pieceType is RCTTrackElementType.Down25LeftBanked
+            or RCTTrackElementType.Down25RightBanked
+            or RCTTrackElementType.Down25ToLeftBankedDown25
+            or RCTTrackElementType.Down25ToRightBankedDown25
+            or RCTTrackElementType.LeftBankedDown25ToDown25
+            or RCTTrackElementType.RightBankedDown25ToDown25
+            or RCTTrackElementType.LeftEighthBankToDiagDown25
+            or RCTTrackElementType.RightEighthBankToDiagDown25
+            or RCTTrackElementType.LeftEighthBankToOrthogonalDown25
+            or RCTTrackElementType.RightEighthBankToOrthogonalDown25)
+            return -Pitch.Slope25;
+
         var isUpTransition = pieceType is RCTTrackElementType.LeftBankToUp25
             or RCTTrackElementType.RightBankToUp25
             or RCTTrackElementType.Up25ToLeftBank
@@ -71,7 +149,15 @@ internal static class TrackCenterlineGeometry
             or RCTTrackElementType.DiagLeftBankToUp25
             or RCTTrackElementType.DiagRightBankToUp25
             or RCTTrackElementType.DiagUp25ToLeftBank
-            or RCTTrackElementType.DiagUp25ToRightBank;
+            or RCTTrackElementType.DiagUp25ToRightBank
+            or RCTTrackElementType.LeftBankedFlatToLeftBankedUp25
+            or RCTTrackElementType.RightBankedFlatToRightBankedUp25
+            or RCTTrackElementType.LeftBankedUp25ToLeftBankedFlat
+            or RCTTrackElementType.RightBankedUp25ToRightBankedFlat
+            or RCTTrackElementType.LeftBankedUp25ToFlat
+            or RCTTrackElementType.RightBankedUp25ToFlat
+            or RCTTrackElementType.FlatToLeftBankedUp25
+            or RCTTrackElementType.FlatToRightBankedUp25;
 
         var isDownTransition = pieceType is RCTTrackElementType.LeftBankToDown25
             or RCTTrackElementType.RightBankToDown25
@@ -80,7 +166,15 @@ internal static class TrackCenterlineGeometry
             or RCTTrackElementType.DiagLeftBankToDown25
             or RCTTrackElementType.DiagRightBankToDown25
             or RCTTrackElementType.DiagDown25ToLeftBank
-            or RCTTrackElementType.DiagDown25ToRightBank;
+            or RCTTrackElementType.DiagDown25ToRightBank
+            or RCTTrackElementType.LeftBankedFlatToLeftBankedDown25
+            or RCTTrackElementType.RightBankedFlatToRightBankedDown25
+            or RCTTrackElementType.LeftBankedDown25ToLeftBankedFlat
+            or RCTTrackElementType.RightBankedDown25ToRightBankedFlat
+            or RCTTrackElementType.LeftBankedDown25ToFlat
+            or RCTTrackElementType.RightBankedDown25ToFlat
+            or RCTTrackElementType.FlatToLeftBankedDown25
+            or RCTTrackElementType.FlatToRightBankedDown25;
 
         if (!isUpTransition && !isDownTransition) return Pitch.None;
 
@@ -90,6 +184,14 @@ internal static class TrackCenterlineGeometry
             or RCTTrackElementType.DiagUp25ToRightBank
             or RCTTrackElementType.Down25ToLeftBank
             or RCTTrackElementType.Down25ToRightBank
+            or RCTTrackElementType.LeftBankedUp25ToLeftBankedFlat
+            or RCTTrackElementType.RightBankedUp25ToRightBankedFlat
+            or RCTTrackElementType.LeftBankedUp25ToFlat
+            or RCTTrackElementType.RightBankedUp25ToFlat
+            or RCTTrackElementType.LeftBankedDown25ToLeftBankedFlat
+            or RCTTrackElementType.RightBankedDown25ToRightBankedFlat
+            or RCTTrackElementType.LeftBankedDown25ToFlat
+            or RCTTrackElementType.RightBankedDown25ToFlat
             or RCTTrackElementType.DiagDown25ToLeftBank
             or RCTTrackElementType.DiagDown25ToRightBank;
 
@@ -111,6 +213,26 @@ internal static class TrackCenterlineGeometry
         RCTTrackElementType.DiagUp60ToUp25 => (Pitch.Slope60, Pitch.Slope25),
         RCTTrackElementType.DiagDown25ToDown60 => (-Pitch.Slope25, -Pitch.Slope60),
         RCTTrackElementType.DiagDown60ToDown25 => (-Pitch.Slope60, -Pitch.Slope25),
+        RCTTrackElementType.DiagUp25ToLeftBankedUp25 or RCTTrackElementType.DiagUp25ToRightBankedUp25
+            or RCTTrackElementType.DiagLeftBankedUp25ToUp25 or RCTTrackElementType.DiagRightBankedUp25ToUp25
+            or RCTTrackElementType.DiagUp25LeftBanked or RCTTrackElementType.DiagUp25RightBanked
+            => (Pitch.Slope25, Pitch.Slope25),
+        RCTTrackElementType.DiagDown25ToLeftBankedDown25 or RCTTrackElementType.DiagDown25ToRightBankedDown25
+            or RCTTrackElementType.DiagLeftBankedDown25ToDown25 or RCTTrackElementType.DiagRightBankedDown25ToDown25
+            or RCTTrackElementType.DiagDown25LeftBanked or RCTTrackElementType.DiagDown25RightBanked
+            => (-Pitch.Slope25, -Pitch.Slope25),
+        RCTTrackElementType.DiagLeftBankedFlatToLeftBankedUp25 or RCTTrackElementType.DiagRightBankedFlatToRightBankedUp25
+            or RCTTrackElementType.DiagFlatToLeftBankedUp25 or RCTTrackElementType.DiagFlatToRightBankedUp25
+            => (Pitch.None, Pitch.Slope25),
+        RCTTrackElementType.DiagLeftBankedUp25ToLeftBankedFlat or RCTTrackElementType.DiagRightBankedUp25ToRightBankedFlat
+            or RCTTrackElementType.DiagLeftBankedUp25ToFlat or RCTTrackElementType.DiagRightBankedUp25ToFlat
+            => (Pitch.Slope25, Pitch.None),
+        RCTTrackElementType.DiagLeftBankedFlatToLeftBankedDown25 or RCTTrackElementType.DiagRightBankedFlatToRightBankedDown25
+            or RCTTrackElementType.DiagFlatToLeftBankedDown25 or RCTTrackElementType.DiagFlatToRightBankedDown25
+            => (Pitch.None, -Pitch.Slope25),
+        RCTTrackElementType.DiagLeftBankedDown25ToLeftBankedFlat or RCTTrackElementType.DiagRightBankedDown25ToRightBankedFlat
+            or RCTTrackElementType.DiagLeftBankedDown25ToFlat or RCTTrackElementType.DiagRightBankedDown25ToFlat
+            => (-Pitch.Slope25, Pitch.None),
         RCTTrackElementType.DiagFlatToUp60LongBase => (Pitch.None, Pitch.Slope60),
         RCTTrackElementType.DiagUp60ToFlatLongBase => (Pitch.Slope60, Pitch.None),
         RCTTrackElementType.DiagFlatToDown60LongBase => (Pitch.None, -Pitch.Slope60),

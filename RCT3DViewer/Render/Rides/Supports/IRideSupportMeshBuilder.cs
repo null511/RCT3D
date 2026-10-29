@@ -1,5 +1,6 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Tracks;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides.Supports;
 
@@ -10,6 +11,8 @@ internal interface IRideSupportMeshBuilder
     bool HasDefaultSupportPlacements => false;
 
     void GetDefaultSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements) => placements.Clear();
+
+    float GetTrackLateralOffset(in RCTTrackElementData track, ReadOnlySpan<Vector3> centerlinePoints, float progress) => 0.0f;
 
     void AddSupport(
         RCTTrackElementData track,

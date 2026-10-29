@@ -26,7 +26,8 @@ struct ComputeInput {
 [[vk::binding(6, 1)]] Texture2D<float4> texSkyIrradiance;
 [[vk::binding(7, 1)]] Texture2D<float> shadowDepth;
 [[vk::binding(8, 1)]] SamplerState linearSampler;
-[[vk::binding(9, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
+[[vk::binding(9, 1)]] SamplerComparisonState linearShadowSampler;
+[[vk::binding(10, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
 
 [shader("compute")]
 [numthreads(16, 16)]
@@ -148,8 +149,9 @@ float getShadowVisibility(float3 worldPosition) {
     if (any(shadowUv < 0.0) || any(shadowUv > 1.0) || shadowNdc.z < 0.0 || shadowNdc.z > 1.0)
         return 1.0;
 
-    float storedDepth = shadowDepth.SampleLevel(linearSampler, shadowUv, 0.0);
-    return shadowNdc.z <= storedDepth + 0.0015 ? 1.0 : 0.0;
+    // float storedDepth = shadowDepth.SampleLevel(linearSampler, shadowUv, 0.0);
+    // return shadowNdc.z <= storedDepth + 0.0015 ? 1.0 : 0.0;
+    return shadowDepth.SampleCmpLevelZero(linearShadowSampler, shadowUv, shadowNdc.z - 0.0015);
 }
 
 float3 FresnelSchlick(float cosine, float3 f0) {

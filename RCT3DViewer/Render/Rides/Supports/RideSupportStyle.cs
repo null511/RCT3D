@@ -18,6 +18,7 @@ internal static class RideSupportMeshBuilders
         RideSupportStyle.MetalBoxed => new MetalBoxedSupportMeshBuilder(),
         RideSupportStyle.MetalFork => new MetalForkSupportMeshBuilder(),
         RideSupportStyle.MetalTubes => new MetalTubesSupportMeshBuilder(),
+        RideSupportStyle.MetalTubesInverted => new MetalTubesInvertedSupportMeshBuilder(),
         RideSupportStyle.WoodenTruss => new WoodenTrussSupportMeshBuilder(),
         _ => null,
     };
