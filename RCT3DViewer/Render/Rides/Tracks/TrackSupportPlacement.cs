@@ -26,4 +26,7 @@ internal readonly record struct TrackSupportAnchor(
     Vector3 Position,
     Vector3 Tangent,
     int SurfaceTileX,
-    int SurfaceTileY);
+    int SurfaceTileY)
+{
+    public float? SupportBaseHeight { get; init; }
+}

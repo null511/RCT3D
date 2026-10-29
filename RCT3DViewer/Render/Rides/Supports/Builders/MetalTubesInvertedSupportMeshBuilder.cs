@@ -33,6 +33,15 @@ internal sealed class MetalTubesInvertedSupportMeshBuilder : IRideSupportMeshBui
         return SupportLateralOffset * (turnDirection < 0 ? -1.0f : 1.0f);
     }
 
+    public float GetSupportTopHeight(
+        in RCTTrackElementData track,
+        TrackSupportPlacement placement,
+        TrackSupportAnchor anchor,
+        float trackHeightOffset) => anchor.Position.Y
+            + TrackTopOffset
+            + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f
+            + trackHeightOffset;
+
     public void AddSupport(
         RCTTrackElementData track,
         TrackSupportPlacement placement,

@@ -19,7 +19,7 @@ internal sealed class ClassicWoodenRollerCoaster : RideDefinition
         SmoothMovement = true;
         TrackBankAngleDegrees = 30f;
         CenterlineHeightOffset = 0.65f;
-        CarVerticalOffset = 0.5f;
+        //CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
         SupportTrackOffset = CenterlineHeightOffset - RailHalfHeight - SupportTopClearance;

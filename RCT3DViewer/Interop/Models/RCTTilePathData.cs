@@ -10,6 +10,7 @@ public struct RCTTilePathData
     public uint SurfaceIdHash;
     public uint RailingsIdHash;
     public byte BaseZ;
+    public byte ClearanceHeight;
     public byte SlopeDirection;
     public byte Edges;
     public byte Corners;

@@ -482,6 +482,7 @@ public struct RCTTrackElementData
     public sbyte SequenceOffsetX;
     public sbyte SequenceOffsetY;
     public sbyte SequenceOffsetZ;
+    public byte ClearanceHeight;
     public sbyte RotationBegin;
     public sbyte RotationEnd;
     public sbyte SplineZBegin;

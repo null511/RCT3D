@@ -7,7 +7,7 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 26;
+    private const uint ExpectedAbiVersion = 29;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -137,8 +137,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (Marshal.SizeOf<RCTTileSurfaceData>() != 20)
                 throw new InvalidOperationException("RCTTileSurfaceData must be 20 bytes to match the OpenRCT2 adapter ABI.");
             
-            if (Marshal.SizeOf<RCTTilePathData>() != 28)
-                throw new InvalidOperationException("RCTTilePathData must be 28 bytes to match the OpenRCT2 adapter ABI.");
+            if (Marshal.SizeOf<RCTTilePathData>() != 29)
+                throw new InvalidOperationException("RCTTilePathData must be 29 bytes to match the OpenRCT2 adapter ABI.");
             
             if (Marshal.SizeOf<RCTVehicleData>() != 56)
                 throw new InvalidOperationException("RCTVehicleData must be 56 bytes to match the OpenRCT2 adapter ABI.");
@@ -146,8 +146,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (Marshal.SizeOf<RCTPeepData>() != 24)
                 throw new InvalidOperationException("RCTPeepData must be 24 bytes to match the OpenRCT2 adapter ABI.");
 
-            if (Marshal.SizeOf<RCTTrackElementData>() != 31)
-                throw new InvalidOperationException("RCTTrackElementData must be 31 bytes to match the OpenRCT2 adapter ABI.");
+            if (Marshal.SizeOf<RCTTrackElementData>() != 32)
+                throw new InvalidOperationException("RCTTrackElementData must be 32 bytes to match the OpenRCT2 adapter ABI.");
 
             if (Marshal.SizeOf<RCTRideEntranceData>() != 14)
                 throw new InvalidOperationException("RCTRideEntranceData must be 14 bytes to match the OpenRCT2 adapter ABI.");

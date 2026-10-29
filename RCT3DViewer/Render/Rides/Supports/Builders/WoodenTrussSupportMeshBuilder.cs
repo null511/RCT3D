@@ -65,11 +65,18 @@ internal sealed class WoodenTrussSupportMeshBuilder : IRideSupportMeshBuilder
                 GetCornerHeightInBaseUnits(surface, surface.NorthCornerHeight),
                 GetCornerHeightInBaseUnits(surface, surface.WestCornerHeight)));
 
-        var segmentBaseHeight = terrainBaseGameUnits * WorldUnits.HeightPerBaseUnit;
+        var segmentBaseHeight = anchor.SupportBaseHeight ?? terrainBaseGameUnits * WorldUnits.HeightPerBaseUnit;
+
+        segmentBaseHeight = MathF.Ceiling(segmentBaseHeight / (WorldUnits.HeightPerBaseUnit * 2f)) * (WorldUnits.HeightPerBaseUnit * 2f);
+
+        var segmentBaseGameUnits = anchor.SupportBaseHeight.HasValue
+            ? segmentBaseHeight / WorldUnits.HeightPerBaseUnit
+            : terrainBaseGameUnits;
+
         var wholeSegmentUnits = (int)MathF.Floor((topHeight - segmentBaseHeight) / (2f*WorldUnits.HeightPerBaseUnit));
 
         // alignment
-        if (wholeSegmentUnits >= 1 && terrainBaseGameUnits % 4 >= 2) {
+        if (wholeSegmentUnits >= 1 && segmentBaseGameUnits % 4 >= 2) {
             AddShortBoxSegment(geometry, west, east, south, north, segmentBaseHeight, track.Direction, color);
             segmentBaseHeight += 2f * WorldUnits.HeightPerBaseUnit;
             wholeSegmentUnits -= 1;

@@ -87,7 +87,7 @@ internal sealed class ParkSceneController(
                 Paths: pathMeshBuilder.Build(snapshot.PathData, snapshot.SurfaceData, snapshot.Width, snapshot.Height),
                 Navigation: new PathNavigation(snapshot.PathData),
                 PathAccessories: pathAccessoryMeshBuilder.Build(snapshot.PathData, snapshot.Width, snapshot.Height),
-                Tracks: trackMeshBuilder.Build(snapshot.TrackData, snapshot.RideEntranceData, snapshot.SurfaceData, snapshot.Width, snapshot.Height, snapshot.PaletteData),
+                Tracks: trackMeshBuilder.Build(snapshot.TrackData, snapshot.PathData, snapshot.RideEntranceData, snapshot.SurfaceData, snapshot.Width, snapshot.Height, snapshot.PaletteData),
                 RideEntrances: rideEntranceExitMeshBuilder.Build(snapshot.RideEntranceData, snapshot.Width, snapshot.Height)));
 
             return new ParkLoadResult(

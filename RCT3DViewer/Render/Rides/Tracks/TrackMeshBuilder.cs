@@ -28,6 +28,7 @@ internal sealed class TrackMeshBuilder
 
     public TrackMeshBuildData Build(
         ReadOnlySpan<RCTTrackElementData> trackElements,
+        ReadOnlySpan<RCTTilePathData> pathElements,
         ReadOnlySpan<RCTRideEntranceData> entrances,
         ReadOnlySpan<RCTTileSurfaceData> surfaces,
         int mapWidth,
@@ -39,6 +40,16 @@ internal sealed class TrackMeshBuilder
 
         if (surfaces.Length < checked(mapWidth * mapHeight))
             throw new InvalidDataException("OpenRCT2 returned fewer terrain surfaces than the map dimensions require.");
+
+        var supportObstacles = new TrackSupportObstacleMap();
+        foreach (ref readonly var path in pathElements) {
+            if ((uint)path.TileX >= (uint)mapWidth || (uint)path.TileY >= (uint)mapHeight)
+                throw new InvalidDataException($"OpenRCT2 returned a path outside the {mapWidth}x{mapHeight} map.");
+
+            supportObstacles.AddPath(path);
+        }
+        foreach (ref readonly var track in trackElements)
+            supportObstacles.AddTrack(track);
 
         var entranceSideOpenings = BuildEntranceSideOpenings(trackElements, entrances);
         var pieces = new Dictionary<TrackPieceKey, List<RCTTrackElementData>>();
@@ -200,6 +211,20 @@ internal sealed class TrackMeshBuilder
                             var trackBaseHeight = supportTrack.BaseHeight * WorldUnits.HeightPerBaseUnit;
                             if (IsSurfaceLevelWithTrackBase(surface, trackBaseHeight)) continue;
 
+                            var supportBottom = GetLowestSurfaceCornerHeight(surface);
+                            var supportTop = supportMeshBuilder.GetSupportTopHeight(
+                                supportTrack, placement, anchor, trackHeightOffset);
+                            var hasObstacleIntersection = supportObstacles.TryGetHighestIntersection(
+                                anchor.SurfaceTileX, anchor.SurfaceTileY, supportBottom, supportTop,
+                                supportTrack, out var highestObstacleTop);
+                            if (supportMeshBuilder.PlacementMode == TrackSupportPlacementMode.TrackBased
+                                && hasObstacleIntersection)
+                                continue;
+
+                            if (supportMeshBuilder.PlacementMode == TrackSupportPlacementMode.TileBased
+                                && hasObstacleIntersection)
+                                anchor = anchor with { SupportBaseHeight = highestObstacleTop };
+
                             supportMeshBuilder.AddSupport(supportTrack, placement, anchor, supportGeometry, surface, supportColor, trackHeightOffset);
                         }
                     }
@@ -245,6 +270,14 @@ internal sealed class TrackMeshBuilder
         var surfaceTileX = Math.Clamp((int)MathF.Floor(supportPosition.X / WorldUnits.TileSize), 0, mapWidth - 1);
         var surfaceTileY = Math.Clamp((int)MathF.Floor(supportPosition.Z / WorldUnits.TileSize), 0, mapHeight - 1);
         return new TrackSupportAnchor(position, tangent, surfaceTileX, surfaceTileY);
+    }
+
+    private static float GetLowestSurfaceCornerHeight(RCTTileSurfaceData surface)
+    {
+        var lowestCornerHeight = Math.Min(
+            Math.Min(surface.NorthCornerHeight, surface.EastCornerHeight),
+            Math.Min(surface.SouthCornerHeight, surface.WestCornerHeight));
+        return surface.BaseZ * WorldUnits.HeightPerBaseUnit + lowestCornerHeight * 1.5f;
     }
 
     private static TrackCenterlinePath GetCenterlineForSequence(byte sequence, ReadOnlySpan<TrackCenterlinePath> centerlines)

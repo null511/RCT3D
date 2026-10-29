@@ -14,6 +14,14 @@ internal interface IRideSupportMeshBuilder
 
     float GetTrackLateralOffset(in RCTTrackElementData track, ReadOnlySpan<Vector3> centerlinePoints, float progress) => 0.0f;
 
+    float GetSupportTopHeight(
+        in RCTTrackElementData track,
+        TrackSupportPlacement placement,
+        TrackSupportAnchor anchor,
+        float trackHeightOffset) => PlacementMode == TrackSupportPlacementMode.TrackBased
+            ? anchor.Position.Y + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f + trackHeightOffset
+            : track.BaseHeight * WorldUnits.HeightPerBaseUnit + placement.HeightExtra * WorldUnits.HeightPerBaseUnit / 8.0f;
+
     void AddSupport(
         RCTTrackElementData track,
         TrackSupportPlacement placement,
