@@ -50,18 +50,19 @@ internal class TrackRideConfiguration(
 internal static class TrackRideConfigurations
 {
     private static readonly TrackRideConfiguration[] configurations = [
-        new Monorail().Build(),
-        new MiniatureRailway().Build(),
-        new GoKarts().Build(),
-        new WoodenWildMouse().Build(),
-        new ClassicMiniRollerCoaster().Build(),
-        new MineTrainCoaster().Build(),
-        new ClassicWoodenRollerCoaster().Build(),
-        new LoopingRollerCoaster().Build(),
-        new CorkscrewRollerCoaster().Build(),
-        new CompactInvertedCoaster().Build(),
-        new InvertedRollerCoaster().Build(),
         new BobsleighCoaster().Build(),
+        new ClassicMiniRollerCoaster().Build(),
+        new ClassicWoodenRollerCoaster().Build(),
+        new CompactInvertedCoaster().Build(),
+        new CorkscrewRollerCoaster().Build(),
+        new GoKarts().Build(),
+        new InvertedRollerCoaster().Build(),
+        new LoopingRollerCoaster().Build(),
+        new MineTrainCoaster().Build(),
+        new MiniatureRailway().Build(),
+        new Monorail().Build(),
+        new WoodenRollerCoaster().Build(),
+        new WoodenWildMouse().Build(),
     ];
 
     public static IReadOnlyList<TrackRideConfiguration> All => configurations;

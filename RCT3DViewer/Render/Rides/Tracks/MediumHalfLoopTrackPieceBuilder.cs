@@ -40,7 +40,7 @@ internal sealed class MediumHalfLoopTrackPieceBuilder(RCTTrackElementType pieceT
             : Vector3.Normalize(endDirection - Vector3.UnitY * Pitch.Slope25);
 
         var preferredSide = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, startDirection));
-        if (PieceType is RCTTrackElementType.RightMediumHalfLoopDown)
+        if (PieceType is RCTTrackElementType.LeftMediumHalfLoopDown or RCTTrackElementType.RightMediumHalfLoopDown)
             preferredSide = -preferredSide;
 
         var controlLength = Vector3.Distance(start, end) * 0.4f;
