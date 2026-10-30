@@ -139,10 +139,11 @@ internal sealed class ParkSceneController(
                 resources.RideEntranceGraphicsResources!.UploadMesh(result.RideEntrances);
                 DisposePathAccessoryResources();
                 DisposeTreeSceneryResources();
+                resources.ModelTextureHeap!.ResetParkTextures();
 
                 foreach (var batch in result.PathAccessories) {
                     var accessoryResources = new ModelGraphicsResources(resources.DeviceContext!, resources.DeferredTargets!.GBufferRenderPass,
-                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Material);
+                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Material, resources.ModelTextureHeap!);
 
                     try {
                         accessoryResources.CreatePipeline();
@@ -159,7 +160,7 @@ internal sealed class ParkSceneController(
 
                 foreach (var batch in result.Trees) {
                     var treeResources = new ModelGraphicsResources(resources.DeviceContext!, resources.DeferredTargets!.GBufferRenderPass,
-                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Material);
+                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Material, resources.ModelTextureHeap!);
 
                     try {
                         treeResources.CreatePipeline();
@@ -252,6 +253,7 @@ internal sealed class ParkSceneController(
 
                 DisposePathAccessoryResources();
                 DisposeTreeSceneryResources();
+                resources.ModelTextureHeap!.ResetParkTextures();
                 resources.TerrainGraphicsResources?.ClearMesh();
                 resources.PathGraphicsResources?.ClearMesh();
                 resources.WaterGraphicsResources?.ClearMesh();

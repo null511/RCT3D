@@ -13,10 +13,6 @@ import lib.shadow;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
 [[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
 
-struct ComputeInput {
-    uint2 globalPos : SV_DispatchThreadID;
-};
-
 [[vk::binding(0, 1)]] Texture2D<float4> defer_albedo;
 [[vk::binding(1, 1)]] Texture2D<float4> defer_normals;
 [[vk::binding(2, 1)]] Texture2D<float4> defer_specular;
@@ -28,6 +24,10 @@ struct ComputeInput {
 [[vk::binding(8, 1)]] SamplerState linearSampler;
 [[vk::binding(9, 1)]] SamplerComparisonState linearShadowSampler;
 [[vk::binding(10, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
+
+struct ComputeInput {
+    uint2 globalPos : SV_DispatchThreadID;
+};
 
 [shader("compute")]
 [numthreads(16, 16)]
@@ -52,7 +52,7 @@ void main(ComputeInput input) {
         float3 geoNormal = octohedral::decode(normalsMap.xy);
         float3 texNormal = octohedral::decode(normalsMap.zw);
 
-        float ao = 1.0; // TODO: not stored in gbuffer data
+        float ao = albedoMap.a;
         float roughness = max(specularMap.r, 0.04);
         float metalness = specularMap.g;
         float sss = specularMap.b;
@@ -84,7 +84,7 @@ void main(ComputeInput input) {
         float3 skySpecular = reflectColor * fresnel_sky * smoothness;
 
         float3 sunLight = SunLux * getValFromTLUT(sky_transmit, linearSampler, sky_viewPos, sunDir);
-        float3 specular = (directSpecular * nDotL * shadowVisibility + skySpecular) * sunLight;
+        float3 specular = directSpecular * nDotL * shadowVisibility * sunLight + skySpecular;
 
         // Metal Diffuse Weighting
         // float3 diffuseWeight = (1.0 - fresnel) * (1.0 - metalness);

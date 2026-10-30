@@ -164,8 +164,10 @@ public sealed class Renderer : IDisposable
                 parkScene!.Update(frameCoordinator!.CurrentFrame);
                 var cameraTileX = (int)MathF.Floor(camera.Position.X / WorldUnits.TileSize);
                 var cameraTileY = (int)MathF.Floor(camera.Position.Z / WorldUnits.TileSize);
+                var sectionMetrics = frameRenderer!.SectionMetrics;
                 ui.BuildFrameUi(deltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours, parkScene.IsPaused,
-                    cameraTileX, cameraTileY, parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
+                    cameraTileX, cameraTileY, sectionMetrics.Visible, sectionMetrics.Total,
+                    parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
                     parkPath => parkScene.LoadPark(parkPath, TerrainSkirtFloor), parkScene.TogglePause,
                     () => exitRequested = true, peepMode!.IsEnabled, peepMode.StatusMessage, peepMode.Toggle,
                     ApplyShadowSettings, graphicsOptionsStore.Save, deviceContext!.SupportsWireframe);

@@ -1,12 +1,9 @@
-from typing import cast
-
 from PIL.ImageFile import ImageFile
 from PIL import Image
 
 def isometric_to_square(iso_img: ImageFile, output_path, target_dim = 32):
     """
-    Extracts a pixel-perfect, centered, and correctly oriented 
-    32x32 native square texture out of the 64x63 RCT isometric diamond sprite.
+    Extracts a pixel-perfect, centered, and correctly oriented 32x32 native square texture out of the 64x63 RCT isometric diamond sprite.
     """
 
     iso_img2 = iso_img.convert("RGBA")

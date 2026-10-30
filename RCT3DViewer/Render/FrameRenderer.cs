@@ -29,6 +29,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
     private Matrix4x4 projectionCurrent = Matrix4x4.Identity;
 
     private Vk Vk => resources.Vk!;
+    public (int Visible, int Total) SectionMetrics { get; private set; }
 
 
     public void Record(
@@ -42,6 +43,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         RideSupportMeshData? rideSupportMesh,
         RideEntranceExitMeshData? rideEntranceExitMesh)
     {
+        SectionMetrics = (0, 0);
+
         if (taaEnabledLastFrame != ui.TaaEnabled) {
             taaHistoryValid = false;
             taaEnabledLastFrame = ui.TaaEnabled;
@@ -203,10 +206,14 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             var vertexBuffer = resources.VertexBuffer;
             Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in vertexBuffer, in offset);
             Vk.CmdBindIndexBuffer(commandBuffer, resources.IndexBuffer, 0, IndexType.Uint32);
+            var visibleSections = 0;
             foreach (var region in terrainMesh.Regions) {
-                if (viewFrustum.Intersects(region.Bounds))
+                if (viewFrustum.Intersects(region.Bounds)) {
+                    visibleSections++;
                     Vk.CmdDrawIndexed(commandBuffer, region.IndexCount, 1, region.FirstIndex, 0, 0);
+                }
             }
+            SectionMetrics = (visibleSections, terrainMesh.Regions.Length);
         }
 
         if (rideSupportMesh is { Vertices.Length: > 0, Indices.Length: > 0 }
@@ -537,8 +544,12 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         };
         Vk.CmdSetViewport(commandBuffer, 0, 1, &viewport);
         Vk.CmdSetScissor(commandBuffer, 0, 1, &scissor);
+        var shadowDescriptorSets = stackalloc DescriptorSet[3];
+        shadowDescriptorSets[0] = uniformDescriptorSet;
+        shadowDescriptorSets[1] = resources.ModelTextureHeap!.DescriptorSet;
+        shadowDescriptorSets[2] = resources.ModelTextureHeap.SamplerDescriptorSet;
         Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, shadowResources.PipelineLayout,
-            0, 1, &uniformDescriptorSet, 0, null);
+            0, 3, shadowDescriptorSets, 0, null);
 
         if (terrainMesh is { Vertices.Length: > 0, Indices.Length: > 0 } && resources.TerrainGraphicsResources is { IndexCount: > 0 } terrainResources)
             DrawShadowRegions(commandBuffer, shadowResources.TerrainPipeline, terrainResources.VertexBuffer, terrainResources.IndexBuffer, terrainMesh.Regions, shadowFrustum);
@@ -590,8 +601,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             return;
 
         Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, pipeline);
-        var materialDescriptorSet = modelResources.DescriptorSet;
-        Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 1, 1, &materialDescriptorSet, 0, null);
+        var baseTextureIndex = modelResources.BaseTextureIndex;
+        Vk.CmdPushConstants(commandBuffer, pipelineLayout, ShaderStageFlags.FragmentBit, 0, sizeof(uint), &baseTextureIndex);
         var vertexBuffers = stackalloc Silk.NET.Vulkan.Buffer[2];
         vertexBuffers[0] = modelResources.VertexBuffer;
         vertexBuffers[1] = modelResources.InstanceBuffer;

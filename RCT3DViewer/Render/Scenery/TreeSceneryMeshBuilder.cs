@@ -1,7 +1,6 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Paths;
 using System.Numerics;
-using System.Runtime.InteropServices;
 
 namespace RCT3D.Render.Scenery;
 
@@ -11,9 +10,12 @@ internal sealed class TreeSceneryMeshBuilder(TreeSceneryAssetLibrary assets)
 
     public TreeSceneryBatch[] Build(ReadOnlySpan<RCTTreeSceneryData> trees, int mapWidth, int mapHeight)
     {
-        var model = assets.TreeModel;
-        var batches = new List<TreeMeshBatchBuilder>(model.Data.Meshes.Length);
-        foreach (var mesh in model.Data.Meshes)
+        if (trees.IsEmpty) return [];
+
+        var model = assets.LoadTreeModel();
+        var batches = new List<TreeMeshBatchBuilder>(model.Meshes.Length);
+
+        foreach (var mesh in model.Meshes)
             batches.Add(new TreeMeshBatchBuilder(mesh));
 
         foreach (var tree in trees) {
@@ -25,6 +27,7 @@ internal sealed class TreeSceneryMeshBuilder(TreeSceneryAssetLibrary assets)
             var position = new Vector3(tree.X, tree.Z, tree.Y) * OpenRCT2UnitToWorld;
             var yaw = tree.Direction * (MathF.PI / 2.0f);
             var transform = Matrix4x4.CreateRotationY(yaw) * Matrix4x4.CreateTranslation(position);
+
             var region = new RenderRegionCoordinate(
                 tileX / RenderRegionLayout.RegionSizeInTiles,
                 tileY / RenderRegionLayout.RegionSizeInTiles);
@@ -59,6 +62,7 @@ internal sealed class TreeSceneryMeshBuilder(TreeSceneryAssetLibrary assets)
     {
         var first = Vector3.Transform(new Vector3(bounds.Min.X, bounds.Min.Y, bounds.Min.Z), transform);
         var transformed = new AxisAlignedBounds(first, first);
+
         for (var corner = 1; corner < 8; corner++) {
             var point = new Vector3(
                 (corner & 1) == 0 ? bounds.Min.X : bounds.Max.X,
@@ -96,10 +100,12 @@ internal sealed class TreeSceneryMeshBuilder(TreeSceneryAssetLibrary assets)
         public AxisAlignedBounds Bounds { get; private set; }
         public List<ModelInstance> Instances { get; } = new();
 
+
         public void Add(ModelInstance instance, AxisAlignedBounds bounds)
         {
             Bounds = hasBounds ? Bounds.Encapsulate(bounds) : bounds;
             hasBounds = true;
+
             Instances.Add(instance);
         }
     }

@@ -19,8 +19,16 @@ struct VertexOutput {
     float2 texCoord : TEXCOORD0;
 };
 
-[[vk::binding(0, 1)]] Texture2DArray<float4> modelTextures;
-[[vk::binding(1, 1)]] SamplerState modelSampler;
+[[vk::binding(0, 1)]] Texture2D<float4> modelTextures[256];
+[[vk::binding(0, 2)]] SamplerState modelSampler;
+
+struct ModelMaterialPushConstants
+{
+    uint baseTextureIndex;
+};
+
+[[vk::push_constant]]
+ModelMaterialPushConstants materialPushConstants;
 
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput input)
@@ -39,8 +47,7 @@ VertexOutput vertexMain(VertexInput input)
 [shader("fragment")]
 void fragmentMain(VertexOutput input)
 {
-    float3 layer = float3(input.texCoord, 0.0);
-    float alpha = modelTextures.Sample(modelSampler, layer).a;
+    float alpha = modelTextures[materialPushConstants.baseTextureIndex].Sample(modelSampler, input.texCoord).a;
 
     if (alpha < AlphaThreshold) discard;
 }

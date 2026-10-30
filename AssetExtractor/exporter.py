@@ -2,12 +2,10 @@ import subprocess
 import sys
 import re
 
+from AssetExtractor import configuration
+
 
 class Exporter:
-    # Point to your OpenRCT2 executable or command alias
-    OPENRCT2_BIN = "C:/Program Files/OpenRCT2/openrct2.exe"
-
-
     @staticmethod
     def unpack_all(dat_path: str, raw_png: str):
         return Exporter.__execute("sprite", "unpack", dat_path, raw_png)
@@ -17,8 +15,12 @@ class Exporter:
         return Exporter.__execute("sprite", "export", dat_path, str(idx), raw_png)
 
     @staticmethod
+    def export_object(object_path: str, output_dir: str):
+        return Exporter.__execute("sprite", "exportobject", object_path, output_dir)
+
+    @staticmethod
     def __execute(*args: str):
-        cmd = [Exporter.OPENRCT2_BIN, *args]
+        cmd = [configuration.OPENRCT2_BIN, *args]
         
         try:
             result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
@@ -35,6 +37,9 @@ class Exporter:
                 return False
 
             if re.search(r'Sprite \#\d+ does not exist in sprite file\.', err_msg):
+                return False
+
+            if "could not load the object" in err_msg.lower() or "could not export" in err_msg.lower():
                 return False
             
             print(f"\n[!] OpenRCT2 process crashed with code {result.returncode}", file=sys.stderr)

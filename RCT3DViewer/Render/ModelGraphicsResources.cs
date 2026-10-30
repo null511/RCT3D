@@ -9,10 +9,12 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
 {
     private readonly VulkanDeviceContext _context;
     private readonly TerrainGraphicsResources _graphicsResources;
+    private readonly ModelTextureHeap _textureHeap;
+    private readonly uint _baseTextureIndex;
 
     public Pipeline Pipeline => _graphicsResources.Pipeline;
     public PipelineLayout PipelineLayout => _graphicsResources.PipelineLayout;
-    public DescriptorSet DescriptorSet => _graphicsResources.DescriptorSet;
+    public uint BaseTextureIndex => _baseTextureIndex;
     public Buffer VertexBuffer => _graphicsResources.VertexBuffer;
     public Buffer IndexBuffer => _graphicsResources.IndexBuffer;
     public Buffer InstanceBuffer => _graphicsResources.InstanceBuffer;
@@ -20,23 +22,29 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
     public ModelRegionBatch[] RegionBatches { get; private set; } = Array.Empty<ModelRegionBatch>();
 
 
-    public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout, ImportedModelMaterial material, bool unlit = false)
+    public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout,
+        ImportedModelMaterial material, ModelTextureHeap textureHeap, bool unlit = false)
     {
         _context = context;
+        _textureHeap = textureHeap;
+        var packedMaterial = ModelMaterialLibrary.FromImportedMaterial(material);
+        _baseTextureIndex = textureHeap.AddMaterial(packedMaterial);
 
         _graphicsResources = new TerrainGraphicsResources(
             context,
             renderPass,
             uniformDescriptorSetLayout,
-            MaterialTextureArrayData.FromModel(ModelMaterialLibrary.FromImportedMaterial(material)),
+            MaterialTextureArrayData.FromModel(packedMaterial),
             useInstances: true,
             shaderNameOverride: Path.Combine("object", unlit ? "vehicleCube" : "model"),
-            colorAttachmentCount: 3u);
+            colorAttachmentCount: 3u,
+            sharedModelMaterialDescriptorSetLayout: textureHeap.DescriptorSetLayout,
+            sharedModelSamplerDescriptorSetLayout: textureHeap.SamplerDescriptorSetLayout);
     }
 
     public void CreatePipeline() => _graphicsResources.CreatePipeline();
 
-    public void CreateTextureResources(CommandPool commandPool) => _graphicsResources.CreateTextureResources(commandPool);
+    public void CreateTextureResources(CommandPool commandPool) { }
 
     public void UploadMesh(ImportedModelMesh mesh)
     {
@@ -76,10 +84,13 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
 
         var vk = _context.Api;
         vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, Pipeline);
-        var descriptorSets = stackalloc DescriptorSet[2];
+        var descriptorSets = stackalloc DescriptorSet[3];
         descriptorSets[0] = uniformDescriptorSet;
-        descriptorSets[1] = DescriptorSet;
-        vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, PipelineLayout, 0, 2, descriptorSets, 0, null);
+        descriptorSets[1] = _textureHeap.DescriptorSet;
+        descriptorSets[2] = _textureHeap.SamplerDescriptorSet;
+        vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, PipelineLayout, 0, 3, descriptorSets, 0, null);
+        var baseTextureIndex = _baseTextureIndex;
+        vk.CmdPushConstants(commandBuffer, PipelineLayout, ShaderStageFlags.FragmentBit, 0, sizeof(uint), &baseTextureIndex);
 
         var vertexBuffers = stackalloc Buffer[2];
         vertexBuffers[0] = VertexBuffer;
@@ -93,6 +104,8 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
     }
 
     public void ClearMesh() => _graphicsResources.ClearMesh();
+
+    public void DisposeMeshResources() => _graphicsResources.Dispose();
 
     public void Dispose() => _graphicsResources.Dispose();
 }

@@ -10,19 +10,19 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
 {
     private readonly VulkanDeviceContext _context;
     private bool _disposed;
-    private DescriptorSetLayout _modelMaterialDescriptorSetLayout;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline TerrainPipeline { get; private set; }
     public Pipeline TrackPipeline { get; private set; }
     public Pipeline ModelPipeline { get; private set; }
 
-    public ShadowGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout)
+    public ShadowGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout,
+        DescriptorSetLayout modelTextureDescriptorSetLayout, DescriptorSetLayout modelSamplerDescriptorSetLayout)
     {
         _context = context;
 
         try {
-            CreatePipelineLayout(uniformDescriptorSetLayout);
+            CreatePipelineLayout(uniformDescriptorSetLayout, modelTextureDescriptorSetLayout, modelSamplerDescriptorSetLayout);
             CreatePipelines(renderPass);
         }
         catch {
@@ -31,29 +31,24 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
         }
     }
 
-    private void CreatePipelineLayout(DescriptorSetLayout uniformDescriptorSetLayout)
+    private void CreatePipelineLayout(DescriptorSetLayout uniformDescriptorSetLayout, DescriptorSetLayout modelTextureDescriptorSetLayout,
+        DescriptorSetLayout modelSamplerDescriptorSetLayout)
     {
-        var modelMaterialBindings = new[] {
-            new DescriptorSetLayoutBinding { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
-            new DescriptorSetLayoutBinding { Binding = 1, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit }
-        };
-        fixed (DescriptorSetLayoutBinding* bindings = modelMaterialBindings) {
-            var descriptorLayoutInfo = new DescriptorSetLayoutCreateInfo {
-                SType = StructureType.DescriptorSetLayoutCreateInfo,
-                BindingCount = (uint)modelMaterialBindings.Length,
-                PBindings = bindings
-            };
-            Check(_context.Api.CreateDescriptorSetLayout(_context.LogicalDevice, in descriptorLayoutInfo, null,
-                out _modelMaterialDescriptorSetLayout), "model shadow material descriptor-set layout");
-        }
-
-        var descriptorLayouts = stackalloc DescriptorSetLayout[2];
+        var descriptorLayouts = stackalloc DescriptorSetLayout[3];
         descriptorLayouts[0] = uniformDescriptorSetLayout;
-        descriptorLayouts[1] = _modelMaterialDescriptorSetLayout;
+        descriptorLayouts[1] = modelTextureDescriptorSetLayout;
+        descriptorLayouts[2] = modelSamplerDescriptorSetLayout;
+        var pushConstantRange = new PushConstantRange {
+            StageFlags = ShaderStageFlags.FragmentBit,
+            Offset = 0,
+            Size = sizeof(uint)
+        };
         var createInfo = new PipelineLayoutCreateInfo {
             SType = StructureType.PipelineLayoutCreateInfo,
-            SetLayoutCount = 2,
-            PSetLayouts = descriptorLayouts
+            SetLayoutCount = 3,
+            PSetLayouts = descriptorLayouts,
+            PushConstantRangeCount = 1,
+            PPushConstantRanges = &pushConstantRange
         };
 
         Check(_context.Api.CreatePipelineLayout(_context.LogicalDevice, in createInfo, null, out var layout), "shadow pipeline layout");
@@ -234,14 +229,11 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
         if (TerrainPipeline.Handle != 0) vk.DestroyPipeline(device, TerrainPipeline, null);
         if (TrackPipeline.Handle != 0) vk.DestroyPipeline(device, TrackPipeline, null);
         if (ModelPipeline.Handle != 0) vk.DestroyPipeline(device, ModelPipeline, null);
-        // Destroy pipeline layout before descriptor-set layouts it references.
         if (PipelineLayout.Handle != 0) vk.DestroyPipelineLayout(device, PipelineLayout, null);
-        if (_modelMaterialDescriptorSetLayout.Handle != 0) vk.DestroyDescriptorSetLayout(device, _modelMaterialDescriptorSetLayout, null);
 
         TerrainPipeline = default;
         TrackPipeline = default;
         ModelPipeline = default;
         PipelineLayout = default;
-        _modelMaterialDescriptorSetLayout = default;
     }
 }

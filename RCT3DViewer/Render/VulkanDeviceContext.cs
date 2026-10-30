@@ -10,6 +10,7 @@ namespace RCT3D.Render;
 
 internal sealed unsafe class VulkanDeviceContext : IDisposable
 {
+    public const uint ModelTextureDescriptorCapacity = 256;
 #if DEBUG
     private static readonly DebugUtilsMessengerCallbackFunctionEXT ValidationCallback = DebugCallback;
     private ExtDebugUtils? _debugUtils;
@@ -28,6 +29,7 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
     public uint GraphicsQueueFamilyIndex { get; private set; }
     public KhrSwapchain? SwapchainExtension { get; private set; }
     public bool SupportsWireframe { get; private set; }
+    public bool SupportsModelTextureIndexing { get; private set; }
 
 
     private VulkanDeviceContext(Vk vk)
@@ -201,7 +203,19 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
             Api.EnumeratePhysicalDevices(Instance, ref deviceCount, devicesPtr);
         }
 
-        PhysicalDevice = devices[0];
+        foreach (var device in devices) {
+            Api.GetPhysicalDeviceFeatures(device, out var features);
+            Api.GetPhysicalDeviceProperties(device, out var properties);
+            if (features.ShaderSampledImageArrayDynamicIndexing &&
+                properties.Limits.MaxPerStageDescriptorSampledImages >= ModelTextureDescriptorCapacity &&
+                properties.Limits.MaxDescriptorSetSampledImages >= ModelTextureDescriptorCapacity) {
+                PhysicalDevice = device;
+                SupportsModelTextureIndexing = true;
+                return;
+            }
+        }
+
+        throw new NotSupportedException($"No Vulkan physical device supports dynamically indexed sampled-image arrays of {ModelTextureDescriptorCapacity} descriptors.");
     }
 
     private void CreateLogicalDevice()
@@ -257,6 +271,7 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
                 SamplerAnisotropy = supportedFeatures.SamplerAnisotropy,
                 FillModeNonSolid = supportedFeatures.FillModeNonSolid,
                 ShaderStorageImageExtendedFormats = supportedFeatures.ShaderStorageImageExtendedFormats,
+                ShaderSampledImageArrayDynamicIndexing = true,
             };
 
             PhysicalDeviceVulkan11Features enabledVulkan11Features = new() {

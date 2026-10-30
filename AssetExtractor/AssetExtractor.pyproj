@@ -20,9 +20,11 @@
     <Content Include="requirements.txt" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="configuration.py" />
     <Compile Include="exporter.py" />
     <Compile Include="main.py" />
     <Compile Include="square.py" />
+    <Compile Include="trees.py" />
   </ItemGroup>
   <ItemGroup>
     <Folder Remove="bin\" />

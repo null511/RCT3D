@@ -24,8 +24,16 @@ internal sealed record ImportedModelMaterial(
     Vector3 EmissiveFactor,
     ImportedModelTexture? BaseColorTexture,
     ImportedModelTexture? EmissiveTexture,
-    bool DoubleSided);
+    bool DoubleSided,
+    ImportedModelTexture? NormalTexture = null,
+    ImportedModelTexture? OcclusionTexture = null,
+    ImportedModelTexture? MetallicRoughnessTexture = null,
+    ImportedModelTexture? DisplacementTexture = null,
+    float MetallicFactor = 1.0f,
+    float RoughnessFactor = 1.0f,
+    float NormalScale = 1.0f,
+    float OcclusionStrength = 1.0f);
 
-internal sealed record ImportedModelTexture(int Width, int Height, byte[] Pixels);
+internal sealed record ImportedModelTexture(int Width, int Height, byte[] Pixels, object? SourceIdentity = null);
 
 internal sealed record ModelImportSettings(float Scale = 1.0f, float? TargetHeight = null);

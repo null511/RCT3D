@@ -20,6 +20,7 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
     public PathAccessoryBatch[] Build(ReadOnlySpan<RCTTilePathData> paths, int mapWidth, int mapHeight)
     {
         _batches.Clear();
+        var loadedModels = new Dictionary<PathAccessoryModelDefinition, PathAccessoryModel>();
 
         foreach (var path in paths) {
             if (path is { IsLampAddition: false, IsBenchAddition: false }) continue;
@@ -28,7 +29,11 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
                 throw new InvalidDataException($"OpenRCT2 returned a path accessory outside the {mapWidth}x{mapHeight} map.");
 
             var isBench = path.IsBenchAddition;
-            var model = isBench ? assets.GetBenchModel(path.AdditionIdHash) : assets.GetLampModel(path.AdditionIdHash);
+            var modelDefinition = isBench ? assets.GetBenchModel(path.AdditionIdHash) : assets.GetLampModel(path.AdditionIdHash);
+            if (!loadedModels.TryGetValue(modelDefinition, out var model)) {
+                model = assets.LoadModel(modelDefinition);
+                loadedModels.Add(modelDefinition, model);
+            }
             var baseHeight = path.BaseZ * BaseHeightScale + (path.IsSloped ? SlopedPathHeightOffset : 0.0f);
 
             var region = new RenderRegionCoordinate(

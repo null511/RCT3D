@@ -23,6 +23,6 @@ internal sealed record MaterialTextureArrayData(
         material.Height,
         1,
         material.BaseColorPixels,
-        null,
-        null);
+        material.NormalPixels,
+        material.SpecularPixels);
 }

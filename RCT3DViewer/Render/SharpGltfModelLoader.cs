@@ -165,21 +165,34 @@ internal sealed class SharpGltfModelLoader
 
         var baseColor = material.FindChannel("BaseColor");
         var emissive = material.FindChannel("Emissive");
+        var normal = material.FindChannel("Normal");
+        var occlusion = material.FindChannel("Occlusion");
+        var metallicRoughness = material.FindChannel("MetallicRoughness");
+        var displacement = material.FindChannel("Displacement");
         var emissiveFactor = emissive?.Parameter ?? Vector4.Zero;
+        var metallicRoughnessFactors = metallicRoughness?.Parameter ?? new Vector4(1.0f, 1.0f, 0.0f, 0.0f);
 
         return new ImportedModelMaterial(
             baseColor?.Parameter ?? Vector4.One,
             new Vector3(emissiveFactor.X, emissiveFactor.Y, emissiveFactor.Z),
             LoadTexture(baseColor?.Texture, textureCache),
             LoadTexture(emissive?.Texture, textureCache),
-            material.DoubleSided);
+            material.DoubleSided,
+            LoadTexture(normal?.Texture, textureCache),
+            LoadTexture(occlusion?.Texture, textureCache),
+            LoadTexture(metallicRoughness?.Texture, textureCache),
+            LoadTexture(displacement?.Texture, textureCache),
+            metallicRoughnessFactors.X,
+            metallicRoughnessFactors.Y,
+            normal?.Parameter.X ?? 1.0f,
+            occlusion?.Parameter.X ?? 1.0f);
     }
 
     private static ImportedModelTexture? LoadTexture(Texture? texture, Dictionary<Image, ImportedModelTexture> textureCache)
     {
         var image = texture?.PrimaryImage;
-        if (image is null)
-            return null;
+        if (image is null) return null;
+
         if (textureCache.TryGetValue(image, out var cached))
             return cached;
 
@@ -188,7 +201,7 @@ internal sealed class SharpGltfModelLoader
             throw new InvalidDataException($"glTF image '{image.Name}' has no image data.");
 
         var decoded = ImageResult.FromMemory(encodedPixels, ColorComponents.RedGreenBlueAlpha);
-        var importedTexture = new ImportedModelTexture(decoded.Width, decoded.Height, decoded.Data);
+        var importedTexture = new ImportedModelTexture(decoded.Width, decoded.Height, decoded.Data, image);
         textureCache.Add(image, importedTexture);
         return importedTexture;
     }

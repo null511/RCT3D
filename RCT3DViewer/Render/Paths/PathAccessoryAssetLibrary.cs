@@ -5,16 +5,16 @@ namespace RCT3D.Render.Paths;
 
 internal sealed class PathAccessoryAssetLibrary
 {
-    private readonly Dictionary<uint, PathAccessoryModel> _lampModelsByObjectIdHash;
-    private readonly Dictionary<uint, PathAccessoryModel> _benchModelsByObjectIdHash;
-    private readonly PathAccessoryModel _defaultLampModel;
-    private readonly PathAccessoryModel _defaultBenchModel;
+    private readonly IReadOnlyDictionary<uint, PathAccessoryModelDefinition> _lampModelsByObjectIdHash;
+    private readonly IReadOnlyDictionary<uint, PathAccessoryModelDefinition> _benchModelsByObjectIdHash;
+    private readonly PathAccessoryModelDefinition _defaultLampModel;
+    private readonly PathAccessoryModelDefinition _defaultBenchModel;
 
     private PathAccessoryAssetLibrary(
-        Dictionary<uint, PathAccessoryModel> lampModelsByObjectIdHash,
-        PathAccessoryModel defaultLampModel,
-        Dictionary<uint, PathAccessoryModel> benchModelsByObjectIdHash,
-        PathAccessoryModel defaultBenchModel)
+        IReadOnlyDictionary<uint, PathAccessoryModelDefinition> lampModelsByObjectIdHash,
+        PathAccessoryModelDefinition defaultLampModel,
+        IReadOnlyDictionary<uint, PathAccessoryModelDefinition> benchModelsByObjectIdHash,
+        PathAccessoryModelDefinition defaultBenchModel)
     {
         _lampModelsByObjectIdHash = lampModelsByObjectIdHash;
         _defaultLampModel = defaultLampModel;
@@ -22,23 +22,29 @@ internal sealed class PathAccessoryAssetLibrary
         _defaultBenchModel = defaultBenchModel;
     }
 
-    public PathAccessoryModel GetLampModel(uint objectIdHash)
+    public PathAccessoryModelDefinition GetLampModel(uint objectIdHash)
     {
         return _lampModelsByObjectIdHash.TryGetValue(objectIdHash, out var model) ? model : _defaultLampModel;
     }
 
-    public PathAccessoryModel GetBenchModel(uint objectIdHash)
+    public PathAccessoryModelDefinition GetBenchModel(uint objectIdHash)
     {
         return _benchModelsByObjectIdHash.TryGetValue(objectIdHash, out var model) ? model : _defaultBenchModel;
     }
 
+    public PathAccessoryModel LoadModel(PathAccessoryModelDefinition definition)
+    {
+        var model = new SharpGltfModelLoader().Load(definition.AssetPath,
+            new ModelImportSettings(TargetHeight: definition.TargetHeight));
+        return new PathAccessoryModel(definition.AssetPath, definition.YawDegrees, model);
+    }
+
     public static PathAccessoryAssetLibrary Load(string assetDirectory)
     {
-        var rootDirectory = Path.GetFullPath(assetDirectory) + Path.DirectorySeparatorChar;
-        var loader = new SharpGltfModelLoader();
-        var cachedModels = new Dictionary<(string Path, float TargetHeight, float YawDegrees), PathAccessoryModel>();
+        assetDirectory = Path.GetFullPath(assetDirectory);
+        var rootDirectory = assetDirectory + Path.DirectorySeparatorChar;
 
-        PathAccessoryModel ParseModel(JsonElement element, string accessoryName, float? inheritedTargetHeight = null)
+        PathAccessoryModelDefinition ParseModel(JsonElement element, string accessoryName, float inheritedTargetHeight)
         {
             var relativePath = element.GetProperty("model").GetString();
             if (string.IsNullOrWhiteSpace(relativePath))
@@ -50,22 +56,15 @@ internal sealed class PathAccessoryAssetLibrary
 
             var targetHeight = element.TryGetProperty("targetHeight", out var targetHeightProperty)
                 ? targetHeightProperty.GetSingle()
-                : inheritedTargetHeight ?? (accessoryName == "bench" ? 7.0f : 23.0f) * (3.0f / 32.0f);
+                : inheritedTargetHeight;
             var yawDegrees = element.TryGetProperty("yawDegrees", out var yawProperty) ? yawProperty.GetSingle() : 0.0f;
             if (!float.IsFinite(yawDegrees))
                 throw new InvalidDataException($"Path {accessoryName} model '{relativePath}' has an invalid yawDegrees value.");
 
-            var cacheKey = (modelPath, targetHeight, yawDegrees);
-            if (cachedModels.TryGetValue(cacheKey, out var cachedModel))
-                return cachedModel;
-
-            var model = new PathAccessoryModel(modelPath, yawDegrees,
-                loader.Load(modelPath, new ModelImportSettings(TargetHeight: targetHeight)));
-            cachedModels.Add(cacheKey, model);
-            return model;
+            return new PathAccessoryModelDefinition(modelPath, targetHeight, yawDegrees);
         }
 
-        (PathAccessoryModel DefaultModel, Dictionary<uint, PathAccessoryModel> ModelsByObjectIdHash) ParseManifest(
+        (PathAccessoryModelDefinition DefaultModel, Dictionary<uint, PathAccessoryModelDefinition> ModelsByObjectIdHash) ParseManifest(
             string manifestName, string defaultModelProperty, string modelEntriesProperty, string accessoryName, float fallbackHeight)
         {
             var manifestPath = Path.Combine(assetDirectory, "Path", manifestName);
@@ -73,7 +72,7 @@ internal sealed class PathAccessoryAssetLibrary
             using var manifest = JsonDocument.Parse(manifestStream);
             var root = manifest.RootElement;
             var defaultModel = ParseModel(root.GetProperty(defaultModelProperty), accessoryName, fallbackHeight);
-            var modelsByObjectIdHash = new Dictionary<uint, PathAccessoryModel>();
+            var modelsByObjectIdHash = new Dictionary<uint, PathAccessoryModelDefinition>();
             foreach (var entry in root.GetProperty(modelEntriesProperty).EnumerateArray()) {
                 var objectId = entry.GetProperty("objectId").GetString();
                 if (string.IsNullOrWhiteSpace(objectId))
@@ -81,7 +80,7 @@ internal sealed class PathAccessoryAssetLibrary
 
                 var objectIdHash = TerrainMaterialLibrary.HashObjectId(objectId);
                 if (!modelsByObjectIdHash.TryAdd(objectIdHash,
-                        ParseModel(entry, accessoryName, defaultModel.Data.BoundsMax.Y - defaultModel.Data.BoundsMin.Y)))
+                        ParseModel(entry, accessoryName, defaultModel.TargetHeight)))
                     throw new InvalidDataException($"Path {accessoryName} object identifier hash collision or duplicate: '{objectId}'.");
             }
 
@@ -95,4 +94,5 @@ internal sealed class PathAccessoryAssetLibrary
     }
 }
 
+internal sealed record PathAccessoryModelDefinition(string AssetPath, float TargetHeight, float YawDegrees);
 internal sealed record PathAccessoryModel(string AssetPath, float YawDegrees, ImportedModelData Data);

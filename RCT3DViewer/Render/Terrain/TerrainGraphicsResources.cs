@@ -20,7 +20,9 @@ internal sealed unsafe class TerrainGraphicsResources(
     string shaderNameOverride = "",
     bool createWireframePipeline = false,
     uint colorAttachmentCount = 1,
-    bool useTrackVertexColor = false) : IDisposable
+    bool useTrackVertexColor = false,
+    DescriptorSetLayout sharedModelMaterialDescriptorSetLayout = default,
+    DescriptorSetLayout sharedModelSamplerDescriptorSetLayout = default) : IDisposable
 {
     private CommandPool _commandPool;
     private DescriptorSetLayout _descriptorSetLayout;
@@ -42,6 +44,8 @@ internal sealed unsafe class TerrainGraphicsResources(
     private Buffer _instanceBuffer;
     private DeviceMemory _instanceBufferMemory;
     private ulong _instanceBufferCapacity;
+    private readonly DescriptorSetLayout _sharedModelMaterialDescriptorSetLayout = sharedModelMaterialDescriptorSetLayout;
+    private readonly DescriptorSetLayout _sharedModelSamplerDescriptorSetLayout = sharedModelSamplerDescriptorSetLayout;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline Pipeline { get; private set; }
@@ -214,7 +218,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             AttachmentCount = (uint)colorBlendAttachments.Length,
         };
 
-        var descriptorBindings = useTrackVertexColor
+        var descriptorBindings = useTrackVertexColor || _sharedModelMaterialDescriptorSetLayout.Handle != 0
             ? Array.Empty<DescriptorSetLayoutBinding>()
             : materials.NormalPixels is null
             ? new DescriptorSetLayoutBinding[] {
@@ -241,13 +245,22 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var descriptorLayouts = useTrackVertexColor
             ? new[] { uniformDescriptorSetLayout }
-            : new[] { uniformDescriptorSetLayout, _descriptorSetLayout };
+            : _sharedModelMaterialDescriptorSetLayout.Handle != 0
+                ? new[] { uniformDescriptorSetLayout, _sharedModelMaterialDescriptorSetLayout, _sharedModelSamplerDescriptorSetLayout }
+                : new[] { uniformDescriptorSetLayout, _descriptorSetLayout };
+        var pushConstantRange = new PushConstantRange {
+            StageFlags = ShaderStageFlags.FragmentBit,
+            Offset = 0,
+            Size = sizeof(uint)
+        };
 
         fixed (DescriptorSetLayout* descriptorLayoutsPointer = descriptorLayouts) {
             var pipelineLayoutInfo = new PipelineLayoutCreateInfo {
                 SType = StructureType.PipelineLayoutCreateInfo,
                 SetLayoutCount = (uint)descriptorLayouts.Length,
-                PSetLayouts = descriptorLayoutsPointer
+                PSetLayouts = descriptorLayoutsPointer,
+                PushConstantRangeCount = _sharedModelMaterialDescriptorSetLayout.Handle != 0 ? 1u : 0u,
+                PPushConstantRanges = _sharedModelMaterialDescriptorSetLayout.Handle != 0 ? &pushConstantRange : null
             };
 
             vk.CreatePipelineLayout(device, in pipelineLayoutInfo, null, out var pipelineLayout);
@@ -310,7 +323,7 @@ internal sealed unsafe class TerrainGraphicsResources(
 
     public void CreateTextureResources(CommandPool commandPool)
     {
-        if (useTrackVertexColor)
+        if (useTrackVertexColor || _sharedModelMaterialDescriptorSetLayout.Handle != 0)
             return;
 
         _commandPool = commandPool;

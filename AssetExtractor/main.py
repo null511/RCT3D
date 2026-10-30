@@ -2,23 +2,19 @@ import os
 import zipfile
 
 from PIL import Image
+from AssetExtractor import configuration, trees
 from exporter import Exporter
 from square import isometric_to_square
-
-# ==========================================
-# ⚙️ CONFIGURATION - ADJUST PATHS HERE
-# ==========================================
-GAME_PATH = "Z:/SteamLibrary/steamapps/common/Rollercoaster Tycoon 2" 
-RAW_DIR = "./bin/raw"
-OUTPUT_DIR = "./bin/squared"
 
 
 def run():
     # Extract game sprites
     print("Extracting sprites...")
 
-    if not os.path.exists(RAW_DIR):
-        os.makedirs(RAW_DIR)
+    if not os.path.exists(configuration.RAW_DIR):
+        os.makedirs(configuration.RAW_DIR)
+
+    trees.extract()
 
     # extract_g1()
     # extract_paths()
@@ -33,8 +29,8 @@ def run():
 
 
 def extract_g1():
-    GAME_G1_PATH = os.path.join(GAME_PATH, "Data", "g1.dat")
-    RAW_DIR_G1 = os.path.join(RAW_DIR, "g1")
+    GAME_G1_PATH = os.path.join(configuration.GAME_PATH, "Data", "g1.dat")
+    RAW_DIR_G1 = os.path.join(configuration.RAW_DIR, "g1")
 
     start_index = 0
     end_index = 35000
@@ -58,7 +54,7 @@ def extract_paths():
 def extract_path(obj_name, raw_name):
     # GAME_OBJ_PATH = os.path.join(GAME_PATH, "ObjData", obj_name)
     GAME_OBJ_PATH = os.path.join("C:\\Program Files\\OpenRCT2\\data\\object\\rct1\\footpath_surface", obj_name)
-    RAW_DIR_PATH = os.path.join(RAW_DIR, "Paths", raw_name)
+    RAW_DIR_PATH = os.path.join(configuration.RAW_DIR, "Paths", raw_name)
 
     print(f"\nExtracting sprites from {obj_name}...")
 
@@ -88,7 +84,7 @@ def extract_path(obj_name, raw_name):
 
 
 def square_terrain():
-    OUTPUT_DIR_TERRAIN = os.path.join(OUTPUT_DIR, "terrain")
+    OUTPUT_DIR_TERRAIN = os.path.join(configuration.OUTPUT_DIR, "terrain")
     if not os.path.exists(OUTPUT_DIR_TERRAIN):
         os.makedirs(OUTPUT_DIR_TERRAIN)
 
@@ -117,8 +113,8 @@ def square_terrain():
 
 
 def square_terrain_tile(idx, name):
-    raw_png = os.path.join(RAW_DIR, "g1", f"sprite_{idx}.png")
-    final_png = os.path.join(OUTPUT_DIR, "terrain", f"{name}.png")
+    raw_png = os.path.join(configuration.RAW_DIR, "g1", f"sprite_{idx}.png")
+    final_png = os.path.join(configuration.OUTPUT_DIR, "terrain", f"{name}.png")
 
     try:
         with Image.open(raw_png) as iso_img:

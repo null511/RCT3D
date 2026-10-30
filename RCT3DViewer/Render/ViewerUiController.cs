@@ -162,6 +162,7 @@ internal sealed class ViewerUiController
     //}
 
     public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, bool? isPaused, int cameraTileX, int cameraTileY,
+        int visibleSections, int totalSections,
         IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit,
         bool peepModeEnabled, string? peepModeStatus, Action togglePeepMode, Action<uint, float> applyShadowSettings,
         Action<GraphicsOptionsSettings> saveGraphicsOptions, bool wireframeAvailable = true)
@@ -236,7 +237,7 @@ internal sealed class ViewerUiController
         }
 
         if (_showDebug)
-            DrawDebugOverlay(cameraTileX, cameraTileY, cameraTileTrackElements);
+            DrawDebugOverlay(cameraTileX, cameraTileY, visibleSections, totalSections, cameraTileTrackElements);
 
         if (peepModeEnabled || peepModeStatus is not null)
             DrawPeepModeOverlay(peepModeEnabled, peepModeStatus);
@@ -313,7 +314,8 @@ internal sealed class ViewerUiController
         ImGui.End();
     }
 
-    private static void DrawDebugOverlay(int tileX, int tileY, IReadOnlyList<RCTTrackElementData> trackElements)
+    private static void DrawDebugOverlay(int tileX, int tileY, int visibleSections, int totalSections,
+        IReadOnlyList<RCTTrackElementData> trackElements)
     {
         var viewport = ImGui.GetMainViewport();
         ImGui.SetNextWindowPos(viewport.WorkPos + new Vector2(10.0f, 10.0f), ImGuiCond.Always);
@@ -323,6 +325,7 @@ internal sealed class ViewerUiController
             | ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.AlwaysAutoResize;
         if (ImGui.Begin("Debug overlay", flags)) {
             ImGui.TextUnformatted($"Tile: {tileX}, {tileY}");
+            ImGui.TextUnformatted($"Sections: {visibleSections} / {totalSections}");
             if (trackElements.Count == 0) {
                 ImGui.TextUnformatted("No ride track at this tile");
             }

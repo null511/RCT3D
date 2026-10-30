@@ -1,8 +1,19 @@
 import lib.uniforms;
+import lib.octohedral;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
-import lib.octohedral;
+
+[[vk::binding(0, 1)]] Texture2D<float4> modelTextures[256];
+[[vk::binding(0, 2)]] SamplerState modelSampler;
+
+struct ModelMaterialPushConstants
+{
+	uint baseTextureIndex;
+};
+
+[[vk::push_constant]]
+ModelMaterialPushConstants materialPushConstants;
 
 struct VertexInput {
 	[[vk::location(0)]] float3 position;
@@ -17,6 +28,7 @@ struct VertexInput {
 struct VertexStageOutput {
 	float4 position : SV_Position;
 	float3 normal : NORMAL;
+	float2 texCoord : TEXCOORD0;
 };
 
 struct GBufferOutput {
@@ -39,6 +51,7 @@ VertexStageOutput vertexMain(VertexInput input) {
 	VertexStageOutput output;
 	output.position = mul(worldPosition, cameraUniforms.viewProjection);
     output.normal = normalize(worldNormal);
+	output.texCoord = input.texCoord;
 
     output.position.xy += (sceneUniforms.taa_jitter / sceneUniforms.renderDimensions) * (2.0 * output.position.w);
 
@@ -47,15 +60,16 @@ VertexStageOutput vertexMain(VertexInput input) {
 
 [shader("fragment")]
 GBufferOutput fragmentMain(VertexStageOutput input) {
-    float4 albedo = float4(1.0, 0.0, 0.0, 1.0);
-    float4 normalMap = float4(0.5, 0.5, 1.0, 1.0);
-    float4 specularMap = float4(0.5, 0.0, 0.0, 1.0);
+	uint baseTextureIndex = materialPushConstants.baseTextureIndex;
+	float4 albedo = modelTextures[baseTextureIndex].Sample(modelSampler, input.texCoord);
+	float4 normalMap = modelTextures[baseTextureIndex + 1].Sample(modelSampler, input.texCoord);
+	float4 specularMap = modelTextures[baseTextureIndex + 2].Sample(modelSampler, input.texCoord);
 
     float3 geoNormal = normalize(input.normal);
     float3 texNormal = geoNormal;
 
     GBufferOutput output;
-    output.albedo = albedo;
+	output.albedo = float4(albedo.rgb, normalMap.b);
 	output.normals.xy = octohedral::encode(geoNormal);
 	output.normals.zw = octohedral::encode(texNormal);
     output.specular = specularMap;

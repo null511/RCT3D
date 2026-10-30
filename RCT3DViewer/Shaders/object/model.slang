@@ -30,8 +30,16 @@ struct GBufferOutput {
 	float4 specular : SV_Target2;
 };
 
-[[vk::binding(0, 1)]] Texture2DArray<float4> terrainTextures;
-[[vk::binding(1, 1)]] SamplerState terrainSampler;
+[[vk::binding(0, 1)]] Texture2D<float4> modelTextures[256];
+[[vk::binding(0, 2)]] SamplerState modelSampler;
+
+struct ModelMaterialPushConstants
+{
+    uint baseTextureIndex;
+};
+
+[[vk::push_constant]]
+ModelMaterialPushConstants materialPushConstants;
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input)
@@ -59,29 +67,24 @@ VertexStageOutput vertexMain(VertexInput input)
 [shader("fragment")]
 GBufferOutput fragmentMain(VertexStageOutput input)
 {
-    float3 layer = float3(input.texCoord, 0.0);
-    float4 albedo = terrainTextures.Sample(terrainSampler, layer);
+    uint baseTextureIndex = materialPushConstants.baseTextureIndex;
+    float4 albedo = modelTextures[baseTextureIndex].Sample(modelSampler, input.texCoord);
 
     if (albedo.a < AlphaThreshold) discard;
 
-    // float4 normalMap = terrainNormalTextures.Sample(terrainSampler, layer);
-    // float4 specularMap = terrainSpecularTextures.Sample(terrainSampler, layer);
-    float4 normalMap = float4(0.5, 0.5, 1.0, 1.0);
-    float4 specularMap = float4(0.5, 0.0, 0.0, 1.0);
+    float4 normalMap = modelTextures[baseTextureIndex + 1].Sample(modelSampler, input.texCoord);
+    float4 specularMap = modelTextures[baseTextureIndex + 2].Sample(modelSampler, input.texCoord);
 
 
     float3 geoNormal = normalize(input.normal);
-    //float3 tangentNormal = restoreNormal(normalMap.rg * 2.0 - 1.0);
+    float3 tangentNormal = restoreNormal(normalMap.rg * 2.0 - 1.0);
 
-    // float3 tangent, bitangent;
-    // getTangent(input.texCoord, input.worldPosition, geoNormal, tangent, bitangent);
-    // float3 texNormal = normalize(tangent * tangentNormal.x + bitangent * tangentNormal.y + geoNormal * tangentNormal.z);
-    float3 texNormal = geoNormal;
-
-    // TODO: AO is not being stored in the GBuffer
+    float3 tangent, bitangent;
+    getTangent(input.texCoord, input.worldPosition, geoNormal, tangent, bitangent);
+    float3 texNormal = normalize(tangent * tangentNormal.x + bitangent * tangentNormal.y + geoNormal * tangentNormal.z);
 
     GBufferOutput output;
-    output.albedo = albedo;
+    output.albedo = float4(albedo.rgb, normalMap.b);
     output.normals.xy = octohedral::encode(geoNormal);
     output.normals.zw = octohedral::encode(texNormal);
     output.specular = specularMap;

@@ -2,19 +2,18 @@ namespace RCT3D.Render.Scenery;
 
 internal sealed class TreeSceneryAssetLibrary
 {
-    public TreeSceneryModel TreeModel { get; }
+    private readonly string modelPath;
 
-    private TreeSceneryAssetLibrary(TreeSceneryModel treeModel)
+    private TreeSceneryAssetLibrary(string modelPath)
     {
-        TreeModel = treeModel;
+        this.modelPath = modelPath;
     }
 
     public static TreeSceneryAssetLibrary Load(string modelDirectory)
     {
         var modelPath = Path.Combine(modelDirectory, "tree_01.glb");
-        var model = new SharpGltfModelLoader().Load(modelPath);
-        return new TreeSceneryAssetLibrary(new TreeSceneryModel(modelPath, model));
+        return new TreeSceneryAssetLibrary(modelPath);
     }
-}
 
-internal sealed record TreeSceneryModel(string AssetPath, ImportedModelData Data);
+    public ImportedModelData LoadTreeModel() => new SharpGltfModelLoader().Load(modelPath);
+}

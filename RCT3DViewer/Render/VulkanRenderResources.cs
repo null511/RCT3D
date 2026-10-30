@@ -22,6 +22,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
     public SwapchainResources? SwapchainResources { get; private set; }
     public DeferredRenderTargets? DeferredTargets { get; private set; }
     public ShadowGraphicsResources? ShadowGraphicsResources { get; private set; }
+    public ModelTextureHeap? ModelTextureHeap { get; private set; }
     public SkyRenderTargets? SkyTargets { get; private set; }
     public DeferredPassResources? DeferredPassResources { get; private set; }
     public UniformBufferResources? UniformBufferResources { get; private set; }
@@ -143,7 +144,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         DeferredPassResources? replacementPasses = null;
         try {
             replacementGraphics = new ShadowGraphicsResources(DeviceContext!, replacementTargets.RenderPass,
-                UniformBufferResources!.DescriptorSetLayout);
+                UniformBufferResources!.DescriptorSetLayout, ModelTextureHeap!.DescriptorSetLayout, ModelTextureHeap.SamplerDescriptorSetLayout);
             deferredTargets.SetShadowTargets(replacementTargets);
             replacementPasses = new DeferredPassResources(DeviceContext!, RenderPass, deferredTargets, SkyTargets!, UniformBufferResources!);
         }
@@ -183,8 +184,6 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
             graphicsOptions.ShadowResolution, graphicsOptions.ShadowRadius);
         SkyTargets = new SkyRenderTargets(DeviceContext);
         UniformBufferResources = new UniformBufferResources(DeviceContext, MaxFramesInFlight);
-        ShadowGraphicsResources = new ShadowGraphicsResources(DeviceContext, DeferredTargets.ShadowTargets!.RenderPass,
-            UniformBufferResources.DescriptorSetLayout);
         DeferredPassResources = new DeferredPassResources(DeviceContext, RenderPass, DeferredTargets, SkyTargets, UniformBufferResources);
         TerrainGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, MaterialTextureArrayData.FromTerrain(TerrainMaterials),
             shaderNameOverride: Path.Combine("object", "terrain"), createWireframePipeline: true, colorAttachmentCount: 3);
@@ -195,12 +194,16 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         WaterGraphicsResources = new WaterGraphicsResources(DeviceContext, DeferredTargets.WaterRenderPass, UniformBufferResources.DescriptorSetLayout, SkyTargets);
         WaterGraphicsResources.CreatePipeline();
         SwapchainResources.CreateFramebuffers();
-
         CreateCommandInfrastructure();
+        ModelTextureHeap = new ModelTextureHeap(DeviceContext, CommandPool);
+        ShadowGraphicsResources = new ShadowGraphicsResources(DeviceContext, DeferredTargets.ShadowTargets!.RenderPass,
+            UniformBufferResources.DescriptorSetLayout, ModelTextureHeap.DescriptorSetLayout, ModelTextureHeap.SamplerDescriptorSetLayout);
+
         InitializeSkyTextures();
         TerrainGraphicsResources.CreateTextureResources(CommandPool);
         PathGraphicsResources.CreateTextureResources(CommandPool);
         CreateVehicleCubeResources();
+        ModelTextureHeap.SetParkTextureStartIndex();
         CreateSyncPrimitives();
 
         ImGuiRenderer = new ImGuiVulkanRenderer(Vk!, DeviceContext.PhysicalDevice, LogicalDevice, GraphicsQueue, RenderPass, CommandPool,
@@ -337,7 +340,8 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         VehicleCubeGraphicsResources = new ModelGraphicsResources[MaxFramesInFlight];
 
         for (var i = 0; i < VehicleCubeGraphicsResources.Length; i++) {
-            var resources = new ModelGraphicsResources(DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, vehicleCube.Material, unlit: true);
+            var resources = new ModelGraphicsResources(DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout,
+                vehicleCube.Material, ModelTextureHeap!, unlit: true);
             
             try {
                 resources.CreatePipeline();
@@ -360,7 +364,8 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
             Flags = CommandPoolCreateFlags.ResetCommandBufferBit
         };
 
-        Vk!.CreateCommandPool(LogicalDevice, in poolInfo, null, out var commandPool);
+        if (Vk!.CreateCommandPool(LogicalDevice, in poolInfo, null, out var commandPool) != Result.Success)
+            throw new InvalidOperationException("Failed to create the Vulkan command pool.");
         CommandPool = commandPool;
 
         CommandBufferAllocateInfo allocInfo = new() {
@@ -372,7 +377,8 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
 
         CommandBuffers = new CommandBuffer[Framebuffers.Length];
         fixed (CommandBuffer* cbPtr = CommandBuffers)
-            Vk.AllocateCommandBuffers(LogicalDevice, in allocInfo, cbPtr);
+            if (Vk.AllocateCommandBuffers(LogicalDevice, in allocInfo, cbPtr) != Result.Success)
+                throw new InvalidOperationException("Failed to allocate the frame command buffers.");
     }
 
     private void CreateSyncPrimitives()
@@ -416,6 +422,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         DeferredTargets!.Resize(SwapchainExtent);
         DeferredPassResources = new DeferredPassResources(DeviceContext!, RenderPass, DeferredTargets, SkyTargets!, UniformBufferResources!);
         CreateCommandInfrastructure();
+        ModelTextureHeap?.SetCommandPool(CommandPool);
         CreateSyncPrimitives();
         ImGuiRenderer?.ResizeBuffers(SwapchainImages.Length);
     }
@@ -506,6 +513,10 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         var shadowGraphicsResources = ShadowGraphicsResources;
         ShadowGraphicsResources = null;
         shadowGraphicsResources?.Dispose();
+
+        var modelTextureHeap = ModelTextureHeap;
+        ModelTextureHeap = null;
+        modelTextureHeap?.Dispose();
 
         var deferredPassResources = DeferredPassResources;
         DeferredPassResources = null;
