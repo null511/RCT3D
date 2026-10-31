@@ -7,16 +7,19 @@ namespace RCT3D.Render.Scenery;
 internal sealed class TreeSceneryMeshBuilder(TreeSceneryAssetLibrary assets)
 {
     private const float OpenRCT2UnitToWorld = WorldUnits.TileSize / 32.0f;
+    private readonly Dictionary<ImportedModelMesh, TreeMeshBatchBuilder> batchesByMesh = new(ReferenceEqualityComparer.Instance);
+
+
+    public void ClearCaches()
+    {
+        assets.ClearCache();
+    }
 
     public TreeSceneryBatch[] Build(ReadOnlySpan<RCTTreeSceneryData> trees, int mapWidth, int mapHeight)
     {
         if (trees.IsEmpty) return [];
 
-        var model = assets.LoadTreeModel();
-        var batches = new List<TreeMeshBatchBuilder>(model.Meshes.Length);
-
-        foreach (var mesh in model.Meshes)
-            batches.Add(new TreeMeshBatchBuilder(mesh));
+        batchesByMesh.Clear();
 
         foreach (var tree in trees) {
             var tileX = tree.X / 32;
@@ -26,17 +29,35 @@ internal sealed class TreeSceneryMeshBuilder(TreeSceneryAssetLibrary assets)
 
             var position = new Vector3(tree.X, tree.Z, tree.Y) * OpenRCT2UnitToWorld;
             var yaw = tree.Direction * (MathF.PI / 2.0f);
-            var transform = Matrix4x4.CreateRotationY(yaw) * Matrix4x4.CreateTranslation(position);
+            ImportedModelMesh[] meshes;
+            var localTransform = Matrix4x4.Identity;
+            if (assets.TryLoadModel(tree.ObjectIdHash, out var model)) {
+                meshes = model.Data.Meshes;
+                var definition = model.Definition;
+                localTransform = Matrix4x4.CreateScale(definition.Scale)
+                    * Matrix4x4.CreateTranslation(definition.Offset);
+            }
+            else if (!assets.Vegetation.TryBuild(tree.ObjectIdHash, out meshes)) {
+                continue;
+            }
+
+            var transform = localTransform * Matrix4x4.CreateRotationY(yaw) * Matrix4x4.CreateTranslation(position);
 
             var region = new RenderRegionCoordinate(
                 tileX / RenderRegionLayout.RegionSizeInTiles,
                 tileY / RenderRegionLayout.RegionSizeInTiles);
 
-            foreach (var batch in batches)
+            foreach (var mesh in meshes) {
+                if (!batchesByMesh.TryGetValue(mesh, out var batch)) {
+                    batch = new TreeMeshBatchBuilder(mesh);
+                    batchesByMesh.Add(mesh, batch);
+                }
+
                 batch.AddInstance(region, transform);
+            }
         }
 
-        return batches
+        return batchesByMesh.Values
             .Where(batch => batch.Mesh.Vertices.Length > 0 && batch.Mesh.Indices.Length > 0)
             .Select(batch => new TreeSceneryBatch(
                 batch.Mesh,

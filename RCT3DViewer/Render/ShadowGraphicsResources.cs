@@ -62,9 +62,9 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
         var modelFragmentShader = default(ShaderModule);
 
         try {
-            meshShader = CreateVertexShader("shadow_mesh");
-            modelShader = CreateShader("shadow_model.vert.spv");
-            modelFragmentShader = CreateShader("shadow_model.frag.spv");
+            meshShader = CreateVertexShader("mesh");
+            modelShader = CreateShader("model.vert.spv");
+            modelFragmentShader = CreateShader("model.frag.spv");
             TerrainPipeline = CreatePipeline(meshShader, renderPass, (uint)Marshal.SizeOf<TerrainVertex>(), false);
             TrackPipeline = CreatePipeline(meshShader, renderPass, (uint)Marshal.SizeOf<TrackVertex>(), false);
             ModelPipeline = CreatePipeline(modelShader, renderPass, (uint)Marshal.SizeOf<ModelVertex>(), true, modelFragmentShader);
@@ -81,7 +81,8 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
 
     private ShaderModule CreateShader(string fileName)
     {
-        var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", "object", fileName);
+        var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", "shadow", fileName);
+
         if (!File.Exists(path))
             throw new FileNotFoundException($"Shadow vertex shader is missing: {path}");
 

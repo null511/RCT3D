@@ -27,6 +27,7 @@ internal sealed class ModelMaterialLibrary
             material.EmissiveTexture,
             material.DisplacementTexture
         };
+
         var width = sourceTextures.Where(texture => texture is not null).Select(texture => texture!.Width).DefaultIfEmpty(1).Max();
         var height = sourceTextures.Where(texture => texture is not null).Select(texture => texture!.Height).DefaultIfEmpty(1).Max();
         var baseColor = Resample(material.BaseColorTexture, width, height, [255, 255, 255, 255]);
@@ -39,6 +40,18 @@ internal sealed class ModelMaterialLibrary
         var packedSpecular = new byte[packedNormal.Length];
 
         for (var offset = 0; offset < packedNormal.Length; offset += 4) {
+            if (material.HasPackedPbrTextures) {
+                packedNormal[offset] = normal[offset];
+                packedNormal[offset + 1] = normal[offset + 1];
+                packedNormal[offset + 2] = normal[offset + 2];
+                packedNormal[offset + 3] = 0;
+                packedSpecular[offset] = metallicRoughness[offset];
+                packedSpecular[offset + 1] = metallicRoughness[offset + 1];
+                packedSpecular[offset + 2] = metallicRoughness[offset + 2];
+                packedSpecular[offset + 3] = 0;
+                continue;
+            }
+
             baseColor[offset] = ScaleChannel(baseColor[offset], material.BaseColorFactor.X);
             baseColor[offset + 1] = ScaleChannel(baseColor[offset + 1], material.BaseColorFactor.Y);
             baseColor[offset + 2] = ScaleChannel(baseColor[offset + 2], material.BaseColorFactor.Z);
@@ -72,21 +85,23 @@ internal sealed class ModelMaterialLibrary
 
     private static byte[] Resample(ImportedModelTexture? texture, int width, int height, byte[] fallback)
     {
-        if (texture is null)
-        {
+        if (texture is null) {
             var fallbackPixels = new byte[checked(width * height * 4)];
             for (var offset = 0; offset < fallbackPixels.Length; offset += 4)
                 fallback.CopyTo(fallbackPixels, offset);
+
             return fallbackPixels;
         }
 
         var result = new byte[checked(width * height * 4)];
         for (var y = 0; y < height; y++) {
             var sourceY = Math.Min(texture.Height - 1, (int)((long)y * texture.Height / height));
+
             for (var x = 0; x < width; x++) {
                 var sourceX = Math.Min(texture.Width - 1, (int)((long)x * texture.Width / width));
                 var sourceOffset = (sourceY * texture.Width + sourceX) * 4;
                 var destinationOffset = (y * width + x) * 4;
+
                 texture.Pixels.AsSpan(sourceOffset, 4).CopyTo(result.AsSpan(destinationOffset, 4));
             }
         }

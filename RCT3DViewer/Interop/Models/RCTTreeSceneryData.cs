@@ -12,4 +12,5 @@ public struct RCTTreeSceneryData
     public byte Reserved0;
     public byte Reserved1;
     public byte Reserved2;
+    public uint ObjectIdHash;
 }

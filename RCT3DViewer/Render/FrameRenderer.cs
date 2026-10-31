@@ -382,6 +382,28 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         if (ui.TaaEnabled)
             RecordTaa(commandBuffer, uniformDescriptorSet, renderDimensions, deferredTargets, deferredPassResources);
 
+        RecordImageBarrier(commandBuffer, deferredTargets.SceneOutputImage,
+            ImageLayout.ShaderReadOnlyOptimal, ImageLayout.General,
+            PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.ComputeShaderBit,
+            AccessFlags.ColorAttachmentWriteBit | AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit);
+
+        deferredPassResources.Tonemap.Dispatch(commandBuffer, 0, uniformDescriptorSet, renderDimensions);
+
+        if (ui.DebugView != 0) {
+            RecordImageBarrier(commandBuffer, deferredTargets.SceneOutputImage,
+                ImageLayout.General, ImageLayout.General,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
+                PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit);
+
+            deferredPassResources.Debug.Dispatch(commandBuffer, 0, uniformDescriptorSet, renderDimensions);
+        }
+
+        RecordImageBarrier(commandBuffer, deferredTargets.SceneOutputImage,
+            ImageLayout.General, ImageLayout.ShaderReadOnlyOptimal,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit,
+            PipelineStageFlags.FragmentShaderBit, AccessFlags.ShaderReadBit);
+
         clearValues[0] = new ClearValue {
             Color = new ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
         };
@@ -405,7 +427,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         Vk.CmdBeginRenderPass(commandBuffer, in presentationRenderPassInfo, SubpassContents.Inline);
         Vk.CmdSetViewport(commandBuffer, 0, 1, &viewport);
         Vk.CmdSetScissor(commandBuffer, 0, 1, &scissor);
-        deferredPassResources.Tonemap.Draw(commandBuffer, 0, uniformDescriptorSet);
+        deferredPassResources.Final.Draw(commandBuffer, 0, uniformDescriptorSet);
         resources.ImGuiRenderer?.Render(commandBuffer, imageIndex);
         Vk.CmdEndRenderPass(commandBuffer);
         Vk.EndCommandBuffer(commandBuffer);

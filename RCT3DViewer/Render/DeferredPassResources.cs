@@ -12,7 +12,9 @@ internal sealed class DeferredPassResources : IDisposable
     public ComputePassResources SkyIrradiance { get; }
     public ComputePassResources TaaResolve { get; }
     public ComputePassResources TaaSharpen { get; }
-    public FullscreenPassResources Tonemap { get; }
+    public ComputePassResources Tonemap { get; }
+    public ComputePassResources Debug { get; }
+    public FullscreenPassResources Final { get; }
 
     public DeferredPassResources(VulkanDeviceContext context, RenderPass swapchainRenderPass, DeferredRenderTargets targets, SkyRenderTargets skyTargets, UniformBufferResources uniformBuffers)
     {
@@ -23,7 +25,9 @@ internal sealed class DeferredPassResources : IDisposable
         ComputePassResources? skyIrradiance = null;
         ComputePassResources? taaResolve = null;
         ComputePassResources? taaSharpen = null;
-        FullscreenPassResources? tonemap = null;
+        ComputePassResources? tonemap = null;
+        ComputePassResources? debug = null;
+        FullscreenPassResources? final = null;
         try {
             skyTransmit = new ComputePassResources(context, "pre/sky_transmit", uniformBuffers.DescriptorSetLayout,
                 new[] { Array.Empty<ImageView>() },
@@ -94,9 +98,17 @@ internal sealed class DeferredPassResources : IDisposable
                     new[] { targets.SceneOutputView, targets.TaaHistoryView }
                 });
 
-            tonemap = new FullscreenPassResources(context, swapchainRenderPass, "post/tonemap", uniformBuffers.DescriptorSetLayout,
+            tonemap = new ComputePassResources(context, "post/tonemap", uniformBuffers.DescriptorSetLayout,
+                new[] { Array.Empty<ImageView>() },
+                new[] { targets.SceneOutputView });
+
+            debug = new ComputePassResources(context, "post/debug", uniformBuffers.DescriptorSetLayout,
+                new[] { new[] { targets.AlbedoView, targets.NormalsView, targets.SpecularView } },
+                new[] { targets.SceneOutputView });
+
+            final = new FullscreenPassResources(context, swapchainRenderPass, "post/final", uniformBuffers.DescriptorSetLayout,
                 new[] {
-                    new[] { targets.SceneOutputView, targets.AlbedoView, targets.NormalsView }
+                    new[] { targets.SceneOutputView }
                 });
 
             Composite = composite;
@@ -107,6 +119,8 @@ internal sealed class DeferredPassResources : IDisposable
             TaaResolve = taaResolve;
             TaaSharpen = taaSharpen;
             Tonemap = tonemap;
+            Debug = debug;
+            Final = final;
         }
         catch {
             composite?.Dispose();
@@ -117,12 +131,16 @@ internal sealed class DeferredPassResources : IDisposable
             taaResolve?.Dispose();
             taaSharpen?.Dispose();
             tonemap?.Dispose();
+            debug?.Dispose();
+            final?.Dispose();
             throw;
         }
     }
 
     public void Dispose()
     {
+        Final.Dispose();
+        Debug.Dispose();
         Tonemap.Dispose();
         TaaSharpen.Dispose();
         TaaResolve.Dispose();

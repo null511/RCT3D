@@ -1,8 +1,9 @@
+import json
+import os
 import subprocess
 import sys
 import re
-
-from AssetExtractor import configuration
+import configuration
 
 
 class Exporter:
@@ -16,17 +17,40 @@ class Exporter:
 
     @staticmethod
     def export_object(object_path: str, output_dir: str):
-        return Exporter.__execute("sprite", "exportobject", object_path, output_dir)
+        output = Exporter.__execute("sprite", "exportobject", object_path, output_dir, capture_stdout=True)
+        if not isinstance(output, str):
+            return False
+
+        try:
+            sprites = json.loads(output if output.lstrip().startswith("[") else f"[{output}]")
+            offsets = {
+                str(index): {
+                    "file": os.path.basename(sprite["path"]),
+                    "x": sprite["x"],
+                    "y": sprite["y"],
+                }
+                if isinstance(sprite, dict)
+                else None
+                for index, sprite in enumerate(sprites)
+            }
+            with open(os.path.join(output_dir, "sprite_offsets.json"), "w", encoding="utf-8") as metadata_file:
+                json.dump(offsets, metadata_file, indent=2)
+        except (json.JSONDecodeError, KeyError, OSError, TypeError) as error:
+            print(f" [!] Could not save sprite offsets for {object_path}: {error}", file=sys.stderr)
+            return False
+
+        return True
 
     @staticmethod
-    def __execute(*args: str):
+    def __execute(*args: str, capture_stdout=False):
         cmd = [configuration.OPENRCT2_BIN, *args]
         
         try:
-            result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+            stdout = subprocess.PIPE if capture_stdout else subprocess.DEVNULL
+            result = subprocess.run(cmd, stdout=stdout, stderr=subprocess.PIPE, text=True)
 
             if result.returncode == 0:
-                return True
+                return result.stdout if capture_stdout else True
             
             err_msg = result.stderr.strip()
             

@@ -2,7 +2,8 @@ import os
 import zipfile
 
 from PIL import Image
-from AssetExtractor import configuration, trees
+import configuration
+from trees import trees
 from exporter import Exporter
 from square import isometric_to_square
 
@@ -14,16 +15,17 @@ def run():
     if not os.path.exists(configuration.RAW_DIR):
         os.makedirs(configuration.RAW_DIR)
 
-    trees.extract()
-
     # extract_g1()
     # extract_paths()
+    trees.extract()
 
     print("\nExtraction complete.")
     print("\nProcessing sprites...")
 
     # Convert isometric sprites to square textures
-    square_terrain()
+    # square_terrain()
+
+    trees.process()
 
     print("\nProcessing complete!")
 

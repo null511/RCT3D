@@ -96,7 +96,8 @@ public sealed class Renderer : IDisposable
             terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(textureRoot, "Terrain"), null, missingTexturePath);
             pathMaterials = PathMaterialLibrary.Load(Path.Combine(textureRoot, "Paths"), missingTexturePath);
             pathAccessoryAssets = PathAccessoryAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
-            treeSceneryAssets = TreeSceneryAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
+            var modelRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
+            treeSceneryAssets = TreeSceneryAssetLibrary.Load(modelRoot, Path.Combine(textureRoot, "tree"));
         }
         catch (Exception ex) {
             simulation?.Dispose();

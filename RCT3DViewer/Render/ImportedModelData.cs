@@ -32,7 +32,8 @@ internal sealed record ImportedModelMaterial(
     float MetallicFactor = 1.0f,
     float RoughnessFactor = 1.0f,
     float NormalScale = 1.0f,
-    float OcclusionStrength = 1.0f);
+    float OcclusionStrength = 1.0f,
+    bool HasPackedPbrTextures = false);
 
 internal sealed record ImportedModelTexture(int Width, int Height, byte[] Pixels, object? SourceIdentity = null);
 

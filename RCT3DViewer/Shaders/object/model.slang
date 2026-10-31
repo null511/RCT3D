@@ -1,10 +1,10 @@
 import lib.common;
 import lib.uniforms;
+import lib.normals;
+import lib.octohedral;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
-import lib.normals;
-import lib.octohedral;
 
 
 struct VertexInput {

@@ -36,7 +36,11 @@ internal sealed class ViewerUiController
     private string? _graphicsOptionsSaveError;
     private GraphicsOptionsSettings _appliedGraphicsOptions = GraphicsOptionsSettings.Defaults;
     private bool _editingGraphicsOptions;
-    private static readonly string[] DebugViewOptions = { "None", "Albedo", "Geometry Normal", "Texture Normal" };
+
+    private static readonly string[] DebugViewOptions = {
+        "None", "Albedo", "Geometry Normal", "Texture Normal", "Specular Roughness", "Specular Metalness", "Specular SSS", "Specular Emission"
+    };
+
     private static readonly string[] ShadowResolutionOptions = { "512", "1024", "2048", "4096" };
 
     public ViewerUiController(GraphicsOptionsSettings settings)

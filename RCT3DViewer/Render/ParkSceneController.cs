@@ -73,6 +73,7 @@ internal sealed class ParkSceneController(
     {
         if (ui.IsParkLoading || parkLoadTask is not null || pendingParkLoadResult is not null) return;
 
+        treeSceneryMeshBuilder.ClearCaches();
         ui.BeginParkLoad(parkPath);
         Volatile.Write(ref parkLoadProgress, "Loading park file...");
         parkLoadTask = BuildParkMeshesAsync(parkPath, terrainSkirtFloor);
@@ -242,6 +243,7 @@ internal sealed class ParkSceneController(
         rideCenterlines = [];
         loadedMapWidth = 0;
         loadedMapHeight = 0;
+        treeSceneryMeshBuilder.ClearCaches();
         frameRenderer.InvalidateHistory();
         pendingParkLoadResult = null;
         parkLoadTask = null;

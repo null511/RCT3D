@@ -25,21 +25,16 @@ import lib.shadow;
 [[vk::binding(9, 1)]] SamplerComparisonState linearShadowSampler;
 [[vk::binding(10, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
 
-struct ComputeInput {
-    uint2 globalPos : SV_DispatchThreadID;
-};
-
 [shader("compute")]
 [numthreads(16, 16)]
-void main(ComputeInput input) {
-    if (any(input.globalPos >= sceneUniforms.renderDimensions)) return;
+void main(uint2 globalPos: SV_DispatchThreadID) {
+    if (any(globalPos >= sceneUniforms.renderDimensions)) return;
 
-    int3 pos = int3(input.globalPos, 0);
+    int3 pos = int3(globalPos, 0);
     float depth = defer_depth.Load(pos);
     float3 color;
 
-    float3 viewPosition = reconstructViewPosition(
-        input.globalPos, depth, sceneUniforms.renderDimensions, cameraUniforms.projectionInverse);
+    float3 viewPosition = reconstructViewPosition(globalPos, depth, sceneUniforms.renderDimensions, cameraUniforms.projectionInverse);
     float3 worldPosition = mul(float4(viewPosition, 1.0), cameraUniforms.viewToWorld).xyz;
     float3 localSunDir = normalize(sceneUniforms.sunDirection.xyz);
 
@@ -137,7 +132,7 @@ void main(ComputeInput input) {
         color += getValFromSkyLUT(sky_view, linearSampler, localViewDir, localSunDir);
     }
 
-    sceneOutput[input.globalPos] = float4(color, 1.0);
+    sceneOutput[globalPos] = float4(color, 1.0);
 }
 
 float getShadowVisibility(float3 worldPosition) {

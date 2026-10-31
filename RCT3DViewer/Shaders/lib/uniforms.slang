@@ -32,4 +32,8 @@ enum DebugView : uint {
     Albedo = 1,
     GeoNormal = 2,
     TexNormal = 3,
+	SpecularRoughness = 4,
+	SpecularMetalness = 5,
+	SpecularSss = 6,
+	SpecularEmission = 7,
 };
