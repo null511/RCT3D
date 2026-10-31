@@ -35,6 +35,7 @@ internal sealed class ParkSceneController(
     private Dictionary<ushort, float> carVerticalOffsetsByRide = new();
     private HashSet<ushort> smoothMovementRideIds = [];
     private TrackCenterlinePiece[] rideCenterlines = [];
+    private readonly Dictionary<RenderRegionCoordinate, ParkRenderRegion> renderRegionsByCoordinate = new();
     private bool isDisposed;
 
     public TerrainMeshData? TerrainMesh { get; private set; }
@@ -43,6 +44,7 @@ internal sealed class ParkSceneController(
     public TrackMeshData? TrackMesh { get; private set; }
     public RideSupportMeshData? RideSupportMesh { get; private set; }
     public RideEntranceExitMeshData? RideEntranceExitMesh { get; private set; }
+    public ParkRenderRegion[] RenderRegions { get; private set; } = [];
     public PathNavigation? Navigation { get; private set; }
     public RCTRideEntranceData[] RideEntrances { get; private set; } = [];
     internal SimulationBridge Simulation => simulation;
@@ -209,6 +211,7 @@ internal sealed class ParkSceneController(
 
                 loadedMapWidth = result.Width;
                 loadedMapHeight = result.Height;
+                RebuildRenderRegions();
 
                 camera.Position = new Vector3(result.Width * 1.5f, 120.0f, -result.Height * 1.5f);
                 frameRenderer.InvalidateHistory();
@@ -241,6 +244,8 @@ internal sealed class ParkSceneController(
         carVerticalOffsetsByRide.Clear();
         smoothMovementRideIds.Clear();
         rideCenterlines = [];
+        renderRegionsByCoordinate.Clear();
+        RenderRegions = [];
         loadedMapWidth = 0;
         loadedMapHeight = 0;
         treeSceneryMeshBuilder.ClearCaches();
@@ -272,9 +277,101 @@ internal sealed class ParkSceneController(
         ui.ClearParkAfterLoadFailure(failure);
     }
 
+    private void RebuildRenderRegions()
+    {
+        renderRegionsByCoordinate.Clear();
+
+        if (TerrainMesh is { } terrain) {
+            foreach (var range in terrain.Regions) {
+                if (range.IsEmpty) continue;
+                var region = GetOrCreateRenderRegion(range.Region);
+                region.Terrain = range;
+                region.IncludeStaticBounds(range.Bounds);
+            }
+        }
+
+        if (WaterMesh is { } water) {
+            foreach (var range in water.Regions) {
+                if (range.IsEmpty) continue;
+                var region = GetOrCreateRenderRegion(range.Region);
+                region.Water = range;
+                region.IncludeStaticBounds(range.Bounds);
+            }
+        }
+
+        if (PathMesh is { } paths) {
+            foreach (var range in paths.Regions) {
+                if (range.IsEmpty) continue;
+                var region = GetOrCreateRenderRegion(range.Region);
+                region.Paths = range;
+                region.IncludeStaticBounds(range.Bounds);
+            }
+        }
+
+        if (TrackMesh is { } tracks) {
+            foreach (var range in tracks.Regions) {
+                if (range.IsEmpty) continue;
+                var region = GetOrCreateRenderRegion(range.Region);
+                region.Tracks = range;
+                region.IncludeStaticBounds(range.Bounds);
+            }
+        }
+
+        if (RideSupportMesh is { } supports) {
+            foreach (var range in supports.Regions) {
+                if (range.IsEmpty) continue;
+                var region = GetOrCreateRenderRegion(range.Region);
+                region.RideSupports = range;
+                region.IncludeStaticBounds(range.Bounds);
+            }
+        }
+
+        if (RideEntranceExitMesh is { } entrances) {
+            foreach (var range in entrances.Regions) {
+                if (range.IsEmpty) continue;
+                var region = GetOrCreateRenderRegion(range.Region);
+                region.RideEntrances = range;
+                region.IncludeStaticBounds(range.Bounds);
+            }
+        }
+
+        foreach (var (_, modelResources) in resources.PathAccessoryGraphicsResources) {
+            foreach (var batch in modelResources.RegionBatches) {
+                if (batch.InstanceCount == 0) continue;
+                var region = GetOrCreateRenderRegion(batch.Region);
+                region.PathAccessories.Add(new RenderRegionModelBatch(modelResources, batch));
+                region.IncludeStaticBounds(batch.Bounds);
+            }
+        }
+
+        foreach (var (_, modelResources) in resources.TreeSceneryGraphicsResources) {
+            foreach (var batch in modelResources.RegionBatches) {
+                if (batch.InstanceCount == 0) continue;
+                var region = GetOrCreateRenderRegion(batch.Region);
+                region.Trees.Add(new RenderRegionModelBatch(modelResources, batch));
+                region.IncludeStaticBounds(batch.Bounds);
+            }
+        }
+
+        RenderRegions = renderRegionsByCoordinate.Values.ToArray();
+    }
+
+    private ParkRenderRegion GetOrCreateRenderRegion(RenderRegionCoordinate coordinate)
+    {
+        if (!renderRegionsByCoordinate.TryGetValue(coordinate, out var region)) {
+            region = new ParkRenderRegion(coordinate);
+            renderRegionsByCoordinate.Add(coordinate, region);
+        }
+
+        return region;
+    }
+
     private void UpdateVehicleCubeInstances(uint currentFrame)
     {
         var vehicleResources = resources.VehicleCubeGraphicsResources;
+        foreach (var region in RenderRegions)
+            region.ClearDynamicContents();
+
         if (vehicleResources.Length == 0) return;
 
         var snapshots = parkLoadTask is null && pendingParkLoadResult is null
@@ -282,7 +379,24 @@ internal sealed class ParkSceneController(
 
         var instances = VehicleCubeRenderer.BuildInstances(
             snapshots, loadedMapWidth, loadedMapHeight, carVerticalOffsetsByRide, UsesSmoothMovement, TryGetCenterlinePose);
-        vehicleResources[(int)currentFrame].UploadInstances(instances);
+        var currentVehicleResources = vehicleResources[(int)currentFrame];
+        currentVehicleResources.UploadInstances(instances);
+
+        var regionsChanged = false;
+        foreach (var batch in currentVehicleResources.RegionBatches) {
+            if (batch.InstanceCount == 0) continue;
+
+            if (!renderRegionsByCoordinate.TryGetValue(batch.Region, out var region)) {
+                region = GetOrCreateRenderRegion(batch.Region);
+                regionsChanged = true;
+            }
+
+            region.Vehicles = new RenderRegionModelBatch(currentVehicleResources, batch);
+            region.IncludeDynamicBounds(batch.Bounds);
+        }
+
+        if (regionsChanged)
+            RenderRegions = renderRegionsByCoordinate.Values.ToArray();
     }
 
     private void ClearVehicleCubeInstances()

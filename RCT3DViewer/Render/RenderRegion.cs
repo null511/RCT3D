@@ -1,4 +1,5 @@
 using System.Numerics;
+using RCT3D.Render.Paths;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Terrain;
 
@@ -48,6 +49,53 @@ internal static class RenderRegionLayout
 internal readonly record struct RenderRegionCoordinate(int X, int Y);
 
 internal readonly record struct RenderRegionTileBounds(int TileX, int TileY, int Width, int Height);
+
+internal sealed class ParkRenderRegion(RenderRegionCoordinate coordinate)
+{
+    private bool hasStaticBounds;
+    private bool hasDynamicBounds;
+    private AxisAlignedBounds staticBounds;
+    private AxisAlignedBounds dynamicBounds;
+
+    public RenderRegionCoordinate Coordinate { get; } = coordinate;
+    public AxisAlignedBounds Bounds => hasStaticBounds
+        ? hasDynamicBounds ? staticBounds.Encapsulate(dynamicBounds) : staticBounds
+        : dynamicBounds;
+    public bool HasBounds => hasStaticBounds || hasDynamicBounds;
+    public bool CameraVisible { get; set; }
+    public bool ShadowVisible { get; set; }
+
+    public RenderRegionIndexRange? Terrain { get; set; }
+    public RenderRegionIndexRange? Water { get; set; }
+    public RenderRegionIndexRange? Paths { get; set; }
+    public RenderRegionIndexRange? Tracks { get; set; }
+    public RenderRegionIndexRange? RideSupports { get; set; }
+    public RenderRegionIndexRange? RideEntrances { get; set; }
+    public List<RenderRegionModelBatch> PathAccessories { get; } = new();
+    public List<RenderRegionModelBatch> Trees { get; } = new();
+    public RenderRegionModelBatch? Vehicles { get; set; }
+
+    public void IncludeStaticBounds(AxisAlignedBounds bounds)
+    {
+        staticBounds = hasStaticBounds ? staticBounds.Encapsulate(bounds) : bounds;
+        hasStaticBounds = true;
+    }
+
+    public void ClearDynamicContents()
+    {
+        dynamicBounds = default;
+        hasDynamicBounds = false;
+        Vehicles = null;
+    }
+
+    public void IncludeDynamicBounds(AxisAlignedBounds bounds)
+    {
+        dynamicBounds = hasDynamicBounds ? dynamicBounds.Encapsulate(bounds) : bounds;
+        hasDynamicBounds = true;
+    }
+}
+
+internal readonly record struct RenderRegionModelBatch(ModelGraphicsResources Resources, ModelRegionBatch Batch);
 
 internal readonly record struct AxisAlignedBounds
 {

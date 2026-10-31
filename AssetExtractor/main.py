@@ -1,9 +1,9 @@
 import os
 import zipfile
+import configuration
 
 from PIL import Image
-import configuration
-from trees import trees
+from Vegetation import Vegetation
 from exporter import Exporter
 from square import isometric_to_square
 
@@ -17,7 +17,7 @@ def run():
 
     # extract_g1()
     # extract_paths()
-    trees.extract()
+    Vegetation.extract()
 
     print("\nExtraction complete.")
     print("\nProcessing sprites...")
@@ -25,7 +25,7 @@ def run():
     # Convert isometric sprites to square textures
     # square_terrain()
 
-    trees.process()
+    Vegetation.process()
 
     print("\nProcessing complete!")
 

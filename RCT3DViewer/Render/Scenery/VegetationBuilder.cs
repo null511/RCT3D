@@ -16,8 +16,14 @@ internal sealed class VegetationBuilder
     public VegetationBuilder(string textureDirectory)
     {
         this.textureDirectory = Path.GetFullPath(textureDirectory);
-        foreach (var path in Directory.EnumerateFiles(this.textureDirectory, "*-north.png")) {
-            var objectId = Path.GetFileNameWithoutExtension(path)[..^"-north".Length];
+        foreach (var path in Directory.EnumerateFiles(this.textureDirectory, "*.png")) {
+            var objectId = Path.GetFileNameWithoutExtension(path);
+            if (objectId.EndsWith("-north", StringComparison.OrdinalIgnoreCase)
+                || objectId.EndsWith("-west", StringComparison.OrdinalIgnoreCase)
+                || objectId.EndsWith("_n", StringComparison.OrdinalIgnoreCase)
+                || objectId.EndsWith("_s", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var hash = TerrainMaterialLibrary.HashObjectId(objectId);
 
             if (objectIdsByHash.TryGetValue(hash, out var existing) && !string.Equals(existing, objectId, StringComparison.Ordinal))
@@ -40,19 +46,14 @@ internal sealed class VegetationBuilder
             return false;
         }
 
-        var north = LoadTexture($"{objectId}-north.png");
-        var west = LoadTexture($"{objectId}-west.png");
-
-        if (north is null || west is null) {
+        var textures = LoadTexture($"{objectId}.png");
+        if (textures is null) {
             builtByObjectIdHash.Add(objectIdHash, null);
             meshes = [];
             return false;
         }
 
-        meshes = [
-            CreatePlane("VegetationNorth", north, alongX: true),
-            CreatePlane("VegetationWest", west, alongX: false),
-        ];
+        meshes = [CreateMesh(objectId, textures)];
 
         builtByObjectIdHash.Add(objectIdHash, meshes);
         return true;
@@ -75,8 +76,11 @@ internal sealed class VegetationBuilder
             LoadCompanion(path, image.Width, image.Height, "_s", [255, 0, 0, 0]));
     }
 
-    private ImportedModelMesh CreatePlane(string name, VegetationTexture textures, bool alongX)
+    private ImportedModelMesh CreateMesh(string name, VegetationTexture textures)
     {
+        if (textures.BaseColor.Width % 2 != 0)
+            throw new InvalidDataException($"Vegetation atlas '{name}' must have two equal-width direction panels.");
+
         var material = new ImportedModelMaterial(
             Vector4.One,
             Vector3.Zero,
@@ -87,39 +91,48 @@ internal sealed class VegetationBuilder
             MetallicRoughnessTexture: textures.Specular,
             HasPackedPbrTextures: true);
 
-        var halfWidth = textures.BaseColor.Width * PixelToWorld * 0.5f;
+        var halfWidth = textures.BaseColor.Width * 0.25f * PixelToWorld;
         var height = textures.BaseColor.Height * PixelToWorld;
+        var uInset = 0.5f / textures.BaseColor.Width;
+        var vInset = 0.5f / textures.BaseColor.Height;
+        var northUMin = uInset;
+        var northUMax = 0.5f - uInset;
+        var westUMin = 0.5f + uInset;
+        var westUMax = 1.0f - uInset;
+        var vertices = new List<ImportedModelVertex>(16);
+        var indices = new List<uint>(24);
 
-        var frontVertices = alongX
-            ? new[] {
-                new ImportedModelVertex(new Vector3(-halfWidth, 0, 0), -Vector3.UnitZ, new Vector2(0, 1)),
-                new ImportedModelVertex(new Vector3(halfWidth, 0, 0), -Vector3.UnitZ, new Vector2(1, 1)),
-                new ImportedModelVertex(new Vector3(halfWidth, height, 0), -Vector3.UnitZ, new Vector2(1, 0)),
-                new ImportedModelVertex(new Vector3(-halfWidth, height, 0), -Vector3.UnitZ, new Vector2(0, 0)),
-            }
-            : new[] {
-                new ImportedModelVertex(new Vector3(0, 0, -halfWidth), Vector3.UnitX, new Vector2(0, 1)),
-                new ImportedModelVertex(new Vector3(0, 0, halfWidth), Vector3.UnitX, new Vector2(1, 1)),
-                new ImportedModelVertex(new Vector3(0, height, halfWidth), Vector3.UnitX, new Vector2(1, 0)),
-                new ImportedModelVertex(new Vector3(0, height, -halfWidth), Vector3.UnitX, new Vector2(0, 0)),
-            };
+        AddPlane(vertices, indices, [
+            new ImportedModelVertex(new Vector3(-halfWidth, 0, 0), -Vector3.UnitZ, new Vector2(northUMin, 1.0f - vInset)),
+            new ImportedModelVertex(new Vector3(halfWidth, 0, 0), -Vector3.UnitZ, new Vector2(northUMax, 1.0f - vInset)),
+            new ImportedModelVertex(new Vector3(halfWidth, height, 0), -Vector3.UnitZ, new Vector2(northUMax, vInset)),
+            new ImportedModelVertex(new Vector3(-halfWidth, height, 0), -Vector3.UnitZ, new Vector2(northUMin, vInset)),
+        ], northUMin, northUMax);
 
-        var vertices = new ImportedModelVertex[frontVertices.Length * 2];
-        frontVertices.CopyTo(vertices, 0);
-        for (var index = 0; index < frontVertices.Length; index++) {
-            var frontVertex = frontVertices[index];
-            vertices[index + frontVertices.Length] = new ImportedModelVertex(
+        AddPlane(vertices, indices, [
+            new ImportedModelVertex(new Vector3(0, 0, -halfWidth), Vector3.UnitX, new Vector2(westUMin, 1.0f - vInset)),
+            new ImportedModelVertex(new Vector3(0, 0, halfWidth), Vector3.UnitX, new Vector2(westUMax, 1.0f - vInset)),
+            new ImportedModelVertex(new Vector3(0, height, halfWidth), Vector3.UnitX, new Vector2(westUMax, vInset)),
+            new ImportedModelVertex(new Vector3(0, height, -halfWidth), Vector3.UnitX, new Vector2(westUMin, vInset)),
+        ], westUMin, westUMax);
+
+        return new ImportedModelMesh(name, vertices.ToArray(), indices.ToArray(), material);
+    }
+
+    private static void AddPlane(List<ImportedModelVertex> vertices, List<uint> indices, ImportedModelVertex[] frontVertices, float uMin, float uMax)
+    {
+        var firstVertex = (uint)vertices.Count;
+        vertices.AddRange(frontVertices);
+        foreach (var frontVertex in frontVertices)
+            vertices.Add(new ImportedModelVertex(
                 frontVertex.Position,
                 -frontVertex.Normal,
-                new Vector2(1.0f - frontVertex.TextureCoordinate.X, frontVertex.TextureCoordinate.Y));
-        }
+                new Vector2(uMin + uMax - frontVertex.TextureCoordinate.X, frontVertex.TextureCoordinate.Y)));
 
-        uint[] indices = [
-            0, 1, 2, 0, 2, 3,
-            6, 5, 4, 7, 6, 4,
-        ];
-
-        return new ImportedModelMesh(name, vertices, indices, material);
+        indices.AddRange([
+            firstVertex, firstVertex + 1, firstVertex + 2, firstVertex, firstVertex + 2, firstVertex + 3,
+            firstVertex + 6, firstVertex + 5, firstVertex + 4, firstVertex + 7, firstVertex + 6, firstVertex + 4,
+        ]);
     }
 
     private ImportedModelTexture LoadCompanion(string basePath, int width, int height, string suffix, byte[] fallback)

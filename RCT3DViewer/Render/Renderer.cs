@@ -175,7 +175,7 @@ public sealed class Renderer : IDisposable
             },
             (commandBuffer, imageIndex, currentFrame) => frameRenderer!.Record(commandBuffer, imageIndex, currentFrame,
                 parkScene.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh, parkScene.RideSupportMesh,
-                parkScene.RideEntranceExitMesh),
+                parkScene.RideEntranceExitMesh, parkScene.RenderRegions),
             () => frameRenderer!.FrameSubmitted(),
             extentChanged => frameRenderer!.ResetForSwapchain(extentChanged));
     }

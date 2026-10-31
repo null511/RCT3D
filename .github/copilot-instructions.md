@@ -26,6 +26,7 @@
 ## Geometry Guidelines
 - For wooden path-support geometry, infer the structure from the in-game reference: longitudinal trusses follow the railing-bearing sides, with repeated transverse support frames under the path and diagonal bracing between frames; verify the intended member layout before changing geometry when the reference is ambiguous.
 - When interpreting topology diagrams, map and validate the explicit vertex/edge connectivity before claiming understanding; if the graph cannot be reliably inferred, ask for concrete connectivity rather than guess.
+- For vegetation assets, `*-north` is the north face and mirrored south face; `*-west` is the west face and mirrored east face. They are two face textures on the same vegetation model, not alternative texture variants. Build one combined vegetation mesh/model using both textures and apply cardinal rotation to the whole model; do not make separate north/west meshes or select one texture based on tree direction.
 
 ## Uniform Block Organization
 - When organizing custom uniform blocks, group fields by their commented type/category (Camera, Temporal, Scene), not by usage. Follow this preference rather than reorganizing fields based on usage.
