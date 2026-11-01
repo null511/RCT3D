@@ -164,7 +164,7 @@ internal sealed class ParkSceneController(
 
                 foreach (var batch in result.Trees) {
                     var treeResources = new ModelGraphicsResources(resources.DeviceContext!, resources.DeferredTargets!.GBufferRenderPass,
-                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Material, resources.ModelTextureHeap!);
+                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Material, resources.ModelTextureHeap!, createWireframePipeline: true);
 
                     try {
                         treeResources.CreatePipeline();

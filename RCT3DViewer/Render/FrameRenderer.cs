@@ -318,7 +318,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
                 batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch);
 
             foreach (var batch in region.Trees)
-                batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch);
+                batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch, ui.WireframeEnabled);
         }
 
         Vk.CmdEndRenderPass(commandBuffer);

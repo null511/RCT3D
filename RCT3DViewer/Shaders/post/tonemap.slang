@@ -1,7 +1,7 @@
 import lib.uniforms;
 
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
-[[vk::binding(0, 1)]] RWTexture2D<float4> sceneOutput;
+[[vk::binding(0, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
 
 [shader("compute")]
 [numthreads(16, 16)]

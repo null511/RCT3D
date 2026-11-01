@@ -7,7 +7,7 @@ import lib.octohedral;
 [[vk::binding(0, 1)]] Texture2D<float4> defer_albedo;
 [[vk::binding(1, 1)]] Texture2D<float4> defer_normals;
 [[vk::binding(2, 1)]] Texture2D<float4> defer_specular;
-[[vk::binding(4, 1)]] RWTexture2D<float4> sceneOutput;
+[[vk::binding(4, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
 
 [shader("compute")]
 [numthreads(16, 16)]

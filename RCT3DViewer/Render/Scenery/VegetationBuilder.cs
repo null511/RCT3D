@@ -7,6 +7,8 @@ namespace RCT3D.Render.Scenery;
 internal sealed class VegetationBuilder
 {
     private const float PixelToWorld = WorldUnits.TileSize / 32.0f;
+    private const float SurfaceBias = -0.12f;
+    private const bool UseUpNormals = true;
 
     private readonly string textureDirectory;
     private readonly Dictionary<uint, string> objectIdsByHash = new();
@@ -18,9 +20,7 @@ internal sealed class VegetationBuilder
         this.textureDirectory = Path.GetFullPath(textureDirectory);
         foreach (var path in Directory.EnumerateFiles(this.textureDirectory, "*.png")) {
             var objectId = Path.GetFileNameWithoutExtension(path);
-            if (objectId.EndsWith("-north", StringComparison.OrdinalIgnoreCase)
-                || objectId.EndsWith("-west", StringComparison.OrdinalIgnoreCase)
-                || objectId.EndsWith("_n", StringComparison.OrdinalIgnoreCase)
+            if (objectId.EndsWith("_n", StringComparison.OrdinalIgnoreCase)
                 || objectId.EndsWith("_s", StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -102,18 +102,21 @@ internal sealed class VegetationBuilder
         var vertices = new List<ImportedModelVertex>(16);
         var indices = new List<uint>(24);
 
+        var minY = SurfaceBias;
+        var maxY = minY + height;
+
         AddPlane(vertices, indices, [
-            new ImportedModelVertex(new Vector3(-halfWidth, 0, 0), -Vector3.UnitZ, new Vector2(northUMin, 1.0f - vInset)),
-            new ImportedModelVertex(new Vector3(halfWidth, 0, 0), -Vector3.UnitZ, new Vector2(northUMax, 1.0f - vInset)),
-            new ImportedModelVertex(new Vector3(halfWidth, height, 0), -Vector3.UnitZ, new Vector2(northUMax, vInset)),
-            new ImportedModelVertex(new Vector3(-halfWidth, height, 0), -Vector3.UnitZ, new Vector2(northUMin, vInset)),
+            new ImportedModelVertex(new Vector3(-halfWidth, minY, 0), -Vector3.UnitZ, new Vector2(northUMin, 1.0f - vInset)),
+            new ImportedModelVertex(new Vector3(halfWidth, minY, 0), -Vector3.UnitZ, new Vector2(northUMax, 1.0f - vInset)),
+            new ImportedModelVertex(new Vector3(halfWidth, maxY, 0), -Vector3.UnitZ, new Vector2(northUMax, vInset)),
+            new ImportedModelVertex(new Vector3(-halfWidth, maxY, 0), -Vector3.UnitZ, new Vector2(northUMin, vInset)),
         ], northUMin, northUMax);
 
         AddPlane(vertices, indices, [
-            new ImportedModelVertex(new Vector3(0, 0, -halfWidth), Vector3.UnitX, new Vector2(westUMin, 1.0f - vInset)),
-            new ImportedModelVertex(new Vector3(0, 0, halfWidth), Vector3.UnitX, new Vector2(westUMax, 1.0f - vInset)),
-            new ImportedModelVertex(new Vector3(0, height, halfWidth), Vector3.UnitX, new Vector2(westUMax, vInset)),
-            new ImportedModelVertex(new Vector3(0, height, -halfWidth), Vector3.UnitX, new Vector2(westUMin, vInset)),
+            new ImportedModelVertex(new Vector3(0, minY, -halfWidth), Vector3.UnitX, new Vector2(westUMin, 1.0f - vInset)),
+            new ImportedModelVertex(new Vector3(0, minY, halfWidth), Vector3.UnitX, new Vector2(westUMax, 1.0f - vInset)),
+            new ImportedModelVertex(new Vector3(0, maxY, halfWidth), Vector3.UnitX, new Vector2(westUMax, vInset)),
+            new ImportedModelVertex(new Vector3(0, maxY, -halfWidth), Vector3.UnitX, new Vector2(westUMin, vInset)),
         ], westUMin, westUMax);
 
         return new ImportedModelMesh(name, vertices.ToArray(), indices.ToArray(), material);
@@ -121,13 +124,21 @@ internal sealed class VegetationBuilder
 
     private static void AddPlane(List<ImportedModelVertex> vertices, List<uint> indices, ImportedModelVertex[] frontVertices, float uMin, float uMax)
     {
+        if (UseUpNormals) {
+            for (var i = 0; i < frontVertices.Length; i++)
+                frontVertices[i].Normal = Vector3.UnitY;
+        }
+
         var firstVertex = (uint)vertices.Count;
         vertices.AddRange(frontVertices);
-        foreach (var frontVertex in frontVertices)
+
+        foreach (var frontVertex in frontVertices) {
+            var n = UseUpNormals ? Vector3.UnitY : -frontVertex.Normal;
             vertices.Add(new ImportedModelVertex(
                 frontVertex.Position,
-                -frontVertex.Normal,
+                n,
                 new Vector2(uMin + uMax - frontVertex.TextureCoordinate.X, frontVertex.TextureCoordinate.Y)));
+        }
 
         indices.AddRange([
             firstVertex, firstVertex + 1, firstVertex + 2, firstVertex, firstVertex + 2, firstVertex + 3,

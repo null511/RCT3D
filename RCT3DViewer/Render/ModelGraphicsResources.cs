@@ -13,6 +13,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
     private readonly uint _baseTextureIndex;
 
     public Pipeline Pipeline => _graphicsResources.Pipeline;
+    public Pipeline WireframePipeline => _graphicsResources.WireframePipeline;
     public PipelineLayout PipelineLayout => _graphicsResources.PipelineLayout;
     public uint BaseTextureIndex => _baseTextureIndex;
     public Buffer VertexBuffer => _graphicsResources.VertexBuffer;
@@ -23,7 +24,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
 
 
     public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout,
-        ImportedModelMaterial material, ModelTextureHeap textureHeap, bool unlit = false)
+        ImportedModelMaterial material, ModelTextureHeap textureHeap, bool unlit = false, bool createWireframePipeline = false)
     {
         _context = context;
         _textureHeap = textureHeap;
@@ -37,6 +38,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
             MaterialTextureArrayData.FromModel(packedMaterial),
             useInstances: true,
             shaderNameOverride: Path.Combine("object", unlit ? "vehicleCube" : "model"),
+            createWireframePipeline: createWireframePipeline,
             colorAttachmentCount: 3u,
             sharedModelMaterialDescriptorSetLayout: textureHeap.DescriptorSetLayout,
             sharedModelSamplerDescriptorSetLayout: textureHeap.SamplerDescriptorSetLayout);
@@ -77,13 +79,14 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
         RegionBatches = uploadedRegions;
     }
 
-    public void DrawInstanced(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, ModelRegionBatch region)
+    public void DrawInstanced(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, ModelRegionBatch region, bool wireframe = false)
     {
         if (IndexCount == 0 || region.InstanceCount == 0)
             return;
 
         var vk = _context.Api;
-        vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, Pipeline);
+        var pipeline = wireframe && WireframePipeline.Handle != 0 ? WireframePipeline : Pipeline;
+        vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, pipeline);
         var descriptorSets = stackalloc DescriptorSet[3];
         descriptorSets[0] = uniformDescriptorSet;
         descriptorSets[1] = _textureHeap.DescriptorSet;

@@ -60,6 +60,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
             throw new NotSupportedException("The selected Vulkan device supports fewer than three simultaneous color attachments.");
 
         ValidateColorFormat(Format.R8G8B8A8Unorm);
+        ValidateColorFormat(Format.R8G8B8A8Srgb);
         ValidateColorFormat(Format.R16G16B16A16Sfloat, requireStorage: true);
 
         _context.Api.GetPhysicalDeviceFormatProperties(_context.PhysicalDevice, DepthFormat, out var depthProperties);
@@ -235,7 +236,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
     private void CreateGBufferRenderPass()
     {
         var attachments = new[] {
-            ColorAttachment(Format.R8G8B8A8Unorm, ImageLayout.Undefined, ImageLayout.ShaderReadOnlyOptimal),
+            ColorAttachment(Format.R8G8B8A8Srgb, ImageLayout.Undefined, ImageLayout.ShaderReadOnlyOptimal),
             ColorAttachment(Format.R16G16B16A16Sfloat, ImageLayout.Undefined, ImageLayout.ShaderReadOnlyOptimal),
             ColorAttachment(Format.R8G8B8A8Unorm, ImageLayout.Undefined, ImageLayout.ShaderReadOnlyOptimal),
             DepthAttachment(ImageLayout.Undefined, ImageLayout.DepthStencilReadOnlyOptimal, storeOp: AttachmentStoreOp.Store)
