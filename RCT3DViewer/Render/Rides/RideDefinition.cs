@@ -5,10 +5,25 @@ using System.Numerics;
 
 namespace RCT3D.Render.Rides;
 
+internal enum RidePlatformSurfaceType
+{
+    Wood,
+    Metal,
+    Fiber,
+}
+
+internal enum RidePlatformRailingType
+{
+    Fenced,
+    Chained,
+}
+
 internal abstract class RideDefinition(RCTRideType rideType)
 {
     protected RideSupportStyle SupportStyle;
     protected IStationBuilder? StationBuilder;
+    protected RidePlatformSurfaceType PlatformSurface = RidePlatformSurfaceType.Wood;
+    protected RidePlatformRailingType PlatformRailing = RidePlatformRailingType.Chained;
 
     /// <summary>
     /// The vertical offset in world-space for the tracks generation.
@@ -36,7 +51,8 @@ internal abstract class RideDefinition(RCTRideType rideType)
         return new TrackRideConfiguration(rideType, [
             new SweptRailProfileGenerator(GetRailParts),
         ], SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
-            HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder, TrackBankAngleDegrees);
+            HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder, TrackBankAngleDegrees,
+            PlatformSurface, PlatformRailing);
     }
 
     protected abstract IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track);

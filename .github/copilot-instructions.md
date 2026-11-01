@@ -5,11 +5,13 @@
 - For nested OpenRCT2 builds, compile only the base `openrct2` project/target. Do not build the full OpenRCT2 solution or configure multiple OS variants, and do not introduce a `zstd` dependency; verify the selected target before starting native builds.
 - Do not add or implement tests unless the user explicitly asks. For this feature, the user will manually verify behavior; limit validation to builds and static checks.
 - Execute code implementation requests in Agent mode, not left as a registered plan; the user is using Agent mode rather than Plan mode.
+- When the user asks a question or gives feedback, answer or clarify only; do not make workspace changes unless they explicitly ask for implementation or approval.
 - For RCT3DViewer integration, use the app's own OpenRCT2 config rather than assuming the main game's settings carry over, as the embedded OpenRCT2 instance is isolated from the main game's config/data location.
 - For ride configurations, do not directly reuse another ride's registry; give each ride an independent registry so future changes to one ride do not propagate to another.
 - For wooden truss behavior, define it by the support type, not individual ride definitions; every occupied track tile gets a placement.
 - For the looping coaster, the entry/exit slope segments should be length-adjustable, extend inward from the existing fixed endpoints, and be used to broaden the bottom of the loop. Keep the main loop curve logic intact and avoid changing the established overall apex height if feasible.
 - For HalfLoopUp and HalfLoopDown roll handling, use separate per-piece endpoint rules derived from OpenRCT2 track metadata; do not assume both pieces share a constant 180-degree roll.
+- Expect minimal, clean geometry changes; avoid unnecessary code expansion or overengineering. When fixing winding, use the existing project convention directly and avoid duplicate calculations or overly generalized helper signatures.
 
 ## Rendering Guidelines
 - Request source-derived terrain direction reasoning rather than guess-and-test; validate rendering hypotheses before making further geometry changes.
@@ -19,6 +21,7 @@
 - For terrain-normal smoothing, constrain interpolation to the configured boundary width; do not average the two tile-triangle normals at diagonal vertices in a way that spreads interpolation across the whole center quad. Use geometry/interpolation boundaries so only the intended band is blended. Ensure terrain mesh normals are continuous within a tile, allowing normal discontinuities only at tile boundaries when the neighboring tile has been raised or lowered; deduplicate/reuse within-tile vertices accordingly.
 - For terrain material textures, use three packed maps: base RGBA where RGB is albedo and A is opacity; normal RGBA where R/G encode tangent-space normal X/Y and B is AO; specular RGB where R=roughness, G=metalness, and B=scalar SSS amount (no SSS color).
 - When updating a material mapping, preserve unrelated working mappings and edit only the mapping requested. In particular, do not alter the existing wood_red terrain-side mapping when fixing another edge mapping.
+- For any newly generated geometry, establish triangle winding from the complete renderer path and use the repository's existing winding helper/pattern. In RCT3DViewer, account for the camera X mirror, Vulkan viewport Y flip, and CCW front-face pipeline; do not assume conventional object-space CCW maps to the project's required indices. Validate against supplied outward normals and established geometry before adding meshes, and keep the fix minimal.
 
 ## Structural Guidelines
 - For wooden path supports, place horizontal side crossmembers between vertical support sections rather than at each section's midpoint; half-frequency means at every other section boundary, using normal beam thickness.
@@ -27,6 +30,7 @@
 - For wooden path-support geometry, infer the structure from the in-game reference: longitudinal trusses follow the railing-bearing sides, with repeated transverse support frames under the path and diagonal bracing between frames; verify the intended member layout before changing geometry when the reference is ambiguous.
 - When interpreting topology diagrams, map and validate the explicit vertex/edge connectivity before claiming understanding; if the graph cannot be reliably inferred, ask for concrete connectivity rather than guess.
 - For vegetation assets, `*-north` is the north face and mirrored south face; `*-west` is the west face and mirrored east face. They are two face textures on the same vegetation model, not alternative texture variants. Build one combined vegetation mesh/model using both textures and apply cardinal rotation to the whole model; do not make separate north/west meshes or select one texture based on tree direction.
+- When generating new mesh geometry, construct vertex/index order correctly from the outset for the project's verified winding convention. Do not create the mesh in an assumed order and then add position-carrying vertex records or helper-based winding correction logic to repair it afterward; keep geometry generation direct and minimal.
 
 ## Uniform Block Organization
 - When organizing custom uniform blocks, group fields by their commented type/category (Camera, Temporal, Scene), not by usage. Follow this preference rather than reorganizing fields based on usage.

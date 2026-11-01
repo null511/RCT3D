@@ -5,7 +5,7 @@ namespace RCT3D.Render.Terrain;
 
 internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 {
-    private const float CornerHeightScale = 1.5f;
+    private const float CornerHeightScale = WorldUnits.TerrainCornerHeightScale;
     private const float NormalInterpolationBoundaryFraction = 1.0f / 8.0f;
     private const float WaterPlaneVerticalOffset = -0.06f;
 

@@ -24,9 +24,12 @@ internal sealed class ViewerUiController
     private float? _gameTimeOfDayHours;
     private float _displayedFps;
     private double _displayedFrameTimeMilliseconds;
+    private double _fpsTextUpdateTimer = 0.5;
+    private string _fpsText = string.Empty;
     private bool _wireframeEnabled;
     private bool _taaEnabled = false;
     private int _debugView;
+    private float _fieldOfView = 45.0f;
     private float _sharpening = 0.5f;
     private float _mipBias = -1.0f;
     private float _shadowDistortionFactor = 0.65f;
@@ -47,6 +50,7 @@ internal sealed class ViewerUiController
     {
         _taaEnabled = settings.TaaEnabled;
         _debugView = settings.DebugView;
+        _fieldOfView = settings.FieldOfView;
         _sharpening = settings.Sharpening;
         _mipBias = settings.MipBias;
         _shadowDistortionFactor = settings.ShadowDistortionFactor;
@@ -84,10 +88,12 @@ internal sealed class ViewerUiController
         _editingGraphicsOptions = true;
     }
 
-    private void CancelGraphicsOptionsEdit()
+    private void CancelGraphicsOptionsEdit(Action<float> applyFieldOfView)
     {
         _taaEnabled = _appliedGraphicsOptions.TaaEnabled;
         _debugView = _appliedGraphicsOptions.DebugView;
+        _fieldOfView = _appliedGraphicsOptions.FieldOfView;
+        applyFieldOfView(_fieldOfView);
         _sharpening = _appliedGraphicsOptions.Sharpening;
         _mipBias = _appliedGraphicsOptions.MipBias;
         _shadowDistortionFactor = _appliedGraphicsOptions.ShadowDistortionFactor;
@@ -96,9 +102,11 @@ internal sealed class ViewerUiController
         _editingGraphicsOptions = false;
     }
 
-    private void ApplyGraphicsOptions(Action<uint, float> applyShadowSettings, Action<GraphicsOptionsSettings> saveGraphicsOptions)
+    private void ApplyGraphicsOptions(Action<uint, float> applyShadowSettings, Action<float> applyFieldOfView,
+        Action<GraphicsOptionsSettings> saveGraphicsOptions)
     {
         applyShadowSettings(_selectedShadowResolution, _shadowRadius);
+        applyFieldOfView(_fieldOfView);
 
         _appliedShadowResolution = _selectedShadowResolution;
         _appliedGraphicsOptions = CaptureGraphicsOptions();
@@ -116,6 +124,7 @@ internal sealed class ViewerUiController
     private GraphicsOptionsSettings CaptureGraphicsOptions() => new() {
         TaaEnabled = _taaEnabled,
         DebugView = _debugView,
+        FieldOfView = _fieldOfView,
         Sharpening = _sharpening,
         MipBias = _mipBias,
         ShadowResolution = _selectedShadowResolution,
@@ -169,7 +178,7 @@ internal sealed class ViewerUiController
         int visibleSections, int totalSections,
         IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit,
         bool peepModeEnabled, string? peepModeStatus, Action togglePeepMode, Action<uint, float> applyShadowSettings,
-        Action<GraphicsOptionsSettings> saveGraphicsOptions, bool wireframeAvailable = true)
+        Action<float> applyFieldOfView, Action<GraphicsOptionsSettings> saveGraphicsOptions, bool wireframeAvailable = true)
     {
         _gameTimeOfDayHours = gameTimeOfDayHours;
         var instantFps = deltaTime > 0.0 ? (float)(1.0 / deltaTime) : 0.0f;
@@ -179,6 +188,12 @@ internal sealed class ViewerUiController
             _displayedFrameTimeMilliseconds = _displayedFrameTimeMilliseconds <= 0.0
                 ? activeFrameTimeMilliseconds
                 : _displayedFrameTimeMilliseconds + (activeFrameTimeMilliseconds - _displayedFrameTimeMilliseconds) * smoothing;
+
+        _fpsTextUpdateTimer += Math.Max(deltaTime, 0.0);
+        if (_fpsTextUpdateTimer >= 0.5) {
+            _fpsTextUpdateTimer %= 0.5;
+            _fpsText = $"FPS: {_displayedFps:0} | Frame: {_displayedFrameTimeMilliseconds:0.00} ms";
+        }
 
         if (ImGui.BeginMainMenuBar()) {
             if (ImGui.BeginMenu("Park")) {
@@ -201,7 +216,7 @@ internal sealed class ViewerUiController
                 if (!graphicsOptionsWereOpen && _showGraphicsOptions)
                     BeginGraphicsOptionsEdit();
                 else if (graphicsOptionsWereOpen && !_showGraphicsOptions)
-                    CancelGraphicsOptionsEdit();
+                    CancelGraphicsOptionsEdit(applyFieldOfView);
                 ImGui.MenuItem("Debug", string.Empty, ref _showDebug);
                 ImGui.EndMenu();
             }
@@ -234,9 +249,8 @@ internal sealed class ViewerUiController
                 ImGui.EndPopup();
             }
 
-            var fpsText = $"FPS: {_displayedFps:0} | Frame: {_displayedFrameTimeMilliseconds:0.00} ms";
-            ImGui.SetCursorPosX(Math.Max(ImGui.GetCursorPosX(), ImGui.GetWindowWidth() - ImGui.CalcTextSize(fpsText).X - ImGui.GetStyle().WindowPadding.X));
-            ImGui.TextUnformatted(fpsText);
+            ImGui.SetCursorPosX(Math.Max(ImGui.GetCursorPosX(), ImGui.GetWindowWidth() - ImGui.CalcTextSize(_fpsText).X - ImGui.GetStyle().WindowPadding.X));
+            ImGui.TextUnformatted(_fpsText);
             ImGui.EndMainMenuBar();
         }
 
@@ -264,6 +278,8 @@ internal sealed class ViewerUiController
             if (graphicsOptionsVisible) {
                 ImGui.Checkbox("TAA", ref _taaEnabled);
                 ImGui.Combo("Debug View", ref _debugView, DebugViewOptions, DebugViewOptions.Length);
+                if (ImGui.SliderFloat("FOV", ref _fieldOfView, 30.0f, 120.0f, "%.0f°"))
+                    applyFieldOfView(_fieldOfView);
                 ImGui.SliderFloat("Sharpening", ref _sharpening, 0.0f, 1.0f, "%.2f");
                 ImGui.SliderFloat("Mip Bias", ref _mipBias, -2.0f, 0.0f, "%.2f");
                 ImGui.SeparatorText("Shadows");
@@ -283,17 +299,17 @@ internal sealed class ViewerUiController
                 ImGui.Separator();
                 ImGui.BeginDisabled(!HasPendingGraphicsOptions);
                 if (ImGui.Button("Apply"))
-                    ApplyGraphicsOptions(applyShadowSettings, saveGraphicsOptions);
+                    ApplyGraphicsOptions(applyShadowSettings, applyFieldOfView, saveGraphicsOptions);
                 ImGui.EndDisabled();
                 ImGui.SameLine();
                 if (ImGui.Button("Cancel")) {
-                    CancelGraphicsOptionsEdit();
+                    CancelGraphicsOptionsEdit(applyFieldOfView);
                     _showGraphicsOptions = false;
                 }
             }
             ImGui.End();
             if (graphicsOptionsWereOpen && !_showGraphicsOptions)
-                CancelGraphicsOptionsEdit();
+                CancelGraphicsOptionsEdit(applyFieldOfView);
         }
 
         if (_isParkLoading)

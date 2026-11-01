@@ -9,6 +9,7 @@ public class FlightCamera
     public Vector3 Position = new(192.0f, 120.0f, -120.0f);
     public Vector3 Front = Vector3.Normalize(new Vector3(0.0f, -0.5f, MathF.Sqrt(3.0f) * 0.5f));
     public Vector3 Up = Vector3.UnitY;
+    public float FieldOfViewDegrees { get; set; } = 45.0f;
     public Vector3 HorizontalForward => Vector3.Normalize(Vector3.TransformNormal(
         new Vector3(MathF.Cos(_yaw * MathF.PI / 180.0f), 0.0f, MathF.Sin(_yaw * MathF.PI / 180.0f)), _baseRotation));
     public Vector3 HorizontalRight => Vector3.Normalize(Vector3.Cross(Up, HorizontalForward));
@@ -35,7 +36,7 @@ public class FlightCamera
     {
         // Explicitly use Vulkan-normalized clip coordinates (Y downward)
         var proj = Matrix4x4.CreatePerspectiveFieldOfView(
-            (float)(Math.PI / 4.0), // 45 Degrees FOV
+            FieldOfViewDegrees * MathF.PI / 180.0f,
             aspectRatio, 
             0.1f, 
             1000.0f

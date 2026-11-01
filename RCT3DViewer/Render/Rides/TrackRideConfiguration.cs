@@ -15,7 +15,9 @@ internal class TrackRideConfiguration(
     Action<RCTTrackElementData, List<TrackSupportPlacement>>? getSupportPlacements,
     bool smoothMovement,
     IStationBuilder? stationBuilder,
-    float trackBankAngleDegrees)
+    float trackBankAngleDegrees,
+    RidePlatformSurfaceType platformSurface = RidePlatformSurfaceType.Wood,
+    RidePlatformRailingType platformRailing = RidePlatformRailingType.Chained)
 {
     public RCTRideType RideType { get; } = rideType;
     public IReadOnlyList<ITrackPartGenerator> PartGenerators { get; } = partGenerators;
@@ -26,6 +28,8 @@ internal class TrackRideConfiguration(
     public bool SmoothMovement { get; } = smoothMovement;
     public float TrackBankAngleDegrees { get; } = trackBankAngleDegrees;
     public IStationBuilder? StationBuilder { get; } = stationBuilder;
+    public RidePlatformSurfaceType PlatformSurface { get; } = platformSurface;
+    public RidePlatformRailingType PlatformRailing { get; } = platformRailing;
     public IRideSupportMeshBuilder? SupportMeshBuilder { get; } = RideSupportMeshBuilders.Resolve(supportStyle);
     public Action<RCTTrackElementData, List<TrackSupportPlacement>>? GetSupportPlacements { get; } = getSupportPlacements;
 
@@ -65,6 +69,7 @@ internal static class TrackRideConfigurations
         new MineTrainCoaster().Build(),
         new MiniatureRailway().Build(),
         new Monorail().Build(),
+        new ObservationTower().Build(),
         new WoodenRollerCoaster().Build(),
         new WoodenWildMouse().Build(),
     ];

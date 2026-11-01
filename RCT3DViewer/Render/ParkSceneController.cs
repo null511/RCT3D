@@ -9,6 +9,7 @@ using RCT3D.Render.Rides.Entrances;
 using RCT3D.Render.Rides;
 using RCT3D.Interop.Models;
 using RCT3D.Render.Scenery;
+using Serilog;
 
 namespace RCT3D.Render;
 
@@ -99,7 +100,7 @@ internal sealed class ParkSceneController(
             return new ParkLoadResult(
                 parkPath, snapshot.Width, snapshot.Height,
                 meshData.Terrain.Terrain, meshData.Terrain.Water, meshData.Paths, meshData.Navigation, meshData.PathAccessories,
-                meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, meshData.Trees, snapshot.TrackData, snapshot.RideEntranceData,
+                meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, meshData.Trees, meshData.Tracks.TrackElements, snapshot.RideEntranceData,
                 meshData.Tracks.Centerlines);
         }
         catch (Exception ex) {
@@ -440,7 +441,7 @@ internal sealed class ParkSceneController(
             simulation.Dispose();
         }
         catch (Exception ex) {
-            Console.Error.WriteLine($"Failed to shut down OpenRCT2: {ex.Message}");
+            Log.Error(ex, "Failed to shut down OpenRCT2");
         }
     }
 

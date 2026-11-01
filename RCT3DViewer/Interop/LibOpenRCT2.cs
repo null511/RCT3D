@@ -7,7 +7,7 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 31;
+    private const uint ExpectedAbiVersion = 32;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -157,8 +157,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (Marshal.SizeOf<RCTPeepData>() != 24)
                 throw new InvalidOperationException("RCTPeepData must be 24 bytes to match the OpenRCT2 adapter ABI.");
 
-            if (Marshal.SizeOf<RCTTrackElementData>() != 32)
-                throw new InvalidOperationException("RCTTrackElementData must be 32 bytes to match the OpenRCT2 adapter ABI.");
+            if (Marshal.SizeOf<RCTTrackElementData>() != 33)
+                throw new InvalidOperationException("RCTTrackElementData must be 33 bytes to match the OpenRCT2 adapter ABI.");
 
             if (Marshal.SizeOf<RCTRideEntranceData>() != 14)
                 throw new InvalidOperationException("RCTRideEntranceData must be 14 bytes to match the OpenRCT2 adapter ABI.");

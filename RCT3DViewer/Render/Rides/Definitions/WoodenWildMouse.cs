@@ -1,7 +1,7 @@
-using System.Numerics;
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
 

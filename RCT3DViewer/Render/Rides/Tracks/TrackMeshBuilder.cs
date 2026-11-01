@@ -2,6 +2,7 @@ using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Serilog;
 
 namespace RCT3D.Render.Rides.Tracks;
 
@@ -9,6 +10,7 @@ internal sealed class TrackMeshBuilder
 {
     private readonly Dictionary<RCTRideType, TrackRideConfiguration> rideConfigurations;
     private readonly TrackPieceBuilderCatalog pieceBuilders = TrackPieceBuilderCatalog.Shared;
+    private readonly RidePlatformBuilder ridePlatformBuilder = new();
 
 
     public TrackMeshBuilder(IEnumerable<TrackRideConfiguration>? rideConfigurations = null)
@@ -26,6 +28,43 @@ internal sealed class TrackMeshBuilder
         byte Direction,
         int OriginBaseHeight);
 
+    private static bool TryValidateTrackElement(
+        in RCTTrackElementData track,
+        int mapWidth,
+        int mapHeight,
+        out string reason)
+    {
+        if ((uint)track.TileX >= (uint)mapWidth || (uint)track.TileY >= (uint)mapHeight) {
+            reason = $"tile ({track.TileX}, {track.TileY}) is outside the {mapWidth}x{mapHeight} map";
+            return false;
+        }
+
+        if (track.Direction > 3) {
+            reason = $"direction {track.Direction} is invalid";
+            return false;
+        }
+
+        if (track.SequenceCount == 0 || track.Sequence >= track.SequenceCount) {
+            reason = $"sequence {track.Sequence} is invalid for sequence count {track.SequenceCount}";
+            return false;
+        }
+
+        if (track.IsRidePlatformBase > 1) {
+            reason = $"ride platform marker {track.IsRidePlatformBase} is invalid";
+            return false;
+        }
+
+        var bottomHeight = track.BaseHeight * WorldUnits.HeightPerBaseUnit;
+        var topHeight = track.ClearanceHeight * WorldUnits.HeightPerBaseUnit;
+        if (!float.IsFinite(bottomHeight) || !float.IsFinite(topHeight) || topHeight < bottomHeight) {
+            reason = $"obstacle height interval is invalid (base {track.BaseHeight}, clearance {track.ClearanceHeight})";
+            return false;
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
     public TrackMeshBuildData Build(
         ReadOnlySpan<RCTTrackElementData> trackElements,
         ReadOnlySpan<RCTTilePathData> pathElements,
@@ -41,6 +80,20 @@ internal sealed class TrackMeshBuilder
         if (surfaces.Length < checked(mapWidth * mapHeight))
             throw new InvalidDataException("OpenRCT2 returned fewer terrain surfaces than the map dimensions require.");
 
+        var validTrackElements = new List<RCTTrackElementData>(trackElements.Length);
+        foreach (ref readonly var track in trackElements) {
+            if (!TryValidateTrackElement(track, mapWidth, mapHeight, out var reason)) {
+                Log.Warning(
+                    "Skipping invalid track element: {Reason}; ride ID {RideId}, ride type {RideType}, part {Part}, tile ({TileX}, {TileY}), direction {Direction}, sequence {Sequence}/{SequenceCount}, base {BaseHeight}, clearance {ClearanceHeight}",
+                    reason, track.RideId, track.RideType, track.Part, track.TileX, track.TileY, track.Direction,
+                    track.Sequence, track.SequenceCount, track.BaseHeight, track.ClearanceHeight);
+                continue;
+            }
+
+            validTrackElements.Add(track);
+        }
+        var filteredTrackElements = CollectionsMarshal.AsSpan(validTrackElements);
+
         var supportObstacles = new TrackSupportObstacleMap();
         foreach (ref readonly var path in pathElements) {
             if ((uint)path.TileX >= (uint)mapWidth || (uint)path.TileY >= (uint)mapHeight)
@@ -48,22 +101,13 @@ internal sealed class TrackMeshBuilder
 
             supportObstacles.AddPath(path);
         }
-        foreach (ref readonly var track in trackElements)
+        foreach (ref readonly var track in filteredTrackElements)
             supportObstacles.AddTrack(track);
 
-        var entranceSideOpenings = BuildEntranceSideOpenings(trackElements, entrances);
+        var entranceSideOpenings = BuildEntranceSideOpenings(filteredTrackElements, entrances);
         var pieces = new Dictionary<TrackPieceKey, List<RCTTrackElementData>>();
 
-        foreach (var track in trackElements) {
-            if ((uint)track.TileX >= (uint)mapWidth || (uint)track.TileY >= (uint)mapHeight)
-                throw new InvalidDataException($"OpenRCT2 returned a track element outside the {mapWidth}x{mapHeight} map.");
-
-            if (track.Direction > 3)
-                throw new InvalidDataException($"OpenRCT2 returned an invalid track direction at ({track.TileX}, {track.TileY}).");
-
-            if (track.SequenceCount == 0 || track.Sequence >= track.SequenceCount)
-                throw new InvalidDataException($"OpenRCT2 returned an invalid track sequence at ({track.TileX}, {track.TileY}).");
-
+        foreach (ref readonly var track in filteredTrackElements) {
             if (!rideConfigurations.TryGetValue(track.RideType, out _)
                 || !pieceBuilders.TryResolve(track.Part, out _)) continue;
 
@@ -96,8 +140,10 @@ internal sealed class TrackMeshBuilder
             var configuration = rideConfigurations[key.RideType];
             pieceBuilders.TryResolve(key.TrackType, out var pieceBuilder);
 
-            if (pieceBuilder.RequiresCompletePiece)
-                ValidatePieceSequences(key, pieceElements);
+            if (pieceBuilder.RequiresCompletePiece && !HasCompletePieceSequences(pieceElements))
+                Log.Warning(
+                    "Track piece {TrackType} for ride {RideId} at ({TileX}, {TileY}) has incomplete sequence data; processing {RetainedSequenceCount} retained elements",
+                    key.TrackType, key.RideId, key.OriginTileX, key.OriginTileY, pieceElements.Count);
 
             var region = new RenderRegionCoordinate(
                 Math.Clamp(key.OriginTileX / RenderRegionLayout.RegionSizeInTiles, 0, Math.Max(0, RenderRegionLayout.GetRegionCount(mapWidth) - 1)),
@@ -111,11 +157,24 @@ internal sealed class TrackMeshBuilder
             regionPieces.Add((key, configuration, pieceElements));
         }
 
+        var platformTilesByRegion = ridePlatformBuilder.BuildTilesByRegion(
+            filteredTrackElements, entrances, rideConfigurations, mapWidth, mapHeight);
+
         foreach (var region in RenderRegionLayout.Enumerate(mapWidth, mapHeight)) {
-            if (!piecesByRegion.TryGetValue(region, out var regionPieces)) continue;
+            if (!piecesByRegion.TryGetValue(region, out var regionPieces))
+                regionPieces = [];
+            if (!platformTilesByRegion.TryGetValue(region, out var platformTiles))
+                platformTiles = [];
+            if (regionPieces.Count == 0 && platformTiles.Count == 0) continue;
 
             geometry.BeginRegion(region);
             supportGeometry.BeginRegion(region);
+
+            foreach (ref readonly var platformTile in CollectionsMarshal.AsSpan(platformTiles)) {
+                var track = platformTile.Track;
+                var surfaceIndex = checked(track.TileY * mapWidth + track.TileX);
+                ridePlatformBuilder.AddTile(platformTile, geometry, surfaces[surfaceIndex]);
+            }
 
             foreach (var (key, configuration, piece) in regionPieces) {
                 var track = piece[0];
@@ -235,7 +294,8 @@ internal sealed class TrackMeshBuilder
             supportGeometry.EndRegion();
         }
 
-        return new TrackMeshBuildData(geometry.Build(), supportGeometry.Build(), rideCenterlines.ToArray());
+        return new TrackMeshBuildData(
+            geometry.Build(), supportGeometry.Build(), rideCenterlines.ToArray(), validTrackElements.ToArray());
     }
 
     private static TrackSupportAnchor ResolveSupportAnchor(
@@ -406,17 +466,17 @@ internal sealed class TrackMeshBuilder
         return openings;
     }
 
-    private static void ValidatePieceSequences(TrackPieceKey key, List<RCTTrackElementData> elements)
+    private static bool HasCompletePieceSequences(List<RCTTrackElementData> elements)
     {
         var expectedCount = elements[0].SequenceCount;
         if (elements.Count != expectedCount || elements.Any(element => element.SequenceCount != expectedCount))
-            throw new InvalidDataException(
-                $"Track piece {key.TrackType} for ride {key.RideId} at ({key.OriginTileX}, {key.OriginTileY}) has incomplete sequence data.");
+            return false;
 
         for (var sequence = 0; sequence < expectedCount; sequence++) {
             if (elements[sequence].Sequence != sequence)
-                throw new InvalidDataException(
-                    $"Track piece {key.TrackType} for ride {key.RideId} at ({key.OriginTileX}, {key.OriginTileY}) has duplicate or missing sequences.");
+                return false;
         }
+
+        return true;
     }
 }

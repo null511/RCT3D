@@ -6,6 +6,7 @@ using RCT3D.Simulation;
 using RCT3D.Configuration;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using Serilog;
 
 namespace RCT3D.Render;
 
@@ -28,6 +29,33 @@ public sealed class Renderer : IDisposable
     private SimulationBridge? simulation;
     private bool framebufferResized;
     private bool exitRequested;
+    private double currentDeltaTime;
+    private readonly Action<double> prepareFrame;
+    private readonly Action<Silk.NET.Vulkan.CommandBuffer, uint, uint> recordFrame;
+    private readonly Action frameSubmitted;
+    private readonly Action<bool> swapchainRecreated;
+    private readonly Action<string> loadPark;
+    private readonly Action togglePause;
+    private readonly Action requestExit;
+    private readonly Action togglePeepMode;
+    private readonly Action<uint, float> applyShadowSettings;
+    private readonly Action<float> applyFieldOfView;
+    private readonly Action<GraphicsOptionsSettings> saveGraphicsOptions;
+
+    public Renderer()
+    {
+        prepareFrame = PrepareFrame;
+        recordFrame = RecordFrame;
+        frameSubmitted = OnFrameSubmitted;
+        swapchainRecreated = OnSwapchainRecreated;
+        loadPark = LoadPark;
+        togglePause = TogglePause;
+        requestExit = RequestExit;
+        togglePeepMode = TogglePeepMode;
+        applyShadowSettings = ApplyShadowSettings;
+        applyFieldOfView = ApplyFieldOfView;
+        saveGraphicsOptions = graphicsOptionsStore.Save;
+    }
 
     public string? LibraryPath { get; set; }
     public string? OpenRCT2Path { get; set; }
@@ -67,6 +95,7 @@ public sealed class Renderer : IDisposable
     public void Initialize()
     {
         var graphicsOptions = graphicsOptionsStore.Load();
+        camera.FieldOfViewDegrees = graphicsOptions.FieldOfView;
         ui = new ViewerUiController(graphicsOptions);
 
         if (string.IsNullOrEmpty(OpenRCT2Path))
@@ -106,7 +135,7 @@ public sealed class Renderer : IDisposable
             throw new InvalidOperationException("Failed to initialize OpenRCT2!", ex);
         }
 
-        Console.WriteLine("Initializing Graphics Subsystems via Silk.NET Vulkan...");
+        Log.Information("Initializing graphics subsystems via Silk.NET Vulkan");
         renderResources = new VulkanRenderResources(window!, terrainMaterials, pathMaterials, pathAccessoryAssets,
             treeSceneryAssets, graphicsOptions);
         frameRenderer = new FrameRenderer(renderResources, ui, camera);
@@ -121,8 +150,8 @@ public sealed class Renderer : IDisposable
 
         SetupInputs();
 
-        Console.WriteLine("\n=== Vulkan Engine Pipeline Fully Operational ===");
-        Console.WriteLine("Hold down RIGHT-MOUSE BUTTON to look around. Use W,A,S,D to fly. Press F9 to toggle simulation pause.");
+        Log.Information("Vulkan engine pipeline is operational");
+        Log.Information("Hold down RIGHT-MOUSE BUTTON to look around. Use W,A,S,D to fly. Press F9 to toggle simulation pause.");
 
         var startupParkPath = StartupParkPath;
         if (!string.IsNullOrWhiteSpace(startupParkPath))
@@ -159,26 +188,41 @@ public sealed class Renderer : IDisposable
     {
         if (parkScene == null) return;
 
-        frameCoordinator!.RenderFrame(
-            deltaTime,
-            activeFrameTimeMilliseconds => {
-                parkScene!.Update(frameCoordinator!.CurrentFrame);
-                var cameraTileX = (int)MathF.Floor(camera.Position.X / WorldUnits.TileSize);
-                var cameraTileY = (int)MathF.Floor(camera.Position.Z / WorldUnits.TileSize);
-                var sectionMetrics = frameRenderer!.SectionMetrics;
-                ui.BuildFrameUi(deltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours, parkScene.IsPaused,
-                    cameraTileX, cameraTileY, sectionMetrics.Visible, sectionMetrics.Total,
-                    parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
-                    parkPath => parkScene.LoadPark(parkPath, TerrainSkirtFloor), parkScene.TogglePause,
-                    () => exitRequested = true, peepMode!.IsEnabled, peepMode.StatusMessage, peepMode.Toggle,
-                    ApplyShadowSettings, graphicsOptionsStore.Save, deviceContext!.SupportsWireframe);
-            },
-            (commandBuffer, imageIndex, currentFrame) => frameRenderer!.Record(commandBuffer, imageIndex, currentFrame,
-                parkScene.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh, parkScene.RideSupportMesh,
-                parkScene.RideEntranceExitMesh, parkScene.RenderRegions),
-            () => frameRenderer!.FrameSubmitted(),
-            extentChanged => frameRenderer!.ResetForSwapchain(extentChanged));
+        currentDeltaTime = deltaTime;
+        frameCoordinator!.RenderFrame(deltaTime, prepareFrame, recordFrame, frameSubmitted, swapchainRecreated);
     }
+
+    private void PrepareFrame(double activeFrameTimeMilliseconds)
+    {
+        parkScene!.Update(frameCoordinator!.CurrentFrame);
+        var cameraTileX = (int)MathF.Floor(camera.Position.X / WorldUnits.TileSize);
+        var cameraTileY = (int)MathF.Floor(camera.Position.Z / WorldUnits.TileSize);
+        var sectionMetrics = frameRenderer!.SectionMetrics;
+        ui.BuildFrameUi(currentDeltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours, parkScene.IsPaused,
+            cameraTileX, cameraTileY, sectionMetrics.Visible, sectionMetrics.Total,
+            parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
+            loadPark, togglePause, requestExit, peepMode!.IsEnabled, peepMode.StatusMessage, togglePeepMode,
+            applyShadowSettings, applyFieldOfView, saveGraphicsOptions, deviceContext!.SupportsWireframe);
+    }
+
+    private void RecordFrame(Silk.NET.Vulkan.CommandBuffer commandBuffer, uint imageIndex, uint currentFrame) =>
+        frameRenderer!.Record(commandBuffer, imageIndex, currentFrame,
+            parkScene!.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh, parkScene.RideSupportMesh,
+            parkScene.RideEntranceExitMesh, parkScene.RenderRegions);
+
+    private void OnFrameSubmitted() => frameRenderer!.FrameSubmitted();
+
+    private void OnSwapchainRecreated(bool extentChanged) => frameRenderer!.ResetForSwapchain(extentChanged);
+
+    private void LoadPark(string parkPath) => parkScene!.LoadPark(parkPath, TerrainSkirtFloor);
+
+    private void TogglePause() => parkScene!.TogglePause();
+
+    private void RequestExit() => exitRequested = true;
+
+    private void TogglePeepMode() => peepMode!.Toggle();
+
+    private void ApplyFieldOfView(float fieldOfView) => camera.FieldOfViewDegrees = fieldOfView;
 
     private void OnEngineShutdown() => Dispose();
 
@@ -204,7 +248,7 @@ public sealed class Renderer : IDisposable
             _simulation?.Dispose();
         }
         catch (Exception ex) {
-            Console.Error.WriteLine($"Failed to shut down OpenRCT2: {ex.Message}");
+            Log.Error(ex, "Failed to shut down OpenRCT2");
         }
     }
 }

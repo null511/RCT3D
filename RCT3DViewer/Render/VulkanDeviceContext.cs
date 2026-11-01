@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Serilog;
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
@@ -177,7 +177,7 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
         void* userData)
     {
         var message = Marshal.PtrToStringAnsi((nint)callbackData->PMessage) ?? "(validation message unavailable)";
-        Debug.WriteLine($"[Vulkan {severity} {types}] {message}");
+        Log.Warning("Vulkan validation {Severity} {Types}: {Message}", severity, types, message);
         return 0;
     }
 #endif

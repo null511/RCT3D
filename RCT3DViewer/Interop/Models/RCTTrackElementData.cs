@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace RCT3D.Interop.Models;
 
@@ -492,6 +492,7 @@ public struct RCTTrackElementData
     public sbyte RollBegin;
     public sbyte RollEnd;
     public byte HasChainLift;
+    public byte IsRidePlatformBase;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]

@@ -1,12 +1,12 @@
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
-using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Entrances;
+using RCT3D.Render.Rides.Supports;
+using RCT3D.Render.Rides.Tracks;
+using Serilog;
 using Silk.NET.Vulkan;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using RCT3D.Render.Rides.Tracks;
-using RCT3D.Render;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace RCT3D.Render.Terrain;
@@ -71,7 +71,7 @@ internal sealed unsafe class TerrainGraphicsResources(
         byte[] fragShaderCode;
 
         if (File.Exists(vertPath) && File.Exists(fragPath)) {
-            Console.WriteLine($"Successfully loaded native SPIR-V shaders from output: {vertPath}");
+            Log.Information("Successfully loaded native SPIR-V shaders from output: {ShaderPath}", vertPath);
 
             vertShaderCode = File.ReadAllBytes(vertPath);
             fragShaderCode = File.ReadAllBytes(fragPath);
@@ -534,10 +534,12 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         if (mesh.Vertices.Length > 0) {
             var vertex = mesh.Vertices[0];
-            Console.WriteLine($"[Mesh] Uploaded vertices={mesh.Vertices.Length}, indices={mesh.Indices.Length}, firstPos=({vertex.Position.X:F2},{vertex.Position.Y:F2},{vertex.Position.Z:F2})");
+            Log.Debug("Uploaded terrain mesh vertices={VertexCount}, indices={IndexCount}, first position=({X:F2}, {Y:F2}, {Z:F2})",
+                mesh.Vertices.Length, mesh.Indices.Length, vertex.Position.X, vertex.Position.Y, vertex.Position.Z);
         }
 
-        Console.WriteLine($"[Mesh] Terrain skirt sections={mesh.SkirtSections}, triangles={mesh.SkirtTriangles}, flat edges skipped={mesh.FlatEdgesSkipped}");
+        Log.Debug("Terrain skirt sections={SectionCount}, triangles={TriangleCount}, flat edges skipped={FlatEdgesSkipped}",
+            mesh.SkirtSections, mesh.SkirtTriangles, mesh.FlatEdgesSkipped);
     }
 
     public void UploadMesh(PathMeshData mesh)

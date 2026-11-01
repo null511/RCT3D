@@ -6,7 +6,8 @@ namespace RCT3D.Render.Rides.Tracks;
 internal sealed record TrackMeshBuildData(
     TrackMeshData Tracks,
     RideSupportMeshData RideSupports,
-    TrackCenterlinePiece[] Centerlines);
+    TrackCenterlinePiece[] Centerlines,
+    RCTTrackElementData[] TrackElements);
 
 internal readonly record struct TrackCenterlinePiece(
     ushort RideId,
