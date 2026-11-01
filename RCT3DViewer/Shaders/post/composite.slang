@@ -132,6 +132,11 @@ void main(uint2 globalPos: SV_DispatchThreadID) {
         color += getValFromSkyLUT(sky_view, linearSampler, localViewDir, localSunDir);
     }
 
+    //float2 shit = (globalPos - 32) / 64.0;
+    //if (all(saturate(shit) == shit)) {
+    //    color = texSkyIrradiance.SampleLevel(linearSampler, shit, 0).rgb;
+    //}
+
     sceneOutput[globalPos] = float4(color, 1.0);
 }
 

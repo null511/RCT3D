@@ -42,9 +42,9 @@ internal sealed class DeferredPassResources : IDisposable
                 new[] { skyTargets.SkyViewView });
 
             skyIrradiance = new ComputePassResources(context, "post/sky_irradiance", uniformBuffers.DescriptorSetLayout,
-                new[] { new[] { skyTargets.SkyViewView, skyTargets.SkyIrradianceView } },
+                new[] { new[] { skyTargets.SkyViewView, skyTargets.SkyTransmitView, skyTargets.SkyIrradianceView } },
                 new[] { skyTargets.SkyIrradianceView },
-                new[] { new[] { ImageLayout.ShaderReadOnlyOptimal, ImageLayout.General } });
+                new[] { new[] { ImageLayout.ShaderReadOnlyOptimal, ImageLayout.ShaderReadOnlyOptimal, ImageLayout.General } });
 
             composite = new ComputePassResources(context, "post/composite", uniformBuffers.DescriptorSetLayout,
                 new[] {

@@ -4,14 +4,16 @@ import lib.colors;
 import lib.ign;
 import lib.erp;
 import lib.sky;
+import lib.sky_transmit;
 import lib.sky_view;
 
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
 
 [[vk::binding(0, 1)]] Texture2D<float4> skyView;
-[[vk::binding(1, 1)]] Texture2D<float4> skyIrradiance;
-[[vk::binding(2, 1)]] SamplerState linearSampler;
-[[vk::binding(3, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> skyIrradianceOutput;
+[[vk::binding(1, 1)]] Texture2D<float4> skyTransmit;
+[[vk::binding(2, 1)]] Texture2D<float4> skyIrradiance;
+[[vk::binding(3, 1)]] SamplerState linearSampler;
+[[vk::binding(4, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> skyIrradianceOutput;
 
 static const uint2 BufferSize = uint2(16, 16);
 
@@ -38,6 +40,8 @@ void main(uint2 globalPos: SV_DispatchThreadID) {
 float3 CalculateIrradiance(const in int2 globalPos, const in float3 normal) {
     const int2 stepCount = int2(4, 4);
 
+    float3 sunDir = sceneUniforms.sunDirection.xyz;
+
     float3 n = normalize(normal);
     float3 referenceAxis = abs(n.y) < 0.999 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);
     float3 right = normalize(cross(referenceAxis, n));
@@ -46,7 +50,7 @@ float3 CalculateIrradiance(const in int2 globalPos, const in float3 normal) {
     float3x3 tbn = float3x3(right, up, n);
     float3 skyUp, skyRight, skyForward;
     float horizonAngle;
-    getSkyViewParameters(sceneUniforms.sunDirection.xyz, skyUp, skyRight, skyForward, horizonAngle);
+    getSkyViewParameters(sunDir, skyUp, skyRight, skyForward, horizonAngle);
 
     float dither1 = IGN::getAnimated(globalPos, sceneUniforms.frameCounter);
     float dither2 = IGN::getAnimated(globalPos, sceneUniforms.frameCounter + 18);
@@ -69,9 +73,18 @@ float3 CalculateIrradiance(const in int2 globalPos, const in float3 normal) {
                 cos_theta);
 
             float3 sampleVec = mul(tangentSample, tbn);
-            float3 skyColor = getValFromSkyLUT(skyView, linearSampler, sampleVec, skyUp, skyRight, skyForward, horizonAngle);
+            float groundDist = rayIntersectSphere(sky_viewPos, sampleVec, GroundRadius_MM);
 
-            irradiance += skyColor;
+            if (groundDist > 0.0) {
+                // hit ground
+                float3 skyLight = SunLux * max(sceneUniforms.sunDirection.y, 0.0) * getValFromTLUT(skyTransmit, linearSampler, sky_viewPos, sunDir);
+                skyLight += getValFromSkyLUT(skyView, linearSampler, float3(0, 1, 0), sunDir);
+                irradiance += srgbToLinear(groundAlbedo) * skyLight/PI;
+            }
+            else {
+                // sky
+                irradiance += getValFromSkyLUT(skyView, linearSampler, sampleVec, skyUp, skyRight, skyForward, horizonAngle);
+            }
         }
     }
 
