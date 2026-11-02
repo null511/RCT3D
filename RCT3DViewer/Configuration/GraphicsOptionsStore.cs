@@ -71,6 +71,5 @@ internal sealed class GraphicsOptionsStore
         && float.IsFinite(settings.Sharpening) && settings.Sharpening is >= 0.0f and <= 1.0f
         && float.IsFinite(settings.MipBias) && settings.MipBias is >= -2.0f and <= 0.0f
         && settings.ShadowResolution is 512 or 1024 or 2048 or 4096
-        && float.IsFinite(settings.ShadowRadius) && settings.ShadowRadius is >= 16.0f and <= 512.0f
-        && float.IsFinite(settings.ShadowDistortionFactor) && settings.ShadowDistortionFactor is >= 0.0f and <= 1.0f;
+        && float.IsFinite(settings.ShadowRadius) && settings.ShadowRadius is >= 16.0f and <= 512.0f;
 }

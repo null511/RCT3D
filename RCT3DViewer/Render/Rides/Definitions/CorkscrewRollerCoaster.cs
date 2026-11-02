@@ -23,7 +23,8 @@ internal class CorkscrewRollerCoaster : RideDefinition
     {
         const float railSeparation = 0.42f;
 
-        return new TrackShape {
+        var shape = new TrackShape {
+            BraceInterval = 0.6f,
             RailShapes = [
                 new TrackRailProfileShape(CreateCircle(-railSeparation, 0f, 0.08f, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
@@ -39,5 +40,9 @@ internal class CorkscrewRollerCoaster : RideDefinition
                 },
             ],
         };
+
+        //shape.BraceParts.Add();
+
+        return shape;
     }
 }

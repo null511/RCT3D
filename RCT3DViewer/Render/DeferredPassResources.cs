@@ -56,7 +56,7 @@ internal sealed class DeferredPassResources : IDisposable
                         skyTargets.SkyTransmitView,
                         skyTargets.SkyViewView,
                         skyTargets.SkyIrradianceView,
-                        targets.ShadowTargets!.DepthView,
+                        targets.ShadowTargets!.CascadeDepthView,
                     },
                 },
                 new[] {

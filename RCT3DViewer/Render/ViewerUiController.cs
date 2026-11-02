@@ -32,7 +32,6 @@ internal sealed class ViewerUiController
     private float _fieldOfView = 45.0f;
     private float _sharpening = 0.5f;
     private float _mipBias = -1.0f;
-    private float _shadowDistortionFactor = 0.65f;
     private float _shadowRadius = ShadowRenderTargets.DefaultRadius;
     private uint _appliedShadowResolution = ShadowRenderTargets.DefaultResolution;
     private uint _selectedShadowResolution = ShadowRenderTargets.DefaultResolution;
@@ -53,7 +52,6 @@ internal sealed class ViewerUiController
         _fieldOfView = settings.FieldOfView;
         _sharpening = settings.Sharpening;
         _mipBias = settings.MipBias;
-        _shadowDistortionFactor = settings.ShadowDistortionFactor;
         _shadowRadius = settings.ShadowRadius;
         _appliedShadowResolution = settings.ShadowResolution;
         _selectedShadowResolution = settings.ShadowResolution;
@@ -71,7 +69,6 @@ internal sealed class ViewerUiController
     public uint DebugView => (uint)_debugView;
     public float Sharpening => _sharpening;
     public float MipBias => _mipBias;
-    public float ShadowDistortionFactor => _shadowDistortionFactor;
     public float ShadowRadius => _shadowRadius;
     public uint ShadowResolution => _appliedShadowResolution;
     //public string? LoadedParkPath => _loadedParkPath;
@@ -96,7 +93,6 @@ internal sealed class ViewerUiController
         applyFieldOfView(_fieldOfView);
         _sharpening = _appliedGraphicsOptions.Sharpening;
         _mipBias = _appliedGraphicsOptions.MipBias;
-        _shadowDistortionFactor = _appliedGraphicsOptions.ShadowDistortionFactor;
         _shadowRadius = _appliedGraphicsOptions.ShadowRadius;
         _selectedShadowResolution = _appliedShadowResolution;
         _editingGraphicsOptions = false;
@@ -128,8 +124,7 @@ internal sealed class ViewerUiController
         Sharpening = _sharpening,
         MipBias = _mipBias,
         ShadowResolution = _selectedShadowResolution,
-        ShadowRadius = _shadowRadius,
-        ShadowDistortionFactor = _shadowDistortionFactor
+        ShadowRadius = _shadowRadius
     };
 
     public void ToggleDebug() => _showDebug = !_showDebug;
@@ -293,7 +288,6 @@ internal sealed class ViewerUiController
                 if (ImGui.Combo("Resolution", ref shadowResolutionIndex, ShadowResolutionOptions, ShadowResolutionOptions.Length))
                     _selectedShadowResolution = (uint)(512 << shadowResolutionIndex);
                 ImGui.SliderFloat("Radius", ref _shadowRadius, 16.0f, 512.0f, "%.0f");
-                ImGui.SliderFloat("Shadow Distortion", ref _shadowDistortionFactor, 0.0f, 1.0f, "%.2f");
                 if (_graphicsOptionsSaveError is not null)
                     ImGui.TextWrapped($"Settings are active but could not be saved: {_graphicsOptionsSaveError}");
                 ImGui.Separator();

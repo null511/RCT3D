@@ -39,9 +39,9 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
         descriptorLayouts[1] = modelTextureDescriptorSetLayout;
         descriptorLayouts[2] = modelSamplerDescriptorSetLayout;
         var pushConstantRange = new PushConstantRange {
-            StageFlags = ShaderStageFlags.FragmentBit,
+            StageFlags = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
             Offset = 0,
-            Size = sizeof(uint)
+            Size = sizeof(uint) * 2
         };
         var createInfo = new PipelineLayoutCreateInfo {
             SType = StructureType.PipelineLayoutCreateInfo,

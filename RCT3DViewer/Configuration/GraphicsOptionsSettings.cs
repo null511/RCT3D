@@ -9,7 +9,6 @@ internal sealed record GraphicsOptionsSettings
     public float MipBias { get; init; } = -1.0f;
     public uint ShadowResolution { get; init; } = 2048;
     public float ShadowRadius { get; init; } = 128.0f;
-    public float ShadowDistortionFactor { get; init; } = 0.65f;
 
     public GraphicsOptionsSettings()
     {

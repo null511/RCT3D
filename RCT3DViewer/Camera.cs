@@ -5,6 +5,9 @@ namespace RCT3D;
 
 public class FlightCamera
 {
+    public const float NearPlane = 0.1f;
+    public const float FarPlane = 1000.0f;
+
     // Start above and slightly behind the terrain, looking toward terrain center.
     public Vector3 Position = new(192.0f, 120.0f, -120.0f);
     public Vector3 Front = Vector3.Normalize(new Vector3(0.0f, -0.5f, MathF.Sqrt(3.0f) * 0.5f));
@@ -38,8 +41,8 @@ public class FlightCamera
         var proj = Matrix4x4.CreatePerspectiveFieldOfView(
             FieldOfViewDegrees * MathF.PI / 180.0f,
             aspectRatio, 
-            0.1f, 
-            1000.0f
+            NearPlane,
+            FarPlane
         );
         proj.M22 *= -1.0f; // Invert Y axis for Vulkan clip-space coordinates
         return proj;

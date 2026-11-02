@@ -22,9 +22,11 @@ struct SceneUniforms {
 };
 
 struct ShadowUniforms {
-	float4x4 shadowViewProjection;
-	float distortionFactor;
-	float3 padding;
+	float4x4 shadowViewProjection0;
+	float4x4 shadowViewProjection1;
+	float4x4 shadowViewProjection2;
+	float4x4 shadowViewProjection3;
+	float4 cascadeSplits;
 };
 
 enum DebugView : uint {

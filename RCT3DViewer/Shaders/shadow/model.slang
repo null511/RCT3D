@@ -1,6 +1,5 @@
 import lib.common;
 import lib.uniforms;
-import lib.shadow;
 
 [[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
 
@@ -25,6 +24,7 @@ struct VertexOutput {
 struct ModelMaterialPushConstants
 {
     uint baseTextureIndex;
+    uint cascadeIndex;
 };
 
 [[vk::push_constant]]
@@ -38,8 +38,12 @@ VertexOutput vertexMain(VertexInput input)
 		+ input.position.z * input.transformRow2
 		+ input.transformRow3;
 
-	VertexOutput output;
-    output.position = distortShadowClip(mul(worldPosition, shadowUniforms.shadowViewProjection), shadowUniforms.distortionFactor);
+    float4x4 shadowViewProjection = materialPushConstants.cascadeIndex == 0 ? shadowUniforms.shadowViewProjection0
+        : materialPushConstants.cascadeIndex == 1 ? shadowUniforms.shadowViewProjection1
+        : materialPushConstants.cascadeIndex == 2 ? shadowUniforms.shadowViewProjection2
+        : shadowUniforms.shadowViewProjection3;
+    VertexOutput output;
+    output.position = mul(worldPosition, shadowViewProjection);
     output.texCoord = input.texCoord;
     return output;
 }
