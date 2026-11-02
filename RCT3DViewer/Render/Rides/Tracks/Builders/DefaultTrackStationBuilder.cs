@@ -1,30 +1,9 @@
 using RCT3D.Interop.Models;
 using System.Numerics;
 
-namespace RCT3D.Render.Rides.Tracks;
+namespace RCT3D.Render.Rides.Tracks.Builders;
 
-[Flags]
-internal enum StationSideOpenings : byte
-{
-    None = 0,
-    NegativeSide = 1,
-    PositiveSide = 2,
-}
-
-internal interface IStationBuilder
-{
-    void AddStationTile(
-        RCTTrackElementType trackType,
-        int tileX,
-        int tileY,
-        byte direction,
-        byte baseHeight,
-        TrackMeshGeometry geometry,
-        TrackRgba8 supportColor,
-        StationSideOpenings sideOpenings);
-}
-
-internal sealed class DefaultStationBuilder : IStationBuilder
+internal sealed class DefaultTrackStationBuilder : ITrackStationBuilder
 {
     private const float MetalPlatformThickness = 0.18f;
     private static readonly TrackRailSpecularData MetalPlatformSpecular = new(80, 20);

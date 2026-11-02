@@ -1,6 +1,7 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
 
 namespace RCT3D.Render.Rides.Definitions;
 
@@ -23,13 +24,14 @@ internal sealed class WoodenRollerCoaster : RideDefinition
         SupportStyle = RideSupportStyle.WoodenTruss;
         SupportTrackOffset = CenterlineHeightOffset - RailHalfHeight - SupportTopClearance;
 
-        StationBuilder = new DefaultStationBuilder();
+        StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
-        foreach (var part in CreateRail(-RailHalfSeparation, -0.2f)) yield return part;
-        foreach (var part in CreateRail( RailHalfSeparation, -0.2f)) yield return part;
+        var shape = new TrackShape();
+        shape.RailShapes.AddRange(CreateRail(-RailHalfSeparation, -0.2f));
+        shape.RailShapes.AddRange(CreateRail(RailHalfSeparation, -0.2f));
 
         if (!track.Part.IsStationPlatform() && !track.Part.IsLoop()) {
             const float woodHalfMargin = (1.5f - (RailHalfSeparation - RailWoodInset)) * 0.5f;
@@ -39,8 +41,8 @@ internal sealed class WoodenRollerCoaster : RideDefinition
             const float woodPlatformCenterY = -0.26f;
 
             // side platforms
-            foreach (var part in CreateWood(-woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight)) yield return part;
-            foreach (var part in CreateWood( woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight)) yield return part;
+            shape.RailShapes.AddRange(CreateWood(-woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight));
+            shape.RailShapes.AddRange(CreateWood(woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight));
 
             const float WoodRailingWidth = 0.04f;
 
@@ -48,9 +50,11 @@ internal sealed class WoodenRollerCoaster : RideDefinition
             var woodRailingCenterY = 0.36f;
 
             // side railing
-            foreach (var part in CreateWood(-woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth)) yield return part;
-            foreach (var part in CreateWood( woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth)) yield return part;
+            shape.RailShapes.AddRange(CreateWood(-woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth));
+            shape.RailShapes.AddRange(CreateWood(woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth));
         }
+
+        return shape;
     }
 
     private static IEnumerable<TrackRailProfileShape> CreateRail(float centerX, float centerY)

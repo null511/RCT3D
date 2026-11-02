@@ -1,6 +1,7 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
 using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
@@ -9,7 +10,7 @@ internal sealed class BobsleighCoaster : RideDefinition
 {
     public BobsleighCoaster() : base(RCTRideType.BobsleighCoaster)
     {
-        StationBuilder = new DefaultStationBuilder();
+        StationBuilder = new DefaultTrackStationBuilder();
         //SmoothMovement = true;
         CenterlineHeightOffset = 0.65f;
         //CarVerticalOffset = 0.5f;
@@ -18,10 +19,12 @@ internal sealed class BobsleighCoaster : RideDefinition
         SupportTrackOffset = -0.45f;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
-        return track.HasChainLift != 0 || track.Part.IsStationPlatform()
-            ? GetTrackedRailParts(track.Part) : GetBeddedRailParts();
+        return new TrackShape {
+            RailShapes = (track.HasChainLift != 0 || track.Part.IsStationPlatform()
+                ? GetTrackedRailParts(track.Part) : GetBeddedRailParts()).ToList(),
+        };
     }
 
     private IEnumerable<TrackRailProfileShape> GetTrackedRailParts(RCTTrackElementType part)

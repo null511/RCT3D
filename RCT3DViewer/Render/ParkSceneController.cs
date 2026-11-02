@@ -88,18 +88,23 @@ internal sealed class ParkSceneController(
             var snapshot = await simulation.LoadParkAsync(parkPath, progress => Volatile.Write(ref parkLoadProgress, progress));
             Volatile.Write(ref parkLoadProgress, "Generating terrain, water, path, accessory, tree, track, support, and station meshes...");
 
-            var meshData = await Task.Run(() => (
-                Terrain: terrainMeshBuilder.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height, terrainSkirtFloor),
-                Paths: pathMeshBuilder.Build(snapshot.PathData, snapshot.SurfaceData, snapshot.Width, snapshot.Height),
-                Navigation: new PathNavigation(snapshot.PathData),
-                PathAccessories: pathAccessoryMeshBuilder.Build(snapshot.PathData, snapshot.Width, snapshot.Height),
-                Trees: treeSceneryMeshBuilder.Build(snapshot.TreeData, snapshot.Width, snapshot.Height),
-                Tracks: trackMeshBuilder.Build(snapshot.TrackData, snapshot.PathData, snapshot.RideEntranceData, snapshot.SurfaceData, snapshot.Width, snapshot.Height, snapshot.PaletteData),
-                RideEntrances: rideEntranceExitMeshBuilder.Build(snapshot.RideEntranceData, snapshot.Width, snapshot.Height)));
+            var meshData = await Task.Run(() => {
+                var terrain = terrainMeshBuilder.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height, terrainSkirtFloor);
+                var tracks = trackMeshBuilder.Build(snapshot.TrackData, snapshot.PathData, snapshot.RideEntranceData, snapshot.SurfaceData, snapshot.Width, snapshot.Height, snapshot.PaletteData);
+                return (
+                    Terrain: terrain,
+                    Water: WaterMeshData.Combine(terrain.Water, tracks.Water),
+                    Paths: pathMeshBuilder.Build(snapshot.PathData, snapshot.SurfaceData, snapshot.Width, snapshot.Height),
+                    Navigation: new PathNavigation(snapshot.PathData),
+                    PathAccessories: pathAccessoryMeshBuilder.Build(snapshot.PathData, snapshot.Width, snapshot.Height),
+                    Trees: treeSceneryMeshBuilder.Build(snapshot.TreeData, snapshot.Width, snapshot.Height),
+                    Tracks: tracks,
+                    RideEntrances: rideEntranceExitMeshBuilder.Build(snapshot.RideEntranceData, snapshot.Width, snapshot.Height));
+            });
 
             return new ParkLoadResult(
                 parkPath, snapshot.Width, snapshot.Height,
-                meshData.Terrain.Terrain, meshData.Terrain.Water, meshData.Paths, meshData.Navigation, meshData.PathAccessories,
+                meshData.Terrain.Terrain, meshData.Water, meshData.Paths, meshData.Navigation, meshData.PathAccessories,
                 meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, meshData.Trees, meshData.Tracks.TrackElements, snapshot.RideEntranceData,
                 meshData.Tracks.Centerlines);
         }

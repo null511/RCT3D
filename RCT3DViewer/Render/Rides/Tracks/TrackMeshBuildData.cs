@@ -1,11 +1,13 @@
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Interop.Models;
+using RCT3D.Render.Terrain;
 
 namespace RCT3D.Render.Rides.Tracks;
 
 internal sealed record TrackMeshBuildData(
     TrackMeshData Tracks,
     RideSupportMeshData RideSupports,
+    WaterMeshData Water,
     TrackCenterlinePiece[] Centerlines,
     RCTTrackElementData[] TrackElements);
 

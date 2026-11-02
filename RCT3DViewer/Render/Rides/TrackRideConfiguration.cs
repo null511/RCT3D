@@ -2,6 +2,8 @@ using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Definitions;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides;
 
@@ -14,10 +16,11 @@ internal class TrackRideConfiguration(
     float carVerticalOffset,
     Action<RCTTrackElementData, List<TrackSupportPlacement>>? getSupportPlacements,
     bool smoothMovement,
-    IStationBuilder? stationBuilder,
+    ITrackStationBuilder? stationBuilder,
     float trackBankAngleDegrees,
     RidePlatformSurfaceType platformSurface = RidePlatformSurfaceType.Wood,
-    RidePlatformRailingType platformRailing = RidePlatformRailingType.Chained)
+    RidePlatformRailingType platformRailing = RidePlatformRailingType.Chained,
+    Vector2[]? waterPlanePolyline = null)
 {
     public RCTRideType RideType { get; } = rideType;
     public IReadOnlyList<ITrackPartGenerator> PartGenerators { get; } = partGenerators;
@@ -27,9 +30,10 @@ internal class TrackRideConfiguration(
     public float CarVerticalOffset { get; } = carVerticalOffset;
     public bool SmoothMovement { get; } = smoothMovement;
     public float TrackBankAngleDegrees { get; } = trackBankAngleDegrees;
-    public IStationBuilder? StationBuilder { get; } = stationBuilder;
+    public ITrackStationBuilder? StationBuilder { get; } = stationBuilder;
     public RidePlatformSurfaceType PlatformSurface { get; } = platformSurface;
     public RidePlatformRailingType PlatformRailing { get; } = platformRailing;
+    public Vector2[]? WaterPlanePolyline { get; } = waterPlanePolyline;
     public IRideSupportMeshBuilder? SupportMeshBuilder { get; } = RideSupportMeshBuilders.Resolve(supportStyle);
     public Action<RCTTrackElementData, List<TrackSupportPlacement>>? GetSupportPlacements { get; } = getSupportPlacements;
 
@@ -70,6 +74,7 @@ internal static class TrackRideConfigurations
         new MiniatureRailway().Build(),
         new Monorail().Build(),
         new ObservationTower().Build(),
+        new RiverRapids().Build(),
         new WoodenRollerCoaster().Build(),
         new WoodenWildMouse().Build(),
     ];

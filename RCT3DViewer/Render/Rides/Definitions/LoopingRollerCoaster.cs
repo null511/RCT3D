@@ -1,6 +1,7 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
 
 namespace RCT3D.Render.Rides.Definitions;
 
@@ -8,7 +9,7 @@ internal class LoopingRollerCoaster : RideDefinition
 {
     public LoopingRollerCoaster() : base(RCTRideType.LoopingRollerCoaster)
     {
-        StationBuilder = new DefaultStationBuilder();
+        StationBuilder = new DefaultTrackStationBuilder();
         SmoothMovement = true;
         CarVerticalOffset = 0.85f;
 
@@ -16,9 +17,10 @@ internal class LoopingRollerCoaster : RideDefinition
         SupportTrackOffset = 0.20f;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
-        return [
+        return new TrackShape {
+            RailShapes = [
             new TrackRailProfileShape(CreateCircle(-0.42f, 0.28f, 0.06f, 5), true) {
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(100, 0),
@@ -31,6 +33,7 @@ internal class LoopingRollerCoaster : RideDefinition
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(100, 0),
             },
-        ];
+            ],
+        };
     }
 }

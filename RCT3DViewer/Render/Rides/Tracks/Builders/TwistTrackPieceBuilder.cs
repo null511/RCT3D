@@ -1,7 +1,7 @@
 using System.Numerics;
 using RCT3D.Interop.Models;
 
-namespace RCT3D.Render.Rides.Tracks;
+namespace RCT3D.Render.Rides.Tracks.Builders;
 
 internal sealed class TwistTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPieceMeshBuilder(pieceType)
 {

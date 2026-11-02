@@ -1,6 +1,7 @@
 ﻿using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
 using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
@@ -9,22 +10,24 @@ internal class MiniatureRailway : RideDefinition
 {
     public MiniatureRailway() : base(RCTRideType.MiniatureRailway)
     {
-        StationBuilder = new DefaultStationBuilder();
+        StationBuilder = new DefaultTrackStationBuilder();
         SmoothMovement = true;
         CarVerticalOffset = 1.0f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
+        var shape = new TrackShape();
+
         // rails
-        yield return CreateRailRectangle(-0.40f, 0.16f);
-        yield return CreateRailRectangle( 0.40f, 0.16f);
+        shape.RailShapes.Add(CreateRailRectangle(-0.40f, 0.16f));
+        shape.RailShapes.Add(CreateRailRectangle(0.40f, 0.16f));
 
         if (!track.Part.IsStationPlatform()) {
             // ballast
-            yield return new TrackRailProfileShape([
+            shape.RailShapes.Add(new TrackRailProfileShape([
                 new Vector2(1.2f, -0.04f),
                 new Vector2(0.5f, 0.16f),
 
@@ -34,8 +37,10 @@ internal class MiniatureRailway : RideDefinition
                 new Vector2(-1.2f, -0.04f),
             ], false) {
                 Color = new TrackRgba8(130, 113, 87, 255),
-            };
+            });
         }
+
+        return shape;
     }
 
     private static TrackRailProfileShape CreateRailRectangle(float centerX, float baseY)

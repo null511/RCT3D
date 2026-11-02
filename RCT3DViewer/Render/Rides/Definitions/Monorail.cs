@@ -1,6 +1,7 @@
 ﻿using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
 using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
@@ -9,7 +10,7 @@ internal class Monorail : RideDefinition
 {
     public Monorail() : base(RCTRideType.Monorail)
     {
-        StationBuilder = new DefaultStationBuilder();
+        StationBuilder = new DefaultTrackStationBuilder();
         SmoothMovement = true;
         CarVerticalOffset = 1.0f;
 
@@ -17,9 +18,10 @@ internal class Monorail : RideDefinition
         SupportTrackOffset = 0.2f;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
-        return [
+        return new TrackShape {
+            RailShapes = [
             new TrackRailProfileShape([
                 new Vector2(0.20f, 0.40f),
                 new Vector2(0.20f, 0.50f),
@@ -50,6 +52,7 @@ internal class Monorail : RideDefinition
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(240, 0),
             },
-        ];
+            ],
+        };
     }
 }

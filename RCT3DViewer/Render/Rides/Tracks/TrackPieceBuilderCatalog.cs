@@ -1,4 +1,5 @@
 using RCT3D.Interop.Models;
+using RCT3D.Render.Rides.Tracks.Builders;
 
 namespace RCT3D.Render.Rides.Tracks;
 
@@ -28,7 +29,12 @@ internal sealed class TrackPieceBuilderCatalog
             RCTTrackElementType.LeftBank,
             RCTTrackElementType.MiddleStation,
             RCTTrackElementType.OnRidePhoto,
-            RCTTrackElementType.RightBank);
+            RCTTrackElementType.Rapids,
+            RCTTrackElementType.RightBank,
+            RCTTrackElementType.Waterfall,
+            RCTTrackElementType.Whirlpool);
+
+        // Special pieces are registered in dedicated sections below.
 
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25, Pitch.Slope25, Pitch.Slope25));
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60, Pitch.Slope60, Pitch.Slope60));

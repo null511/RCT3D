@@ -586,4 +586,48 @@ internal sealed record TerrainMeshData(
 
 internal sealed record TerrainMeshBuildData(TerrainMeshData Terrain, WaterMeshData Water);
 
-internal sealed record WaterMeshData(Vector3[] Vertices, uint[] Indices, RenderRegionIndexRange[] Regions);
+internal sealed record WaterMeshData(Vector3[] Vertices, uint[] Indices, RenderRegionIndexRange[] Regions)
+{
+    public static WaterMeshData Combine(WaterMeshData first, WaterMeshData second)
+    {
+        if (first.Indices.Length == 0) return second;
+        if (second.Indices.Length == 0) return first;
+
+        var firstRegions = first.Regions.ToDictionary(range => range.Region);
+        var secondRegions = second.Regions.ToDictionary(range => range.Region);
+        var vertices = new List<Vector3>();
+        var indices = new List<uint>();
+        var regions = new List<RenderRegionIndexRange>();
+
+        foreach (var region in firstRegions.Keys.Concat(secondRegions.Keys).Distinct()
+                     .OrderBy(region => region.Y).ThenBy(region => region.X)) {
+            var firstVertex = vertices.Count;
+            var firstIndex = indices.Count;
+
+            AddRegion(first, firstRegions, region, vertices, indices);
+            AddRegion(second, secondRegions, region, vertices, indices);
+
+            if (indices.Count > firstIndex)
+                regions.Add(RenderRegionMeshRanges.Create(region, vertices, indices, firstVertex, firstIndex));
+        }
+
+        return new WaterMeshData(vertices.ToArray(), indices.ToArray(), regions.ToArray());
+    }
+
+    private static void AddRegion(
+        WaterMeshData mesh,
+        IReadOnlyDictionary<RenderRegionCoordinate, RenderRegionIndexRange> ranges,
+        RenderRegionCoordinate region,
+        List<Vector3> vertices,
+        List<uint> indices)
+    {
+        if (!ranges.TryGetValue(region, out var range)) return;
+
+        var endIndex = checked((int)(range.FirstIndex + range.IndexCount));
+        for (var index = checked((int)range.FirstIndex); index < endIndex; index++) {
+            var sourceVertex = checked((int)mesh.Indices[index]);
+            indices.Add(checked((uint)vertices.Count));
+            vertices.Add(mesh.Vertices[sourceVertex]);
+        }
+    }
+}

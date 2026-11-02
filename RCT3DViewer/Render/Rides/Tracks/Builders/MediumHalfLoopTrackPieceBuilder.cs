@@ -1,14 +1,14 @@
 using RCT3D.Interop.Models;
 using System.Numerics;
 
-namespace RCT3D.Render.Rides.Tracks;
+namespace RCT3D.Render.Rides.Tracks.Builders;
 
-internal sealed class LargeHalfLoopTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPieceMeshBuilder(pieceType)
+internal sealed class MediumHalfLoopTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPieceMeshBuilder(pieceType)
 {
     public override bool RequiresCompletePiece => true;
 
     public override void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> palette) =>
-        throw new InvalidOperationException("Large half-loop geometry must be built from a complete piece.");
+        throw new InvalidOperationException("Medium half-loop geometry must be built from a complete piece.");
 
     public override void AddPiece(ReadOnlySpan<RCTTrackElementData> tracks, TrackMeshGeometry geometry, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> palette)
     {
@@ -29,7 +29,7 @@ internal sealed class LargeHalfLoopTrackPieceBuilder(RCTTrackElementType pieceTy
         start.Y = originHeight + first.SplineZBegin * WorldUnits.HeightPerBaseUnit;
         end.Y = originHeight + first.SplineZEnd * WorldUnits.HeightPerBaseUnit;
 
-        var isUp = PieceType is RCTTrackElementType.LeftLargeHalfLoopUp or RCTTrackElementType.RightLargeHalfLoopUp;
+        var isUp = PieceType is RCTTrackElementType.LeftMediumHalfLoopUp or RCTTrackElementType.RightMediumHalfLoopUp;
 
         var startTangent = isUp
             ? Vector3.Normalize(startDirection + Vector3.UnitY * Pitch.Slope25)
@@ -40,7 +40,7 @@ internal sealed class LargeHalfLoopTrackPieceBuilder(RCTTrackElementType pieceTy
             : Vector3.Normalize(endDirection - Vector3.UnitY * Pitch.Slope25);
 
         var preferredSide = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, startDirection));
-        if (!isUp)
+        if (PieceType is RCTTrackElementType.LeftMediumHalfLoopDown or RCTTrackElementType.RightMediumHalfLoopDown)
             preferredSide = -preferredSide;
 
         var controlLength = Vector3.Distance(start, end) * 0.4f;

@@ -1,5 +1,6 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
 using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
@@ -8,20 +9,22 @@ internal sealed class MineTrainCoaster : RideDefinition
 {
     public MineTrainCoaster() : base(RCTRideType.MineTrainCoaster)
     {
-        StationBuilder = new DefaultStationBuilder();
+        StationBuilder = new DefaultTrackStationBuilder();
         SmoothMovement = true;
         CenterlineHeightOffset = 0.2f;
         CarVerticalOffset = 0.5f;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
         const float RailSeparation = 0.48f;
 
-        return [
-            .. CreateRail(-RailSeparation*0.5f),
-            .. CreateRail( RailSeparation*0.5f),
-        ];
+        return new TrackShape {
+            RailShapes = [
+                .. CreateRail(-RailSeparation*0.5f),
+                .. CreateRail(RailSeparation*0.5f),
+            ],
+        };
     }
 
     private static IEnumerable<TrackRailProfileShape> CreateRail(float centerX)

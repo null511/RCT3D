@@ -1,27 +1,16 @@
 ﻿using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
+using System.Collections.Concurrent;
 using System.Numerics;
 
 namespace RCT3D.Render.Rides;
 
-internal enum RidePlatformSurfaceType
-{
-    Wood,
-    Metal,
-    Fiber,
-}
-
-internal enum RidePlatformRailingType
-{
-    Fenced,
-    Chained,
-}
-
 internal abstract class RideDefinition(RCTRideType rideType)
 {
     protected RideSupportStyle SupportStyle;
-    protected IStationBuilder? StationBuilder;
+    protected ITrackStationBuilder? StationBuilder;
     protected RidePlatformSurfaceType PlatformSurface = RidePlatformSurfaceType.Wood;
     protected RidePlatformRailingType PlatformRailing = RidePlatformRailingType.Chained;
 
@@ -39,6 +28,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
 
     protected float CarVerticalOffset = 0.0f;
     protected bool HasSupportPlacement = false;
+    protected Vector2[]? WaterPlanePolyline;
 
     /// <summary>
     /// Enables smoothing of vehicle movement by using the track centerline instead of the game-provided location/rotation.
@@ -48,14 +38,26 @@ internal abstract class RideDefinition(RCTRideType rideType)
 
     public TrackRideConfiguration Build()
     {
-        return new TrackRideConfiguration(rideType, [
-            new SweptRailProfileGenerator(GetRailParts),
-        ], SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
+        var trackShapesByType = new ConcurrentDictionary<(RCTTrackElementType TrackType, byte HasChainLift), TrackShape>();
+
+        TrackShape GetCachedTrackShape(RCTTrackElementData track) {
+            var trackData = track;
+            return trackShapesByType.GetOrAdd(
+                (track.Part, track.HasChainLift),
+                _ => GetTrackShape(trackData));
+        }
+
+        var partGenerators = new List<ITrackPartGenerator> {
+            new SweptRailProfileGenerator(track => GetCachedTrackShape(track).RailShapes),
+            new TrackBraceGenerator(GetCachedTrackShape),
+        };
+
+        return new TrackRideConfiguration(rideType, partGenerators, SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
             HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder, TrackBankAngleDegrees,
-            PlatformSurface, PlatformRailing);
+            PlatformSurface, PlatformRailing, WaterPlanePolyline);
     }
 
-    protected abstract IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track);
+    protected abstract TrackShape GetTrackShape(RCTTrackElementData track);
 
     protected virtual void GetSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements)
     {
@@ -113,4 +115,24 @@ internal abstract class RideDefinition(RCTRideType rideType)
     }
 
     #endregion
+}
+
+internal class TrackShape
+{
+    public float? BraceInterval;
+    public List<TrackRailProfileShape> RailShapes = [];
+    public List<TrackBracePart> BraceParts = [];
+}
+
+internal enum RidePlatformSurfaceType
+{
+    Wood,
+    Metal,
+    Fiber,
+}
+
+internal enum RidePlatformRailingType
+{
+    Fenced,
+    Chained,
 }

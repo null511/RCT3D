@@ -3,6 +3,7 @@ using RCT3D.Render.Rides.Supports;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Serilog;
+using RCT3D.Render.Rides.Tracks.Builders;
 
 namespace RCT3D.Render.Rides.Tracks;
 
@@ -131,6 +132,7 @@ internal sealed class TrackMeshBuilder
         }
 
         var geometry = new TrackMeshGeometry();
+        var waterGeometry = new WaterPlaneMeshGeometry();
         var supportGeometry = new RideSupportMeshGeometry();
         var rideCenterlines = new List<TrackCenterlinePiece>();
         var piecesByRegion = new Dictionary<RenderRegionCoordinate, List<(TrackPieceKey Key, TrackRideConfiguration Configuration, List<RCTTrackElementData> Elements)>>();
@@ -168,6 +170,7 @@ internal sealed class TrackMeshBuilder
             if (regionPieces.Count == 0 && platformTiles.Count == 0) continue;
 
             geometry.BeginRegion(region);
+            waterGeometry.BeginRegion(region);
             supportGeometry.BeginRegion(region);
 
             foreach (ref readonly var platformTile in CollectionsMarshal.AsSpan(platformTiles)) {
@@ -181,7 +184,8 @@ internal sealed class TrackMeshBuilder
                 pieceBuilders.TryResolve(track.Part, out var pieceBuilder);
                 var pieceSpan = CollectionsMarshal.AsSpan(piece);
                 var hasSupportPlacements = configuration.HasSupportPlacements;
-                var captureCenterline = hasSupportPlacements || configuration.SmoothMovement;
+                var captureCenterline = hasSupportPlacements || configuration.SmoothMovement
+                    || configuration.WaterPlanePolyline is not null;
                 geometry.SetVerticalOffset(configuration.CenterlineHeightOffset);
                 geometry.SetTrackBankAngleDegrees(configuration.TrackBankAngleDegrees);
                 if (captureCenterline)
@@ -213,6 +217,11 @@ internal sealed class TrackMeshBuilder
                 }
 
                 var centerlines = captureCenterline ? geometry.EndCenterlineCapture() : [];
+                if (configuration.WaterPlanePolyline is { } waterPlanePolyline) {
+                    foreach (var centerline in centerlines)
+                        waterGeometry.AddSweptPolyline(waterPlanePolyline, centerline);
+                }
+
                 if (configuration.SmoothMovement && centerlines.Length > 0) {
                     var sequences = new TrackCenterlineSequence[centerlines.Length];
                     for (var i = 0; i < centerlines.Length; i++) {
@@ -291,11 +300,12 @@ internal sealed class TrackMeshBuilder
             }
 
             geometry.EndRegion();
+            waterGeometry.EndRegion();
             supportGeometry.EndRegion();
         }
 
         return new TrackMeshBuildData(
-            geometry.Build(), supportGeometry.Build(), rideCenterlines.ToArray(), validTrackElements.ToArray());
+            geometry.Build(), supportGeometry.Build(), waterGeometry.Build(), rideCenterlines.ToArray(), validTrackElements.ToArray());
     }
 
     private static TrackSupportAnchor ResolveSupportAnchor(

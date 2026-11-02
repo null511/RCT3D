@@ -64,7 +64,7 @@ void main(uint2 globalPos: SV_DispatchThreadID) {
         float hDotV = max(dot(halfDirection, viewDirection), 0.0);
 
         float smoothness = 1.0 - roughness;
-        smoothness = pow2(smoothness);
+        //smoothness = pow2(smoothness);
 
         float3 f0 = lerp(0.04, albedo, metalness);
         float3 fresnel_sun = FresnelSchlick(hDotV, f0);

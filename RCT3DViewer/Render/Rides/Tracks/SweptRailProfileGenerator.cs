@@ -171,7 +171,7 @@ internal static class TrackMeshPartGenerator
         return frames;
     }
 
-    private static TrackRgba8 GetPaletteColor(byte paletteIndex, ReadOnlySpan<RCTPaletteEntry> palette)
+    internal static TrackRgba8 GetPaletteColor(byte paletteIndex, ReadOnlySpan<RCTPaletteEntry> palette)
     {
         if (paletteIndex >= palette.Length)
             throw new InvalidDataException($"Track palette index {paletteIndex} is outside the {palette.Length}-entry palette.");

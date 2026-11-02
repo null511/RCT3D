@@ -1,6 +1,7 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
 
 namespace RCT3D.Render.Rides.Definitions;
 
@@ -14,14 +15,15 @@ internal sealed class MineRide : RideDefinition
 
         SupportStyle = RideSupportStyle.MetalFork;
 
-        StationBuilder = new DefaultStationBuilder();
+        StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
         var railSpecular = new TrackRailSpecularData(80, 20);
 
-        return [
+        return new TrackShape {
+            RailShapes = [
             new TrackRailProfileShape(CreateCircle(-0.42f, 0f, 0.075f, 5), true) {
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = railSpecular,
@@ -34,6 +36,7 @@ internal sealed class MineRide : RideDefinition
                 shape.Swatch = TrackRailSwatch.Main;
                 shape.Specular = railSpecular;
             }),
-        ];
+            ],
+        };
     }
 }

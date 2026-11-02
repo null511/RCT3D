@@ -14,9 +14,10 @@ internal sealed class GoKarts : RideDefinition
         SupportStyle = RideSupportStyle.WoodenTruss;
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
-        return [
+        return new TrackShape {
+            RailShapes = [
             // left-outside
             new TrackRailProfileShape([
                 new Vector2(-1.40f, 0.3f),
@@ -73,6 +74,7 @@ internal sealed class GoKarts : RideDefinition
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = new TrackRailSpecularData(220, 0),
             },
-        ];
+            ],
+        };
     }
 }

@@ -1,6 +1,7 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
 
 namespace RCT3D.Render.Rides.Definitions;
 
@@ -18,14 +19,15 @@ internal sealed class JuniorRollerCoaster : RideDefinition
         SupportStyle = RideSupportStyle.MetalFork;
         SupportTrackOffset = RailCenterY - RailRadius;
 
-        StationBuilder = new DefaultStationBuilder();
+        StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
         var railSpecular = new TrackRailSpecularData(80, 20);
 
-        return [
+        return new TrackShape {
+            RailShapes = [
             new TrackRailProfileShape(CreateCircle(-RailSeparation, RailCenterY, RailRadius, 5), true) {
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = railSpecular,
@@ -34,6 +36,7 @@ internal sealed class JuniorRollerCoaster : RideDefinition
                 Swatch = TrackRailSwatch.Alternate,
                 Specular = railSpecular,
             },
-        ];
+            ],
+        };
     }
 }

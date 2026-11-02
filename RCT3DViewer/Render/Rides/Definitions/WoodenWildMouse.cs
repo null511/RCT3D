@@ -1,6 +1,7 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
+using RCT3D.Render.Rides.Tracks.Builders;
 using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
@@ -14,11 +15,12 @@ internal class WoodenWildMouse : RideDefinition
 
         SupportStyle = RideSupportStyle.WoodenTruss;
 
-        StationBuilder = new DefaultStationBuilder();
+        StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override IEnumerable<TrackRailProfileShape> GetRailParts(RCTTrackElementData track)
+    protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
+        var shape = new TrackShape();
         var railColor = new TrackRgba8(200, 200, 200, 255);
         var railSpecular = new TrackRailSpecularData(180, 255);
 
@@ -32,81 +34,83 @@ internal class WoodenWildMouse : RideDefinition
         var sideHalfWidth = 0.04f;
 
         // left rail - top
-        yield return new TrackRailProfileShape([
+        shape.RailShapes.Add(new TrackRailProfileShape([
             new Vector2(centerLeftX + sideHalfWidth, centerY + halfHeight),
             new Vector2(centerLeftX - sideHalfWidth, centerY + halfHeight),
         ], false) {
             Color = railColor,
             Specular = railSpecular,
-        };
+        });
 
         // left rail - left
-        yield return new TrackRailProfileShape([
+        shape.RailShapes.Add(new TrackRailProfileShape([
             new Vector2(centerLeftX - sideHalfWidth, centerY + halfHeight),
             new Vector2(centerLeftX - sideHalfWidth, centerY - halfHeight),
         ], false) {
             Swatch = TrackRailSwatch.Main,
             Specular = railSpecular,
-        };
+        });
 
         // left rail - bottom
-        yield return new TrackRailProfileShape([
+        shape.RailShapes.Add(new TrackRailProfileShape([
             new Vector2(centerLeftX - sideHalfWidth, centerY - halfHeight),
             new Vector2(centerLeftX + sideHalfWidth, centerY - halfHeight),
         ], false) {
             Color = railColor,
             Specular = railSpecular,
-        };
+        });
 
         // left rail - right
-        yield return new TrackRailProfileShape([
+        shape.RailShapes.Add(new TrackRailProfileShape([
             new Vector2(centerLeftX + sideHalfWidth, centerY - halfHeight),
             new Vector2(centerLeftX + sideHalfWidth, centerY + halfHeight),
         ], false) {
             Color = railColor,
             Specular = railSpecular,
-        };
+        });
 
         // center rail
-        foreach (var part in CreateBox(centerX, centerY, halfWidth, halfHeight, shape => {
-            shape.Color = railColor;
-            shape.Specular = railSpecular;
-        })) yield return part;
+        shape.RailShapes.AddRange(CreateBox(centerX, centerY, halfWidth, halfHeight, part => {
+            part.Color = railColor;
+            part.Specular = railSpecular;
+        }));
 
         // right rail - top
-        yield return new TrackRailProfileShape([
+        shape.RailShapes.Add(new TrackRailProfileShape([
             new Vector2(centerRightX + sideHalfWidth, centerY + halfHeight),
             new Vector2(centerRightX - sideHalfWidth, centerY + halfHeight),
         ], false) {
             Color = railColor,
             Specular = railSpecular,
-        };
+        });
 
         // right rail - left
-        yield return new TrackRailProfileShape([
+        shape.RailShapes.Add(new TrackRailProfileShape([
             new Vector2(centerRightX - sideHalfWidth, centerY + halfHeight),
             new Vector2(centerRightX - sideHalfWidth, centerY - halfHeight),
         ], false) {
             Color = railColor,
             Specular = railSpecular,
-        };
+        });
 
         // right rail - bottom
-        yield return new TrackRailProfileShape([
+        shape.RailShapes.Add(new TrackRailProfileShape([
             new Vector2(centerRightX - sideHalfWidth, centerY - halfHeight),
             new Vector2(centerRightX + sideHalfWidth, centerY - halfHeight),
         ], false) {
             Color = railColor,
             Specular = railSpecular,
-        };
+        });
 
         // right rail - right
-        yield return new TrackRailProfileShape([
+        shape.RailShapes.Add(new TrackRailProfileShape([
             new Vector2(centerRightX + sideHalfWidth, centerY - halfHeight),
             new Vector2(centerRightX + sideHalfWidth, centerY + halfHeight),
         ], false) {
             Swatch = TrackRailSwatch.Main,
             Specular = railSpecular,
-        };
+        });
+
+        return shape;
     }
 }

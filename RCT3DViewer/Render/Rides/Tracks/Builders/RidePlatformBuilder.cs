@@ -2,7 +2,7 @@ using RCT3D.Interop.Models;
 using System.Numerics;
 using Serilog;
 
-namespace RCT3D.Render.Rides.Tracks;
+namespace RCT3D.Render.Rides.Tracks.Builders;
 
 [Flags]
 internal enum PlatformSideOpenings : byte
