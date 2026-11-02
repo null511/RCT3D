@@ -1,9 +1,9 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
+using RCT3D.Render.Rides.Tracks.Builders;
+using Serilog;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Serilog;
-using RCT3D.Render.Rides.Tracks.Builders;
 
 namespace RCT3D.Render.Rides.Tracks;
 
@@ -71,6 +71,7 @@ internal sealed class TrackMeshBuilder
         ReadOnlySpan<RCTTilePathData> pathElements,
         ReadOnlySpan<RCTRideEntranceData> entrances,
         ReadOnlySpan<RCTTileSurfaceData> surfaces,
+        MapOccupancyMap occupancy,
         int mapWidth,
         int mapHeight,
         ReadOnlySpan<RCTPaletteEntry> palette)
@@ -80,6 +81,8 @@ internal sealed class TrackMeshBuilder
 
         if (surfaces.Length < checked(mapWidth * mapHeight))
             throw new InvalidDataException("OpenRCT2 returned fewer terrain surfaces than the map dimensions require.");
+        if (occupancy.Width != mapWidth || occupancy.Height != mapHeight)
+            throw new InvalidDataException("The occupancy map dimensions do not match the terrain map.");
 
         var validTrackElements = new List<RCTTrackElementData>(trackElements.Length);
         foreach (ref readonly var track in trackElements) {
@@ -95,15 +98,14 @@ internal sealed class TrackMeshBuilder
         }
         var filteredTrackElements = CollectionsMarshal.AsSpan(validTrackElements);
 
-        var supportObstacles = new TrackSupportObstacleMap();
         foreach (ref readonly var path in pathElements) {
             if ((uint)path.TileX >= (uint)mapWidth || (uint)path.TileY >= (uint)mapHeight)
                 throw new InvalidDataException($"OpenRCT2 returned a path outside the {mapWidth}x{mapHeight} map.");
 
-            supportObstacles.AddPath(path);
+            occupancy.AddPath(path);
         }
         foreach (ref readonly var track in filteredTrackElements)
-            supportObstacles.AddTrack(track);
+            occupancy.AddTrack(track);
 
         var entranceSideOpenings = BuildEntranceSideOpenings(filteredTrackElements, entrances);
         var pieces = new Dictionary<TrackPieceKey, List<RCTTrackElementData>>();
@@ -184,12 +186,9 @@ internal sealed class TrackMeshBuilder
                 pieceBuilders.TryResolve(track.Part, out var pieceBuilder);
                 var pieceSpan = CollectionsMarshal.AsSpan(piece);
                 var hasSupportPlacements = configuration.HasSupportPlacements;
-                var captureCenterline = hasSupportPlacements || configuration.SmoothMovement
-                    || configuration.WaterPlanePolyline is not null;
                 geometry.SetVerticalOffset(configuration.CenterlineHeightOffset);
                 geometry.SetTrackBankAngleDegrees(configuration.TrackBankAngleDegrees);
-                if (captureCenterline)
-                    geometry.BeginCenterlineCapture();
+                geometry.BeginCenterlineCapture();
 
                 try {
                     pieceBuilder.AddPiece(pieceSpan, geometry, configuration.PartGenerators, palette);
@@ -216,7 +215,10 @@ internal sealed class TrackMeshBuilder
                             stationTrack.BaseHeight)));
                 }
 
-                var centerlines = captureCenterline ? geometry.EndCenterlineCapture() : [];
+                var centerlines = geometry.EndCenterlineCapture();
+                var occupancyPaths = centerlines.Select(centerline => centerline.Points).ToArray();
+                foreach (ref readonly var sequenceTrack in pieceSpan)
+                    occupancy.AddTrackCenterlines(sequenceTrack, occupancyPaths);
                 if (configuration.WaterPlanePolyline is { } waterPlanePolyline) {
                     foreach (var centerline in centerlines)
                         waterGeometry.AddSweptPolyline(waterPlanePolyline, centerline);
@@ -282,7 +284,7 @@ internal sealed class TrackMeshBuilder
                             var supportBottom = GetLowestSurfaceCornerHeight(surface);
                             var supportTop = supportMeshBuilder.GetSupportTopHeight(
                                 supportTrack, placement, anchor, trackHeightOffset);
-                            var hasObstacleIntersection = supportObstacles.TryGetHighestIntersection(
+                            var hasObstacleIntersection = occupancy.TryGetHighestIntersection(
                                 anchor.SurfaceTileX, anchor.SurfaceTileY, supportBottom, supportTop,
                                 supportTrack, out var highestObstacleTop);
                             if (supportMeshBuilder.PlacementMode == TrackSupportPlacementMode.TrackBased

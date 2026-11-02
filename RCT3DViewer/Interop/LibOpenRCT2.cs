@@ -7,7 +7,8 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 32;
+    private const uint ExpectedAbiVersion = 34;
+    private const int ExpectedTrackElementDataSize = 35;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -131,6 +132,10 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 
     public LibOpenRCT2(string libraryPath, string openRCT2Path, string rct2Path, string rct1Path)
     {
+        var trackElementDataSize = Marshal.SizeOf<RCTTrackElementData>();
+        if (trackElementDataSize != ExpectedTrackElementDataSize)
+            throw new InvalidOperationException($"Managed track element data has size {trackElementDataSize}; expected {ExpectedTrackElementDataSize} bytes for adapter ABI {ExpectedAbiVersion}.");
+
         _libraryPath = Path.GetFullPath(libraryPath);
         if (!NativeLoader.TryLoadNativeLibrary(_libraryPath, out _nativeHandle, out var error))
             throw new InvalidOperationException(error);
@@ -156,9 +161,6 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
 
             if (Marshal.SizeOf<RCTPeepData>() != 24)
                 throw new InvalidOperationException("RCTPeepData must be 24 bytes to match the OpenRCT2 adapter ABI.");
-
-            if (Marshal.SizeOf<RCTTrackElementData>() != 33)
-                throw new InvalidOperationException("RCTTrackElementData must be 33 bytes to match the OpenRCT2 adapter ABI.");
 
             if (Marshal.SizeOf<RCTRideEntranceData>() != 14)
                 throw new InvalidOperationException("RCTRideEntranceData must be 14 bytes to match the OpenRCT2 adapter ABI.");

@@ -1,15 +1,15 @@
+using RCT3D.Interop.Models;
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
-using RCT3D.Render.Terrain;
-using RCT3D.Simulation;
-using System.Numerics;
+using RCT3D.Render.Rides;
+using RCT3D.Render.Rides.Entrances;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
-using RCT3D.Render.Rides.Entrances;
-using RCT3D.Render.Rides;
-using RCT3D.Interop.Models;
 using RCT3D.Render.Scenery;
+using RCT3D.Render.Terrain;
+using RCT3D.Simulation;
 using Serilog;
+using System.Numerics;
 
 namespace RCT3D.Render;
 
@@ -25,6 +25,7 @@ internal sealed class ParkSceneController(
     private readonly PathAccessoryMeshBuilder pathAccessoryMeshBuilder = new(resources.PathAccessoryAssets!);
     private readonly TreeSceneryMeshBuilder treeSceneryMeshBuilder = new(resources.TreeSceneryAssets!);
     private readonly TrackMeshBuilder trackMeshBuilder = new();
+    private readonly TunnelLayoutBuilder tunnelLayoutBuilder = new();
     private readonly RideEntranceExitMeshBuilder rideEntranceExitMeshBuilder = new();
 
     private Task<ParkLoadResult>? parkLoadTask;
@@ -86,11 +87,15 @@ internal sealed class ParkSceneController(
     {
         try {
             var snapshot = await simulation.LoadParkAsync(parkPath, progress => Volatile.Write(ref parkLoadProgress, progress));
-            Volatile.Write(ref parkLoadProgress, "Generating terrain, water, path, accessory, tree, track, support, and station meshes...");
+            Volatile.Write(ref parkLoadProgress, "Generating terrain, tunnel, water, path, accessory, tree, track, support, and station meshes...");
 
             var meshData = await Task.Run(() => {
-                var terrain = terrainMeshBuilder.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height, terrainSkirtFloor);
-                var tracks = trackMeshBuilder.Build(snapshot.TrackData, snapshot.PathData, snapshot.RideEntranceData, snapshot.SurfaceData, snapshot.Width, snapshot.Height, snapshot.PaletteData);
+                var occupancy = new MapOccupancyMap(snapshot.SurfaceData, snapshot.Width, snapshot.Height);
+                var tracks = trackMeshBuilder.Build(snapshot.TrackData, snapshot.PathData, snapshot.RideEntranceData,
+                    snapshot.SurfaceData, occupancy, snapshot.Width, snapshot.Height, snapshot.PaletteData);
+                var tunnelLayout = tunnelLayoutBuilder.Build(occupancy, terrainSkirtFloor);
+                var terrain = terrainMeshBuilder.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height,
+                    terrainSkirtFloor, tunnelLayout);
                 return (
                     Terrain: terrain,
                     Water: WaterMeshData.Combine(terrain.Water, tracks.Water),
@@ -122,7 +127,7 @@ internal sealed class ParkSceneController(
 
             try {
                 pendingParkLoadResult = completedTask.GetAwaiter().GetResult();
-                ui.SetParkLoadStatus("Uploading terrain, water, path, accessory, tree, track, support, and station meshes...");
+                ui.SetParkLoadStatus("Uploading terrain, tunnel, water, path, accessory, tree, track, support, and station meshes...");
                 loadCompletedThisFrame = true;
             }
             catch (Exception ex) {

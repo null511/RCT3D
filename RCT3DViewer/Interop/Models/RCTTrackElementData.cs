@@ -493,6 +493,8 @@ public struct RCTTrackElementData
     public sbyte RollEnd;
     public byte HasChainLift;
     public byte IsRidePlatformBase;
+    public byte TunnelSideMask;
+    public byte ConnectionSideMask;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
