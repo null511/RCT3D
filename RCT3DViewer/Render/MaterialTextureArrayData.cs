@@ -10,13 +10,13 @@ internal sealed record MaterialTextureArrayData(
     byte[]? NormalPixels,
     byte[]? SpecularPixels)
 {
-    public static MaterialTextureArrayData FromTerrain(TerrainMaterialLibrary materials) => new(
-        materials.Width,
-        materials.Height,
-        materials.LayerCount,
-        materials.Pixels,
-        materials.NormalPixels,
-        materials.SpecularPixels);
+    public static MaterialTextureArrayData From(IMaterialLibrary library) => new(
+        library.Width,
+        library.Height,
+        library.LayerCount,
+        library.ColorPixels,
+        library.NormalPixels,
+        library.SpecularPixels);
 
     public static MaterialTextureArrayData FromModel(ModelMaterialLibrary material) => new(
         material.Width,

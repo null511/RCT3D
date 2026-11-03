@@ -7,6 +7,9 @@ internal sealed record GraphicsOptionsSettings
     public float FieldOfView { get; init; } = 45.0f;
     public float Sharpening { get; init; } = 0.5f;
     public float MipBias { get; init; } = -1.0f;
+    public float RidesRenderDistance { get; init; } = 100.0f;
+    public float SupportsRenderDistance { get; init; } = 100.0f;
+    public float SceneryRenderDistance { get; init; } = 100.0f;
     public bool ShadowMappingEnabled { get; init; } = true;
     public uint ShadowResolution { get; init; } = 2048;
     public float ShadowRadius { get; init; } = 128.0f;

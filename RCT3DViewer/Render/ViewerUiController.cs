@@ -32,6 +32,9 @@ internal sealed class ViewerUiController
     private float _fieldOfView = 45.0f;
     private float _sharpening = 0.5f;
     private float _mipBias = -1.0f;
+    private float _ridesRenderDistance;
+    private float _supportsRenderDistance;
+    private float _sceneryRenderDistance;
     private bool _shadowMappingEnabled = true;
     private float _shadowRadius = ShadowRenderTargets.DefaultRadius;
     private uint _appliedShadowResolution = ShadowRenderTargets.DefaultResolution;
@@ -53,6 +56,9 @@ internal sealed class ViewerUiController
         _fieldOfView = settings.FieldOfView;
         _sharpening = settings.Sharpening;
         _mipBias = settings.MipBias;
+        _ridesRenderDistance = settings.RidesRenderDistance;
+        _supportsRenderDistance = settings.SupportsRenderDistance;
+        _sceneryRenderDistance = settings.SceneryRenderDistance;
         _shadowMappingEnabled = settings.ShadowMappingEnabled;
         _shadowRadius = settings.ShadowRadius;
         _appliedShadowResolution = settings.ShadowResolution;
@@ -71,6 +77,9 @@ internal sealed class ViewerUiController
     public uint DebugView => (uint)_debugView;
     public float Sharpening => _sharpening;
     public float MipBias => _mipBias;
+    public float RidesRenderDistance => _ridesRenderDistance;
+    public float SupportsRenderDistance => _supportsRenderDistance;
+    public float SceneryRenderDistance => _sceneryRenderDistance;
     public bool ShadowMappingEnabled => _appliedGraphicsOptions.ShadowMappingEnabled;
     public float ShadowRadius => _shadowRadius;
     public uint ShadowResolution => _appliedShadowResolution;
@@ -96,6 +105,9 @@ internal sealed class ViewerUiController
         applyFieldOfView(_fieldOfView);
         _sharpening = _appliedGraphicsOptions.Sharpening;
         _mipBias = _appliedGraphicsOptions.MipBias;
+        _ridesRenderDistance = _appliedGraphicsOptions.RidesRenderDistance;
+        _supportsRenderDistance = _appliedGraphicsOptions.SupportsRenderDistance;
+        _sceneryRenderDistance = _appliedGraphicsOptions.SceneryRenderDistance;
         _shadowMappingEnabled = _appliedGraphicsOptions.ShadowMappingEnabled;
         _shadowRadius = _appliedGraphicsOptions.ShadowRadius;
         _selectedShadowResolution = _appliedShadowResolution;
@@ -127,6 +139,9 @@ internal sealed class ViewerUiController
         FieldOfView = _fieldOfView,
         Sharpening = _sharpening,
         MipBias = _mipBias,
+        RidesRenderDistance = _ridesRenderDistance,
+        SupportsRenderDistance = _supportsRenderDistance,
+        SceneryRenderDistance = _sceneryRenderDistance,
         ShadowMappingEnabled = _shadowMappingEnabled,
         ShadowResolution = _selectedShadowResolution,
         ShadowRadius = _shadowRadius
@@ -282,6 +297,11 @@ internal sealed class ViewerUiController
                     applyFieldOfView(_fieldOfView);
                 ImGui.SliderFloat("Sharpening", ref _sharpening, 0.0f, 1.0f, "%.2f");
                 ImGui.SliderFloat("Mip Bias", ref _mipBias, -2.0f, 0.0f, "%.2f");
+                ImGui.SeparatorText("Render Distance");
+                ImGui.SliderFloat("Rides", ref _ridesRenderDistance, 0.0f, 400.0f, "%.1f", ImGuiSliderFlags.AlwaysClamp);
+                ImGui.SliderFloat("Supports", ref _supportsRenderDistance, 0.0f, 400.0f, "%.1f", ImGuiSliderFlags.AlwaysClamp);
+                ImGui.SliderFloat("Scenery", ref _sceneryRenderDistance, 0.0f, 400.0f, "%.1f", ImGuiSliderFlags.AlwaysClamp);
+                ImGui.TextDisabled("World-space units; 0.0 = unlimited. Supports includes path supports.");
                 ImGui.SeparatorText("Shadows");
                 ImGui.Checkbox("Shadow Mapping", ref _shadowMappingEnabled);
                 var shadowResolutionIndex = _selectedShadowResolution switch {

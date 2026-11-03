@@ -48,10 +48,16 @@ internal sealed class PathMeshBuilder(PathMaterialLibrary materials)
                     buildersByRailingIdHash.Add(path.RailingsIdHash, builder);
                 }
 
-                builder.AddPath(path, surfaces[path.TileY * mapWidth + path.TileX], geometry, supportStations);
+                builder.AddPath(path, surfaces[path.TileY * mapWidth + path.TileX], geometry);
             }
 
             geometry.EndRegion();
+
+            geometry.BeginRegion(region);
+            foreach (var path in regionPaths)
+                buildersByRailingIdHash[path.RailingsIdHash].AddPathSupports(
+                    path, surfaces[path.TileY * mapWidth + path.TileX], geometry, supportStations);
+            geometry.EndRegion(supports: true);
         }
 
         return geometry.Build();
@@ -72,6 +78,8 @@ internal sealed class PathSupportStationRegistry
 
 internal sealed record PathMeshData(TerrainVertex[] Vertices, uint[] Indices, RenderRegionIndexRange[] Regions)
 {
+    public RenderRegionIndexRange[] SupportRegions { get; init; } = Array.Empty<RenderRegionIndexRange>();
+
     public PathMeshData(TerrainVertex[] vertices, uint[] indices)
         : this(vertices, indices, Array.Empty<RenderRegionIndexRange>()) {}
 }

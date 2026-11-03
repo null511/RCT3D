@@ -6,6 +6,7 @@ namespace RCT3D.Render.Paths.Meshing;
 internal sealed class PathMeshGeometry
 {
     private readonly List<RenderRegionIndexRange> regions = new();
+    private readonly List<RenderRegionIndexRange> supportRegions = new();
     private readonly List<TerrainVertex> vertices = new();
     private readonly List<uint> indices = new();
 
@@ -21,13 +22,15 @@ internal sealed class PathMeshGeometry
         _firstIndex = indices.Count;
     }
 
-    public void EndRegion()
+    public void EndRegion(bool supports = false)
     {
         if (indices.Count > _firstIndex)
-            regions.Add(RenderRegionMeshRanges.Create(_region, vertices, indices, firstVertex, _firstIndex));
+            (supports ? supportRegions : regions).Add(RenderRegionMeshRanges.Create(_region, vertices, indices, firstVertex, _firstIndex));
     }
 
-    public PathMeshData Build() => new(vertices.ToArray(), indices.ToArray(), regions.ToArray());
+    public PathMeshData Build() => new(vertices.ToArray(), indices.ToArray(), regions.ToArray()) {
+        SupportRegions = supportRegions.ToArray()
+    };
 
     public void AddTriangle(Vector3 a, Vector2 uvA, Vector3 b, Vector2 uvB, Vector3 c, Vector2 uvC, uint material, Vector3? expectedNormal = null)
     {

@@ -94,8 +94,18 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         var (shadowViewProjections, cascadeSplits) = CreateShadowViewProjections(camera, aspect, sunDirection, ui.ShadowRadius,
             ui.ShadowResolution);
         var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
-        foreach (var region in parkRegions)
+        var ridesDistance = ui.RidesRenderDistance;
+        var supportsDistance = ui.SupportsRenderDistance;
+        var sceneryDistance = ui.SceneryRenderDistance;
+        foreach (var region in parkRegions) {
             region.CameraVisible = region.HasBounds && viewFrustum.Intersects(region.Bounds);
+            var distanceSquared = region.HasBounds
+                ? Vector3.DistanceSquared(cameraPosition, region.Bounds.Center)
+                : float.PositiveInfinity;
+            region.RidesInRange = ridesDistance == 0.0f || distanceSquared <= ridesDistance * ridesDistance;
+            region.SupportsInRange = supportsDistance == 0.0f || distanceSquared <= supportsDistance * supportsDistance;
+            region.SceneryInRange = sceneryDistance == 0.0f || distanceSquared <= sceneryDistance * sceneryDistance;
+        }
         EnsureRegionLookup(parkRegions);
 
         var renderDimensions = new Vector2D<uint>(extent.Width, extent.Height);
@@ -238,7 +248,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             Vk.CmdBindIndexBuffer(commandBuffer, supportResources.IndexBuffer, 0, IndexType.Uint32);
 
             foreach (var region in parkRegions) {
-                if (region.RideSupports is { } range && region.CameraVisible)
+                if (region.RideSupports is { } range && region.CameraVisible && region.SupportsInRange)
                     Vk.CmdDrawIndexed(commandBuffer, range.IndexCount, 1, range.FirstIndex, 0, 0);
             }
         }
@@ -265,7 +275,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             Vk.CmdBindIndexBuffer(commandBuffer, trackResources.IndexBuffer, 0, IndexType.Uint32);
 
             foreach (var region in parkRegions) {
-                if (region.Tracks is { } range && region.CameraVisible)
+                if (region.Tracks is { } range && region.CameraVisible && region.RidesInRange)
                     Vk.CmdDrawIndexed(commandBuffer, range.IndexCount, 1, range.FirstIndex, 0, 0);
             }
         }
@@ -282,13 +292,13 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             Vk.CmdBindIndexBuffer(commandBuffer, rideEntranceResources.IndexBuffer, 0, IndexType.Uint32);
 
             foreach (var region in parkRegions) {
-                if (region.RideEntrances is { } range && region.CameraVisible)
+                if (region.RideEntrances is { } range && region.CameraVisible && region.RidesInRange)
                     Vk.CmdDrawIndexed(commandBuffer, range.IndexCount, 1, range.FirstIndex, 0, 0);
             }
         }
 
         foreach (var region in parkRegions) {
-            if (region.Vehicles is { } vehicleBatch && region.CameraVisible)
+            if (region.Vehicles is { } vehicleBatch && region.CameraVisible && region.RidesInRange)
                 vehicleBatch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, vehicleBatch.Batch);
         }
 
@@ -309,11 +319,13 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             foreach (var region in parkRegions) {
                 if (region.Paths is { } range && region.CameraVisible)
                     Vk.CmdDrawIndexed(commandBuffer, range.IndexCount, 1, range.FirstIndex, 0, 0);
+                if (region.PathSupports is { } supportRange && region.CameraVisible && region.SupportsInRange)
+                    Vk.CmdDrawIndexed(commandBuffer, supportRange.IndexCount, 1, supportRange.FirstIndex, 0, 0);
             }
         }
 
         foreach (var region in parkRegions) {
-            if (!region.CameraVisible) continue;
+            if (!region.CameraVisible || !region.SceneryInRange) continue;
 
             foreach (var batch in region.PathAccessories)
                 batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch);
@@ -609,9 +621,12 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             DrawShadowRegions(commandBuffer, shadowResources.TerrainPipeline, terrainResources.VertexBuffer, terrainResources.IndexBuffer,
                 parkRegions, ShadowRegionCategory.Terrain);
 
-        if (pathMesh is { Vertices.Length: > 0, Indices.Length: > 0 } && resources.PathGraphicsResources is { IndexCount: > 0 } pathResources)
+        if (pathMesh is { Vertices.Length: > 0, Indices.Length: > 0 } && resources.PathGraphicsResources is { IndexCount: > 0 } pathResources) {
             DrawShadowRegions(commandBuffer, shadowResources.TerrainPipeline, pathResources.VertexBuffer, pathResources.IndexBuffer,
                 parkRegions, ShadowRegionCategory.Paths);
+            DrawShadowRegions(commandBuffer, shadowResources.TerrainPipeline, pathResources.VertexBuffer, pathResources.IndexBuffer,
+                parkRegions, ShadowRegionCategory.PathSupports);
+        }
 
         if (trackMesh is { Vertices.Length: > 0, Indices.Length: > 0 } && resources.TrackGraphicsResources is { IndexCount: > 0 } trackResources)
             DrawShadowRegions(commandBuffer, shadowResources.TrackPipeline, trackResources.VertexBuffer, trackResources.IndexBuffer,
@@ -628,13 +643,13 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         var vehicleResources = resources.VehicleCubeGraphicsResources;
         if (vehicleResources.Length > 0)
             DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout,
-                vehicleResources[(int)currentFrame], regionsByCoordinate, (uint)cascade);
+                vehicleResources[(int)currentFrame], regionsByCoordinate, (uint)cascade, ShadowRegionCategory.Vehicles);
 
         foreach (var (_, modelResources) in resources.PathAccessoryGraphicsResources)
-            DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout, modelResources, regionsByCoordinate, (uint)cascade);
+            DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout, modelResources, regionsByCoordinate, (uint)cascade, ShadowRegionCategory.Scenery);
 
         foreach (var (_, modelResources) in resources.TreeSceneryGraphicsResources)
-            DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout, modelResources, regionsByCoordinate, (uint)cascade);
+            DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout, modelResources, regionsByCoordinate, (uint)cascade, ShadowRegionCategory.Scenery);
 
         Vk.CmdEndRenderPass(commandBuffer);
     }
@@ -648,13 +663,14 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         Vk.CmdBindIndexBuffer(commandBuffer, indexBuffer, 0, IndexType.Uint32);
 
         foreach (var region in regions) {
-            if (region.ShadowVisible && GetShadowRange(region, category) is { } range)
+            if (region.ShadowVisible && IsShadowCategoryInRange(region, category) && GetShadowRange(region, category) is { } range)
                 Vk.CmdDrawIndexed(commandBuffer, range.IndexCount, 1, range.FirstIndex, 0, 0);
         }
     }
 
     private void DrawShadowModels(CommandBuffer commandBuffer, Pipeline pipeline, PipelineLayout pipelineLayout,
-        ModelGraphicsResources modelResources, Dictionary<RenderRegionCoordinate, ParkRenderRegion> regionsByCoordinate, uint cascadeIndex)
+        ModelGraphicsResources modelResources, Dictionary<RenderRegionCoordinate, ParkRenderRegion> regionsByCoordinate, uint cascadeIndex,
+        ShadowRegionCategory category)
     {
         if (modelResources.IndexCount == 0 || modelResources.RegionBatches.Length == 0 || modelResources.InstanceBuffer.Handle == 0)
             return;
@@ -675,14 +691,22 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         foreach (var batch in modelResources.RegionBatches) {
             if (batch.InstanceCount > 0
                 && regionsByCoordinate.TryGetValue(batch.Region, out var region)
-                && region.ShadowVisible)
+                && region.ShadowVisible && IsShadowCategoryInRange(region, category))
                 Vk.CmdDrawIndexed(commandBuffer, modelResources.IndexCount, batch.InstanceCount, 0, 0, batch.FirstInstance);
         }
     }
 
+    private static bool IsShadowCategoryInRange(ParkRenderRegion region, ShadowRegionCategory category) => category switch {
+        ShadowRegionCategory.Tracks or ShadowRegionCategory.RideEntrances or ShadowRegionCategory.Vehicles => region.RidesInRange,
+        ShadowRegionCategory.RideSupports or ShadowRegionCategory.PathSupports => region.SupportsInRange,
+        ShadowRegionCategory.Scenery => region.SceneryInRange,
+        _ => true
+    };
+
     private static RenderRegionIndexRange? GetShadowRange(ParkRenderRegion region, ShadowRegionCategory category) => category switch {
         ShadowRegionCategory.Terrain => region.Terrain,
         ShadowRegionCategory.Paths => region.Paths,
+        ShadowRegionCategory.PathSupports => region.PathSupports,
         ShadowRegionCategory.Tracks => region.Tracks,
         ShadowRegionCategory.RideSupports => region.RideSupports,
         ShadowRegionCategory.RideEntrances => region.RideEntrances,
@@ -704,9 +728,12 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
     {
         Terrain,
         Paths,
+        PathSupports,
         Tracks,
         RideSupports,
-        RideEntrances
+        RideEntrances,
+        Vehicles,
+        Scenery
     }
 
     private sealed class WaterRegionDepthComparer : IComparer<ParkRenderRegion>

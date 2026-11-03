@@ -70,6 +70,9 @@ internal sealed class GraphicsOptionsStore
         && float.IsFinite(settings.FieldOfView) && settings.FieldOfView is >= 30.0f and <= 120.0f
         && float.IsFinite(settings.Sharpening) && settings.Sharpening is >= 0.0f and <= 1.0f
         && float.IsFinite(settings.MipBias) && settings.MipBias is >= -2.0f and <= 0.0f
+        && float.IsFinite(settings.RidesRenderDistance) && settings.RidesRenderDistance is >= 0.0f and <= 400.0f
+        && float.IsFinite(settings.SupportsRenderDistance) && settings.SupportsRenderDistance is >= 0.0f and <= 400.0f
+        && float.IsFinite(settings.SceneryRenderDistance) && settings.SceneryRenderDistance is >= 0.0f and <= 400.0f
         && settings.ShadowResolution is 512 or 1024 or 2048 or 4096
         && float.IsFinite(settings.ShadowRadius) && settings.ShadowRadius is >= 16.0f and <= 512.0f;
 }

@@ -195,7 +195,7 @@ internal class BracePartBuilder(List<TrackBracePart> braces)
         }
     }
 
-    public TrackBracePart Cylinder(Vector3 start, Vector3 end, float radius, int segmentCount)
+    public TrackBracePart Cylinder(Vector3 start, Vector3 end, float radius, int segmentCount, Action<TrackBracePart>? partAction = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(segmentCount, 3);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
@@ -231,6 +231,7 @@ internal class BracePartBuilder(List<TrackBracePart> braces)
         }
 
         var part = new TrackBracePart(vertices, indices);
+        partAction?.Invoke(part);
         braces.Add(part);
         return part;
     }

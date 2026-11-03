@@ -120,10 +120,12 @@ public sealed class Renderer : IDisposable
                 OpenRCT2Path = Path.Combine(AppContext.BaseDirectory, OpenRCT2Path);
 
             simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path, Rct1Path);
+
             var textureRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Textures");
             var missingTexturePath = Path.Combine(textureRoot, "missing.png");
-            terrainMaterials = TerrainMaterialLibrary.Load(Path.Combine(textureRoot, "Terrain"), null, missingTexturePath);
-            pathMaterials = PathMaterialLibrary.Load(Path.Combine(textureRoot, "Paths"), missingTexturePath);
+            terrainMaterials = TerrainMaterialLibrary.Load(textureRoot, null, missingTexturePath);
+            pathMaterials = PathMaterialLibrary.Load(textureRoot, missingTexturePath);
+
             pathAccessoryAssets = PathAccessoryAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
             var modelRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
             treeSceneryAssets = TreeSceneryAssetLibrary.Load(modelRoot, Path.Combine(textureRoot, "tree"));

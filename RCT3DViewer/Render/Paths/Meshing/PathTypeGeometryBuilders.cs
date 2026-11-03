@@ -32,18 +32,22 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
     protected PathMaterialLibrary Materials {get;} = materials;
 
 
-    public void AddPath(RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
+    public void AddPath(RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry)
     {
         AddSurface(path, geometry);
 
+        if (ShouldDrawSupports(path, surface))
+            AddElevatedPlatformSlab(path, geometry);
+    }
+
+    public void AddPathSupports(RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
+    {
         if (Materials.HasVisibleRailings(path.RailingsIdHash) && (path.IsQueue || path.IsSloped || path.BaseZ != surface.BaseZ || surface.SlopeFlags != 0)) {
             AddRailings(path, geometry);
         }
 
-        if (ShouldDrawSupports(path, surface)) {
-            AddElevatedPlatformSlab(path, geometry);
-            AddSupports(path, surface, Materials.GetRailingLayer(path.RailingsIdHash), geometry, supportStations);
-        }
+        if (ShouldDrawSupports(path, surface))
+            AddSupports(path, surface, Materials.GetLayer(path.RailingsIdHash), geometry, supportStations);
     }
 
     private void AddRailings(RCTTilePathData path, PathMeshGeometry geometry)
@@ -53,7 +57,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var south = path.TileY * WorldUnits.TileSize;
         var north = (path.TileY + 1) * WorldUnits.TileSize;
         var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit;
-        var material = Materials.GetRailingLayer(path.RailingsIdHash);
+        var material = Materials.GetLayer(path.RailingsIdHash);
 
         if (path.IsSloped) {
             if (path.SlopeDirection is DirectionWest or DirectionEast) {

@@ -23,6 +23,9 @@
 - When updating a material mapping, preserve unrelated working mappings and edit only the mapping requested. In particular, do not alter the existing wood_red terrain-side mapping when fixing another edge mapping.
 - Treat correct winding as a mandatory precondition for every generated triangle: determine and emit indices in the CCW order seen by the renderer after the complete transform and viewport path. In RCT3DViewer, account for the camera X mirror, Vulkan viewport Y flip, and CCW front-face pipeline; derive the order from verified project geometry and validate it against supplied outward normals before emitting the mesh. Never assume object-space CCW is sufficient or defer winding correction until after geometry is created.
 
+## RCT3DViewer Guidelines
+- RCT3DViewer render-distance sliders should preview changes in real time for both main rendering and shadows; apply saved values and cancel restores previous settings.
+
 ## Structural Guidelines
 - For wooden path supports, place horizontal side crossmembers between vertical support sections rather than at each section's midpoint; half-frequency means at every other section boundary, using normal beam thickness.
 

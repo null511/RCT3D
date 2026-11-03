@@ -60,6 +60,7 @@ internal sealed class TrackPieceBuilderCatalog
         catalog.Register(new LongBaseSlopeTrackPieceBuilder(RCTTrackElementType.Down60ToFlatLongBase, -Pitch.Slope60, Pitch.None));
 
         catalog.RegisterMany(type => new CurveTrackPieceBuilder(type),
+            RCTTrackElementType.LeftCurvedLiftHill,
             RCTTrackElementType.LeftQuarterTurn1Tile,
             RCTTrackElementType.LeftQuarterTurn3Tiles,
             RCTTrackElementType.LeftQuarterTurn3TilesCovered,
@@ -69,6 +70,7 @@ internal sealed class TrackPieceBuilderCatalog
             RCTTrackElementType.LeftQuarterTurn5TilesCovered,
             RCTTrackElementType.LeftQuarterTurn5TilesDown25,
             RCTTrackElementType.LeftQuarterTurn5TilesUp25,
+            RCTTrackElementType.RightCurvedLiftHill,
             RCTTrackElementType.RightQuarterTurn1Tile,
             RCTTrackElementType.RightQuarterTurn3Tiles,
             RCTTrackElementType.RightQuarterTurn3TilesCovered,

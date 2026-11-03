@@ -317,6 +317,13 @@ internal sealed class ParkSceneController(
                 region.Paths = range;
                 region.IncludeStaticBounds(range.Bounds);
             }
+
+            foreach (var range in paths.SupportRegions) {
+                if (range.IsEmpty) continue;
+                var region = GetOrCreateRenderRegion(range.Region);
+                region.PathSupports = range;
+                region.IncludeStaticBounds(range.Bounds);
+            }
         }
 
         if (TrackMesh is { } tracks) {

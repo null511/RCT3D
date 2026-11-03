@@ -64,10 +64,14 @@ internal sealed class ParkRenderRegion(RenderRegionCoordinate coordinate)
     public bool HasBounds => hasStaticBounds || hasDynamicBounds;
     public bool CameraVisible { get; set; }
     public bool ShadowVisible { get; set; }
+    public bool RidesInRange { get; set; }
+    public bool SupportsInRange { get; set; }
+    public bool SceneryInRange { get; set; }
 
     public RenderRegionIndexRange? Terrain { get; set; }
     public RenderRegionIndexRange? Water { get; set; }
     public RenderRegionIndexRange? Paths { get; set; }
+    public RenderRegionIndexRange? PathSupports { get; set; }
     public RenderRegionIndexRange? Tracks { get; set; }
     public RenderRegionIndexRange? RideSupports { get; set; }
     public RenderRegionIndexRange? RideEntrances { get; set; }
