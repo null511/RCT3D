@@ -2,9 +2,11 @@ public module uniforms;
 
 struct CameraUniforms {
 	float4 cameraPosition;
+	float4x4 view;
+	float4x4 projection;
 	float4x4 viewProjection;
 	float4x4 projectionInverse;
-	float4x4 viewToWorld;
+	float4x4 viewInverse;
 };
 
 struct TemporalUniforms {
@@ -19,13 +21,12 @@ struct SceneUniforms {
 	float taa_sharpen;
     float mipBias;
     DebugView debugView;
+	uint shadowMappingEnabled;
 };
 
 struct ShadowUniforms {
-	float4x4 shadowViewProjection0;
-	float4x4 shadowViewProjection1;
-	float4x4 shadowViewProjection2;
-	float4x4 shadowViewProjection3;
+	// Keep this bound in sync with ShadowRenderTargets.CascadeCount.
+	float4x4 shadowViewProjection[4];
 	float4 cascadeSplits;
 };
 

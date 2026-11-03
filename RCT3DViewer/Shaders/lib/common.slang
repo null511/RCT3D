@@ -1,6 +1,8 @@
 public module common;
 
 static const float PI = 3.14159265358979323846;
+static const float GoldenAngle = PI * (3.0 - sqrt(5.0));
+static const float PHI = (1.0 + sqrt(5.0)) / 2.0;
 
 static const float AlphaThreshold = 0.2;
 
@@ -30,6 +32,10 @@ float3 minOf(float3 x, float3 y, float3 z) {
 
 T pow2<T>(const in T value) where T : IArithmetic {
     return value * value;
+}
+
+T pow5<T>(const in T value) where T : IArithmetic {
+    return value * value * value * value * value;
 }
 
 T sumOf<T>(const in vector<T, 2> vec) where T : IArithmetic {

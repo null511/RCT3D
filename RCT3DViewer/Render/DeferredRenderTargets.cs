@@ -19,6 +19,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
     public ImageView DepthView => _depthView;
     public Image SceneOutputImage { get; private set; }
     public ImageView SceneOutputView { get; private set; }
+    public ImageView WaterStagingView { get; private set; }
     public Image TaaHistoryImage { get; private set; }
     public ImageView TaaHistoryView { get; private set; }
     public Image TaaResolveImage { get; private set; }
@@ -107,6 +108,9 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
         var scene = CreateColorImage(Format.R16G16B16A16Sfloat, storage: true);
         SceneOutputImage = scene.Image;
         SceneOutputView = scene.View;
+
+        var waterStaging = CreateColorImage(Format.R16G16B16A16Sfloat);
+        WaterStagingView = waterStaging.View;
 
         var history = CreateColorImage(Format.R16G16B16A16Sfloat, storage: true);
         TaaHistoryImage = history.Image;
@@ -291,7 +295,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
     private void CreateWaterRenderPass()
     {
         var attachments = new[] {
-            ColorAttachment(Format.R16G16B16A16Sfloat, ImageLayout.General, ImageLayout.ShaderReadOnlyOptimal, AttachmentLoadOp.Load),
+            ColorAttachment(Format.R16G16B16A16Sfloat, ImageLayout.Undefined, ImageLayout.ShaderReadOnlyOptimal),
             DepthAttachment(ImageLayout.DepthStencilReadOnlyOptimal, ImageLayout.DepthStencilReadOnlyOptimal, AttachmentLoadOp.Load, AttachmentStoreOp.Store)
         };
 
@@ -304,9 +308,8 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
                 DstSubpass = 0,
                 SrcStageMask = PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.EarlyFragmentTestsBit | PipelineStageFlags.LateFragmentTestsBit,
                 DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
-                SrcAccessMask = AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit | AccessFlags.DepthStencilAttachmentWriteBit,
-                DstAccessMask = AccessFlags.ColorAttachmentReadBit | AccessFlags.ColorAttachmentWriteBit
-                    | AccessFlags.DepthStencilAttachmentReadBit | AccessFlags.DepthStencilAttachmentWriteBit,
+                SrcAccessMask = AccessFlags.ShaderReadBit | AccessFlags.DepthStencilAttachmentWriteBit,
+                DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentReadBit,
                 DependencyFlags = DependencyFlags.ByRegionBit
             },
             new SubpassDependency {
@@ -347,7 +350,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
     private void CreateFramebuffers()
     {
         GBufferFramebuffer = CreateFramebuffer(GBufferRenderPass, new[] { AlbedoView, NormalsView, SpecularView, _depthView });
-        WaterFramebuffer = CreateFramebuffer(WaterRenderPass, new[] { SceneOutputView, _depthView });
+        WaterFramebuffer = CreateFramebuffer(WaterRenderPass, new[] { WaterStagingView, _depthView });
     }
 
     public void Resize(Extent2D extent)
@@ -472,6 +475,7 @@ internal sealed unsafe class DeferredRenderTargets : IDisposable
         SpecularView = default;
         SceneOutputView = default;
         SceneOutputImage = default;
+        WaterStagingView = default;
         TaaHistoryImage = default;
         TaaHistoryView = default;
         TaaResolveImage = default;

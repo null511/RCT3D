@@ -5,7 +5,7 @@ namespace RCT3D.Render.Rides.Tracks;
 
 internal sealed class WaterPlaneMeshGeometry
 {
-    private readonly List<Vector3> vertices = new();
+    private readonly List<WaterVertex> vertices = new();
     private readonly List<uint> indices = new();
     private readonly List<RenderRegionIndexRange> regions = new();
     private RenderRegionCoordinate? region;
@@ -31,7 +31,7 @@ internal sealed class WaterPlaneMeshGeometry
         for (var station = 0; station < centerline.Points.Length; station++) {
             var frame = centerline.Frames[station];
             foreach (var point in profile)
-                vertices.Add(centerline.Points[station] + frame.Side * point.X + frame.Up * point.Y);
+                vertices.Add(new WaterVertex(centerline.Points[station] + frame.Side * point.X + frame.Up * point.Y, frame.Up));
         }
 
         for (var station = 0; station < centerline.Points.Length - 1; station++) {

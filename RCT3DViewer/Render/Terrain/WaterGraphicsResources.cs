@@ -5,7 +5,7 @@ using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace RCT3D.Render.Terrain;
 
-internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout, SkyRenderTargets skyTargets) : IDisposable
+internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout, SkyRenderTargets skyTargets, ShadowRenderTargets shadowTargets) : IDisposable
 {
     private Buffer _vertexBuffer;
     private DeviceMemory _vertexBufferMemory;
@@ -14,6 +14,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
     private DescriptorSetLayout _skyDescriptorSetLayout;
     private DescriptorPool _skyDescriptorPool;
     private Sampler _skySampler;
+    private Sampler _shadowSampler;
 
     public PipelineLayout PipelineLayout { get; private set; }
     public Pipeline Pipeline { get; private set; }
@@ -62,23 +63,21 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
 
             VertexInputBindingDescription binding = new() {
                 Binding = 0,
-                Stride = (uint)Marshal.SizeOf<Vector3>(),
+                Stride = (uint)Marshal.SizeOf<WaterVertex>(),
                 InputRate = VertexInputRate.Vertex
             };
 
-            VertexInputAttributeDescription attribute = new() {
-                Binding = 0,
-                Location = 0,
-                Format = Format.R32G32B32Sfloat,
-                Offset = 0
+            var attributes = stackalloc VertexInputAttributeDescription[] {
+                new VertexInputAttributeDescription { Binding = 0, Location = 0, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<WaterVertex>(nameof(WaterVertex.Position)) },
+                new VertexInputAttributeDescription { Binding = 0, Location = 1, Format = Format.R32G32B32Sfloat, Offset = (uint)Marshal.OffsetOf<WaterVertex>(nameof(WaterVertex.Normal)) }
             };
 
             PipelineVertexInputStateCreateInfo vertexInput = new() {
                 SType = StructureType.PipelineVertexInputStateCreateInfo,
                 VertexBindingDescriptionCount = 1,
                 PVertexBindingDescriptions = &binding,
-                VertexAttributeDescriptionCount = 1,
-                PVertexAttributeDescriptions = &attribute
+                VertexAttributeDescriptionCount = 2,
+                PVertexAttributeDescriptions = attributes
             };
 
             PipelineInputAssemblyStateCreateInfo inputAssembly = new() {
@@ -200,6 +199,9 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
             new DescriptorSetLayoutBinding { Binding = 0, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
             new DescriptorSetLayoutBinding { Binding = 1, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
             new DescriptorSetLayoutBinding { Binding = 2, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+            new DescriptorSetLayoutBinding { Binding = 7, DescriptorType = DescriptorType.SampledImage, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+            new DescriptorSetLayoutBinding { Binding = 8, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
+            new DescriptorSetLayoutBinding { Binding = 9, DescriptorType = DescriptorType.Sampler, DescriptorCount = 1, StageFlags = ShaderStageFlags.FragmentBit },
         };
 
         fixed (DescriptorSetLayoutBinding* bindingsPointer = bindings) {
@@ -214,8 +216,8 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
         }
 
         var poolSizes = new[] {
-            new DescriptorPoolSize { Type = DescriptorType.SampledImage, DescriptorCount = 2 },
-            new DescriptorPoolSize { Type = DescriptorType.Sampler, DescriptorCount = 1 },
+            new DescriptorPoolSize { Type = DescriptorType.SampledImage, DescriptorCount = 3 },
+            new DescriptorPoolSize { Type = DescriptorType.Sampler, DescriptorCount = 3 },
         };
 
         fixed (DescriptorPoolSize* poolSizesPointer = poolSizes) {
@@ -259,15 +261,27 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
         if (vk.CreateSampler(device, in samplerInfo, null, out _skySampler) != Result.Success)
             throw new InvalidOperationException("Failed to create the water sky sampler.");
 
+        var shadowSamplerInfo = samplerInfo;
+        shadowSamplerInfo.AddressModeU = SamplerAddressMode.ClampToBorder;
+        shadowSamplerInfo.AddressModeV = SamplerAddressMode.ClampToBorder;
+        shadowSamplerInfo.AddressModeW = SamplerAddressMode.ClampToBorder;
+        shadowSamplerInfo.CompareEnable = true;
+        shadowSamplerInfo.CompareOp = CompareOp.LessOrEqual;
+        shadowSamplerInfo.BorderColor = BorderColor.FloatOpaqueWhite;
+        if (vk.CreateSampler(device, in shadowSamplerInfo, null, out _shadowSampler) != Result.Success)
+            throw new InvalidOperationException("Failed to create the water shadow sampler.");
+
         var images = new[] {
             new DescriptorImageInfo { ImageView = skyTargets.SkyTransmitView, ImageLayout = ImageLayout.ShaderReadOnlyOptimal },
             new DescriptorImageInfo { ImageView = skyTargets.SkyViewView, ImageLayout = ImageLayout.ShaderReadOnlyOptimal },
+            new DescriptorImageInfo { ImageView = shadowTargets.CascadeDepthView, ImageLayout = ImageLayout.DepthStencilReadOnlyOptimal },
         };
 
         fixed (DescriptorImageInfo* imagesPointer = images) {
             var imageWrites = new[] {
                 new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstSet = SkyDescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage, PImageInfo = &imagesPointer[0] },
                 new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstSet = SkyDescriptorSet, DstBinding = 1, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage, PImageInfo = &imagesPointer[1] },
+                new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstSet = SkyDescriptorSet, DstBinding = 7, DescriptorCount = 1, DescriptorType = DescriptorType.SampledImage, PImageInfo = &imagesPointer[2] },
             };
 
             fixed (WriteDescriptorSet* writesPointer = imageWrites)
@@ -284,6 +298,20 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
             PImageInfo = &samplerDescriptor
         };
         vk.UpdateDescriptorSets(device, 1, &samplerWrite, 0, null);
+
+        samplerWrite.DstBinding = 8;
+        vk.UpdateDescriptorSets(device, 1, &samplerWrite, 0, null);
+
+        var shadowSamplerDescriptor = new DescriptorImageInfo { Sampler = _shadowSampler };
+        var shadowSamplerWrite = new WriteDescriptorSet {
+            SType = StructureType.WriteDescriptorSet,
+            DstSet = SkyDescriptorSet,
+            DstBinding = 9,
+            DescriptorCount = 1,
+            DescriptorType = DescriptorType.Sampler,
+            PImageInfo = &shadowSamplerDescriptor
+        };
+        vk.UpdateDescriptorSets(device, 1, &shadowSamplerWrite, 0, null);
     }
 
     public void UploadMesh(WaterMeshData mesh)
@@ -293,7 +321,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
             return;
         }
 
-        var vertexSize = checked((ulong)(Marshal.SizeOf<Vector3>() * mesh.Vertices.Length));
+        var vertexSize = checked((ulong)(Marshal.SizeOf<WaterVertex>() * mesh.Vertices.Length));
         var indexSize = checked((ulong)(sizeof(uint) * mesh.Indices.Length));
 
         Buffer vertexBuffer = default;
@@ -307,7 +335,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
             if (context.Api.MapMemory(context.LogicalDevice, vertexMemory, 0, vertexSize, 0, &vertexData) != Result.Success)
                 throw new InvalidOperationException("Failed to map the water vertex buffer.");
 
-            mesh.Vertices.AsSpan().CopyTo(new Span<Vector3>(vertexData, mesh.Vertices.Length));
+            mesh.Vertices.AsSpan().CopyTo(new Span<WaterVertex>(vertexData, mesh.Vertices.Length));
             context.Api.UnmapMemory(context.LogicalDevice, vertexMemory);
 
             AllocateBuffer(indexSize, BufferUsageFlags.IndexBufferBit, out indexBuffer, out indexMemory);
@@ -436,6 +464,9 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
         if (_skySampler.Handle != 0)
             vk.DestroySampler(device, _skySampler, null);
 
+        if (_shadowSampler.Handle != 0)
+            vk.DestroySampler(device, _shadowSampler, null);
+
         if (_skyDescriptorSetLayout.Handle != 0)
             vk.DestroyDescriptorSetLayout(device, _skyDescriptorSetLayout, null);
 
@@ -444,6 +475,7 @@ internal sealed unsafe class WaterGraphicsResources(VulkanDeviceContext context,
         SkyDescriptorSet = default;
         _skyDescriptorPool = default;
         _skySampler = default;
+        _shadowSampler = default;
         _skyDescriptorSetLayout = default;
         IndexCount = 0;
     }

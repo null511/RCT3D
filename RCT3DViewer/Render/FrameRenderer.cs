@@ -72,7 +72,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         var viewProjection = view * projection;
         if (!Matrix4x4.Invert(projection, out var projectionInverse))
             throw new InvalidOperationException("The camera projection matrix is not invertible.");
-        if (!Matrix4x4.Invert(view, out var viewToWorld))
+        if (!Matrix4x4.Invert(view, out var viewInverse))
             throw new InvalidOperationException("The camera view matrix is not invertible.");
 
         CalculateSunDirection(out _, out var sunDirection);
@@ -102,9 +102,11 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         var uniformDescriptorSet = resources.UniformBufferResources!.GetDescriptorSet(currentFrame);
         CameraUniforms cameraUniforms = new() {
             CameraPosition = new Vector4(cameraPosition, 1.0f),
+            View = view,
+            Projection = projection,
             ViewProjection = viewProjection,
             ProjectionInverse = projectionInverse,
-            ViewToWorld = viewToWorld,
+            ViewInverse = viewInverse,
         };
 
         var taaJitter = ui.TaaEnabled ? GetR2Jitter(taaFrameIndex + 1) : Vector2.Zero;
@@ -120,15 +122,12 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             TaaSharpen = ui.Sharpening,
             MipBias = ui.MipBias,
             DebugView = ui.DebugView,
+            ShadowMappingEnabled = ui.ShadowMappingEnabled ? 1u : 0u,
         };
 
-        ShadowUniforms shadowUniforms = new() {
-            ShadowViewProjection0 = shadowViewProjections[0],
-            ShadowViewProjection1 = shadowViewProjections[1],
-            ShadowViewProjection2 = shadowViewProjections[2],
-            ShadowViewProjection3 = shadowViewProjections[3],
-            CascadeSplits = cascadeSplits,
-        };
+        ShadowUniforms shadowUniforms = new() { CascadeSplits = cascadeSplits };
+        for (var cascade = 0; cascade < ShadowRenderTargets.CascadeCount; cascade++)
+            shadowUniforms.ShadowViewProjection[cascade] = shadowViewProjections[cascade];
 
         resources.UniformBufferResources.Update(currentFrame, cameraUniforms, temporalUniforms, sceneUniforms, shadowUniforms);
 
@@ -325,30 +324,22 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
         Vk.CmdEndRenderPass(commandBuffer);
 
-        RecordShadowPass(commandBuffer, uniformDescriptorSet, currentFrame, terrainMesh, pathMesh, trackMesh,
-            rideSupportMesh, rideEntranceExitMesh, parkRegions, shadowViewProjections);
-
-        RecordImageBarrier(commandBuffer, deferredTargets.SceneOutputImage,
-            sceneOutputInitialized ? ImageLayout.ShaderReadOnlyOptimal : ImageLayout.Undefined,
-            ImageLayout.General,
-            sceneOutputInitialized ? PipelineStageFlags.ComputeShaderBit : PipelineStageFlags.TopOfPipeBit,
-            sceneOutputInitialized ? AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit : AccessFlags.None,
-            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
-
-        deferredPassResources.Composite.Dispatch(commandBuffer, 0, uniformDescriptorSet, renderDimensions);
-        sceneOutputInitialized = true;
+        if (ui.ShadowMappingEnabled || !shadowMapInitialized)
+            RecordShadowPass(commandBuffer, uniformDescriptorSet, currentFrame, terrainMesh, pathMesh, trackMesh,
+                rideSupportMesh, rideEntranceExitMesh, parkRegions, shadowViewProjections, ui.ShadowMappingEnabled);
 
         RenderPassBeginInfo waterRenderPassInfo = new() {
             SType = StructureType.RenderPassBeginInfo,
             RenderPass = deferredTargets.WaterRenderPass,
             Framebuffer = deferredTargets.WaterFramebuffer,
-            RenderArea = new Rect2D(new Offset2D(0, 0), extent)
+            RenderArea = new Rect2D(new Offset2D(0, 0), extent),
+            ClearValueCount = 1,
+            PClearValues = clearValues
         };
 
         Vk.CmdBeginRenderPass(commandBuffer, in waterRenderPassInfo, SubpassContents.Inline);
-        // The shadow pass uses its own 2048x2048 viewport and scissor. Dynamic
-        // state persists across render passes, so restore the frame-sized state
-        // before drawing water (and leave it in place for presentation).
+        // The shadow pass uses its own viewport and scissor. Dynamic state persists
+        // across render passes, so restore the frame-sized state before drawing water.
         Vk.CmdSetViewport(commandBuffer, 0, 1, &viewport);
         Vk.CmdSetScissor(commandBuffer, 0, 1, &scissor);
 
@@ -381,6 +372,16 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         }
 
         Vk.CmdEndRenderPass(commandBuffer);
+
+        RecordImageBarrier(commandBuffer, deferredTargets.SceneOutputImage,
+            sceneOutputInitialized ? ImageLayout.ShaderReadOnlyOptimal : ImageLayout.Undefined,
+            ImageLayout.General,
+            sceneOutputInitialized ? PipelineStageFlags.ComputeShaderBit : PipelineStageFlags.TopOfPipeBit,
+            sceneOutputInitialized ? AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit : AccessFlags.None,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
+
+        deferredPassResources.Composite.Dispatch(commandBuffer, 0, uniformDescriptorSet, renderDimensions);
+        sceneOutputInitialized = true;
 
         if (ui.TaaEnabled)
             RecordTaa(commandBuffer, uniformDescriptorSet, renderDimensions, deferredTargets, deferredPassResources);
@@ -530,14 +531,14 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
     private void RecordShadowPass(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, uint currentFrame,
         TerrainMeshData? terrainMesh, PathMeshData? pathMesh, TrackMeshData? trackMesh,
         RideSupportMeshData? rideSupportMesh, RideEntranceExitMeshData? rideEntranceExitMesh,
-        ParkRenderRegion[] parkRegions, Matrix4x4[] shadowViewProjections)
+        ParkRenderRegion[] parkRegions, Matrix4x4[] shadowViewProjections, bool renderGeometry)
     {
         var targets = resources.DeferredTargets!.ShadowTargets!;
         var shadowResources = resources.ShadowGraphicsResources!;
         RecordImageBarrier(commandBuffer, targets.Image,
             shadowMapInitialized ? ImageLayout.DepthStencilReadOnlyOptimal : ImageLayout.Undefined,
             ImageLayout.DepthStencilAttachmentOptimal,
-            shadowMapInitialized ? PipelineStageFlags.ComputeShaderBit : PipelineStageFlags.TopOfPipeBit,
+            shadowMapInitialized ? PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit : PipelineStageFlags.TopOfPipeBit,
             shadowMapInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
             PipelineStageFlags.EarlyFragmentTestsBit | PipelineStageFlags.LateFragmentTestsBit,
             AccessFlags.DepthStencilAttachmentWriteBit,
@@ -545,12 +546,14 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             ShadowRenderTargets.CascadeCount);
 
         for (var cascade = 0; cascade < ShadowRenderTargets.CascadeCount; cascade++) {
-            var shadowFrustum = ViewFrustum.FromViewProjection(shadowViewProjections[cascade]);
-            foreach (var region in parkRegions)
-                region.ShadowVisible = region.HasBounds && shadowFrustum.Intersects(region.Bounds);
+            if (renderGeometry) {
+                var shadowFrustum = ViewFrustum.FromViewProjection(shadowViewProjections[cascade]);
+                foreach (var region in parkRegions)
+                    region.ShadowVisible = region.HasBounds && shadowFrustum.Intersects(region.Bounds);
+            }
 
             DrawShadowCascade(commandBuffer, uniformDescriptorSet, currentFrame, terrainMesh, pathMesh, trackMesh,
-                rideSupportMesh, rideEntranceExitMesh, parkRegions, targets, shadowResources, cascade);
+                rideSupportMesh, rideEntranceExitMesh, parkRegions, targets, shadowResources, cascade, renderGeometry);
         }
 
         shadowMapInitialized = true;
@@ -559,7 +562,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
     private void DrawShadowCascade(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, uint currentFrame,
         TerrainMeshData? terrainMesh, PathMeshData? pathMesh, TrackMeshData? trackMesh,
         RideSupportMeshData? rideSupportMesh, RideEntranceExitMeshData? rideEntranceExitMesh,
-        ParkRenderRegion[] parkRegions, ShadowRenderTargets targets, ShadowGraphicsResources shadowResources, int cascade)
+        ParkRenderRegion[] parkRegions, ShadowRenderTargets targets, ShadowGraphicsResources shadowResources, int cascade, bool renderGeometry)
     {
         var clearValue = new ClearValue {
             DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 }
@@ -574,6 +577,10 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         };
 
         Vk.CmdBeginRenderPass(commandBuffer, in beginInfo, SubpassContents.Inline);
+        if (!renderGeometry) {
+            Vk.CmdEndRenderPass(commandBuffer);
+            return;
+        }
         var viewport = new Viewport {
             X = 0.0f,
             Y = 0.0f,
@@ -595,7 +602,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, shadowResources.PipelineLayout,
             0, 3, shadowDescriptorSets, 0, null);
         var cascadeIndex = (uint)cascade;
-        Vk.CmdPushConstants(commandBuffer, shadowResources.PipelineLayout, ShaderStageFlags.VertexBit,
+        Vk.CmdPushConstants(commandBuffer, shadowResources.PipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
             sizeof(uint), sizeof(uint), &cascadeIndex);
 
         if (terrainMesh is { Vertices.Length: > 0, Indices.Length: > 0 } && resources.TerrainGraphicsResources is { IndexCount: > 0 } terrainResources)
@@ -654,8 +661,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
         Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, pipeline);
         var baseTextureIndex = modelResources.BaseTextureIndex;
-        Vk.CmdPushConstants(commandBuffer, pipelineLayout, ShaderStageFlags.FragmentBit, 0, sizeof(uint), &baseTextureIndex);
-        Vk.CmdPushConstants(commandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, sizeof(uint), sizeof(uint), &cascadeIndex);
+        Vk.CmdPushConstants(commandBuffer, pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, sizeof(uint), &baseTextureIndex);
+        Vk.CmdPushConstants(commandBuffer, pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, sizeof(uint), sizeof(uint), &cascadeIndex);
         var vertexBuffers = stackalloc Silk.NET.Vulkan.Buffer[2];
         vertexBuffers[0] = modelResources.VertexBuffer;
         vertexBuffers[1] = modelResources.InstanceBuffer;

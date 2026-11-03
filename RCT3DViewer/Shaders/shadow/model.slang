@@ -38,12 +38,8 @@ VertexOutput vertexMain(VertexInput input)
 		+ input.position.z * input.transformRow2
 		+ input.transformRow3;
 
-    float4x4 shadowViewProjection = materialPushConstants.cascadeIndex == 0 ? shadowUniforms.shadowViewProjection0
-        : materialPushConstants.cascadeIndex == 1 ? shadowUniforms.shadowViewProjection1
-        : materialPushConstants.cascadeIndex == 2 ? shadowUniforms.shadowViewProjection2
-        : shadowUniforms.shadowViewProjection3;
     VertexOutput output;
-    output.position = mul(worldPosition, shadowViewProjection);
+    output.position = mul(worldPosition, shadowUniforms.shadowViewProjection[materialPushConstants.cascadeIndex]);
     output.texCoord = input.texCoord;
     return output;
 }

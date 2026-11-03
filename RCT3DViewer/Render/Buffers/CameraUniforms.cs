@@ -7,7 +7,9 @@ namespace RCT3D.Render.Buffers;
 public struct CameraUniforms
 {
     public Vector4 CameraPosition;
+    public Matrix4x4 View;
+    public Matrix4x4 Projection;
     public Matrix4x4 ViewProjection;
     public Matrix4x4 ProjectionInverse;
-    public Matrix4x4 ViewToWorld;
+    public Matrix4x4 ViewInverse;
 }

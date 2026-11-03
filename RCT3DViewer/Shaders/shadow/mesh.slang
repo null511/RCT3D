@@ -22,11 +22,7 @@ struct VertexOutput {
 VertexOutput vertexMain(VertexInput input)
 {
 	VertexOutput output;
-	float4x4 shadowViewProjection = shadowPushConstants.cascadeIndex == 0 ? shadowUniforms.shadowViewProjection0
-		: shadowPushConstants.cascadeIndex == 1 ? shadowUniforms.shadowViewProjection1
-		: shadowPushConstants.cascadeIndex == 2 ? shadowUniforms.shadowViewProjection2
-		: shadowUniforms.shadowViewProjection3;
-	output.position = mul(float4(input.position, 1.0), shadowViewProjection);
+	output.position = mul(float4(input.position, 1.0), shadowUniforms.shadowViewProjection[shadowPushConstants.cascadeIndex]);
 	return output;
 }
 

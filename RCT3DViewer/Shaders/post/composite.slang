@@ -3,10 +3,14 @@ import lib.uniforms;
 import lib.colors;
 import lib.octohedral;
 import lib.celestial;
+import lib.fresnel;
+import lib.ign;
+import lib.ggx;
 import lib.sky;
 import lib.sky_transmit;
 import lib.sky_view;
 import lib.sky_irradiance;
+import lib.shadow;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
@@ -20,9 +24,10 @@ import lib.sky_irradiance;
 [[vk::binding(5, 1)]] Texture2D<float4> sky_view;
 [[vk::binding(6, 1)]] Texture2D<float4> texSkyIrradiance;
 [[vk::binding(7, 1)]] Texture2DArray<float> shadowDepth;
-[[vk::binding(8, 1)]] SamplerState linearSampler;
-[[vk::binding(9, 1)]] SamplerComparisonState linearShadowSampler;
-[[vk::binding(10, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
+[[vk::binding(8, 1)]] Texture2D<float4> waterStaging;
+[[vk::binding(9, 1)]] SamplerState linearSampler;
+[[vk::binding(10, 1)]] SamplerComparisonState linearShadowSampler;
+[[vk::binding(11, 1), vk::image_format("rgba16f")]] RWTexture2D<float4> sceneOutput;
 
 [shader("compute")]
 [numthreads(16, 16)]
@@ -34,7 +39,7 @@ void main(uint2 globalPos: SV_DispatchThreadID) {
     float3 color;
 
     float3 viewPosition = reconstructViewPosition(globalPos, depth, sceneUniforms.renderDimensions, cameraUniforms.projectionInverse);
-    float3 worldPosition = mul(float4(viewPosition, 1.0), cameraUniforms.viewToWorld).xyz;
+    float3 worldPosition = mul(float4(viewPosition, 1.0), cameraUniforms.viewInverse).xyz;
     float3 localSunDir = normalize(sceneUniforms.sunDirection.xyz);
 
     if (depth < 1.0) {
@@ -53,9 +58,23 @@ void main(uint2 globalPos: SV_DispatchThreadID) {
         float emission = fract(specularMap.a);
 
         float3 sunDir = normalize(sceneUniforms.sunDirection.xyz);
-        float shadowVisibility = getShadowVisibility(worldPosition, -viewPosition.z);
+        float shadowVisibility = 1.0;
+
+        if (sceneUniforms.shadowMappingEnabled != 0) {
+            int cascade = getShadowCascade(shadowUniforms, -viewPosition.z);
+
+            if (cascade >= 0) {
+                float3 shadowPos = mul_project(worldPosition, shadowUniforms.shadowViewProjection[cascade]);
+                shadowPos.xy = shadowPos.xy * 0.5 + 0.5;
+
+                float dither = IGN::getAnimated(globalPos, sceneUniforms.frameCounter);
+                // shadowVisibility = getShadowVisibility(shadowDepth, linearSampler, linearShadowSampler, shadowPos, cascade, dither);
+                shadowVisibility = getShadowVisibility(shadowDepth, linearShadowSampler, shadowPos, cascade, dither);
+            }
+        }
 
         float3 viewDirection = normalize(cameraUniforms.cameraPosition.xyz - worldPosition);
+
         float3 halfDirection = normalize(sunDir + viewDirection);
         float nDotL = max(dot(texNormal, sunDir), 0.0);
         float nDotV = max(dot(texNormal, viewDirection), 0.0001);
@@ -131,51 +150,11 @@ void main(uint2 globalPos: SV_DispatchThreadID) {
         color += getValFromSkyLUT(sky_view, linearSampler, localViewDir, localSunDir);
     }
 
-    //float2 shit = (globalPos - 32) / 64.0;
-    //if (all(saturate(shit) == shit)) {
-    //    color = texSkyIrradiance.SampleLevel(linearSampler, shit, 0).rgb;
-    //}
+    float4 water = waterStaging.Load(pos);
+    if (water.a > 0.0) {
+        color *= srgbToLinear(float3(0.235, 0.627, 0.702));
+        color = color * (1.0 - water.a) + water.rgb;
+    }
 
     sceneOutput[globalPos] = float4(color, 1.0);
-}
-
-float4x4 getShadowViewProjection(uint cascade) {
-    if (cascade == 0) return shadowUniforms.shadowViewProjection0;
-    if (cascade == 1) return shadowUniforms.shadowViewProjection1;
-    if (cascade == 2) return shadowUniforms.shadowViewProjection2;
-    return shadowUniforms.shadowViewProjection3;
-}
-
-float getShadowVisibility(float3 worldPosition, float viewDepth) {
-    uint cascade = 0;
-    if (viewDepth > shadowUniforms.cascadeSplits.x) cascade = 1;
-    if (viewDepth > shadowUniforms.cascadeSplits.y) cascade = 2;
-    if (viewDepth > shadowUniforms.cascadeSplits.z) cascade = 3;
-    if (viewDepth > shadowUniforms.cascadeSplits.w) return 1.0;
-
-    float4 shadowClip = mul(float4(worldPosition, 1.0), getShadowViewProjection(cascade));
-    float3 shadowNdc = shadowClip.xyz / shadowClip.w;
-    float2 shadowUv = shadowNdc.xy * 0.5 + 0.5;
-
-    if (any(shadowUv < 0.0) || any(shadowUv > 1.0) || shadowNdc.z < 0.0 || shadowNdc.z > 1.0) return 1.0;
-
-    const float bias = 0.00012;
-
-    return shadowDepth.SampleCmpLevelZero(linearShadowSampler, float3(shadowUv, cascade), shadowNdc.z - bias * exp2(cascade));
-}
-
-float3 FresnelSchlick(float cosine, float3 f0) {
-    return f0 + (1.0 - f0) * pow(1.0 - saturate(cosine), 5.0);
-}
-
-float DistributionGgx(float nDotH, float roughness) {
-    float alpha = roughness * roughness;
-    float alphaSquared = alpha * alpha;
-    float denominator = nDotH * nDotH * (alphaSquared - 1.0) + 1.0;
-    return alphaSquared / max(PI * denominator * denominator, 0.000001);
-}
-
-float GeometrySchlickGgx(float nDotDirection, float roughness) {
-    float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
-    return nDotDirection / max(nDotDirection * (1.0 - k) + k, 0.000001);
 }

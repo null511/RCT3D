@@ -194,4 +194,44 @@ internal class BracePartBuilder(List<TrackBracePart> braces)
             nextVertex += 4;
         }
     }
+
+    public TrackBracePart Cylinder(Vector3 start, Vector3 end, float radius, int segmentCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(segmentCount, 3);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var direction = end - start;
+        if (direction.LengthSquared() <= float.Epsilon)
+            throw new ArgumentException("Cylinder endpoints must be distinct.", nameof(end));
+
+        var axis = Vector3.Normalize(direction);
+        var reference = MathF.Abs(Vector3.Dot(axis, Vector3.UnitY)) < 0.99f ? Vector3.UnitY : Vector3.UnitZ;
+        var radialY = Vector3.Normalize(reference - Vector3.Dot(reference, axis) * axis);
+        var radialZ = Vector3.Cross(axis, radialY);
+
+        var vertices = new TrackBraceVertex[segmentCount * 2];
+        var indices = new uint[segmentCount * 6];
+
+        for (var segment = 0; segment < segmentCount; segment++) {
+            var angle = 2.0f * MathF.PI * segment / segmentCount;
+            var normal = radialY * MathF.Cos(angle) + radialZ * MathF.Sin(angle);
+
+            vertices[segment] = new TrackBraceVertex(start + radius * normal, normal);
+            vertices[segment + segmentCount] = new TrackBraceVertex(end + radius * normal, normal);
+
+            var next = (segment + 1) % segmentCount;
+            var index = segment * 6;
+
+            indices[index] = (uint)segment;
+            indices[index + 1] = (uint)(segment + segmentCount);
+            indices[index + 2] = (uint)(next + segmentCount);
+            indices[index + 3] = (uint)segment;
+            indices[index + 4] = (uint)(next + segmentCount);
+            indices[index + 5] = (uint)next;
+        }
+
+        var part = new TrackBracePart(vertices, indices);
+        braces.Add(part);
+        return part;
+    }
 }

@@ -191,7 +191,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         PathGraphicsResources = new TerrainGraphicsResources(DeviceContext, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, MaterialTextureArrayData.FromTerrain(PathMaterials.TextureLibrary),
             shaderNameOverride: Path.Combine("object", "terrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         PathGraphicsResources.CreatePipeline();
-        WaterGraphicsResources = new WaterGraphicsResources(DeviceContext, DeferredTargets.WaterRenderPass, UniformBufferResources.DescriptorSetLayout, SkyTargets);
+        WaterGraphicsResources = new WaterGraphicsResources(DeviceContext, DeferredTargets.WaterRenderPass, UniformBufferResources.DescriptorSetLayout, SkyTargets, DeferredTargets.ShadowTargets!);
         WaterGraphicsResources.CreatePipeline();
         SwapchainResources.CreateFramebuffers();
         CreateCommandInfrastructure();

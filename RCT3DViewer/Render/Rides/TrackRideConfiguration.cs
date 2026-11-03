@@ -68,6 +68,7 @@ internal static class TrackRideConfigurations
         new GoKarts().Build(),
         new InvertedRollerCoaster().Build(),
         new JuniorRollerCoaster().Build(),
+        new LogFlume().Build(),
         new LoopingRollerCoaster().Build(),
         new MineRide().Build(),
         new MineTrainCoaster().Build(),

@@ -130,7 +130,7 @@ internal sealed unsafe class ShadowRenderTargets : IDisposable
                 SrcSubpass = 0,
                 DstSubpass = Vk.SubpassExternal,
                 SrcStageMask = PipelineStageFlags.LateFragmentTestsBit,
-                DstStageMask = PipelineStageFlags.ComputeShaderBit,
+                DstStageMask = PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.FragmentShaderBit,
                 SrcAccessMask = AccessFlags.DepthStencilAttachmentWriteBit,
                 DstAccessMask = AccessFlags.ShaderReadBit,
                 DependencyFlags = DependencyFlags.ByRegionBit

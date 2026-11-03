@@ -32,6 +32,7 @@ internal sealed class ViewerUiController
     private float _fieldOfView = 45.0f;
     private float _sharpening = 0.5f;
     private float _mipBias = -1.0f;
+    private bool _shadowMappingEnabled = true;
     private float _shadowRadius = ShadowRenderTargets.DefaultRadius;
     private uint _appliedShadowResolution = ShadowRenderTargets.DefaultResolution;
     private uint _selectedShadowResolution = ShadowRenderTargets.DefaultResolution;
@@ -52,6 +53,7 @@ internal sealed class ViewerUiController
         _fieldOfView = settings.FieldOfView;
         _sharpening = settings.Sharpening;
         _mipBias = settings.MipBias;
+        _shadowMappingEnabled = settings.ShadowMappingEnabled;
         _shadowRadius = settings.ShadowRadius;
         _appliedShadowResolution = settings.ShadowResolution;
         _selectedShadowResolution = settings.ShadowResolution;
@@ -69,6 +71,7 @@ internal sealed class ViewerUiController
     public uint DebugView => (uint)_debugView;
     public float Sharpening => _sharpening;
     public float MipBias => _mipBias;
+    public bool ShadowMappingEnabled => _appliedGraphicsOptions.ShadowMappingEnabled;
     public float ShadowRadius => _shadowRadius;
     public uint ShadowResolution => _appliedShadowResolution;
     //public string? LoadedParkPath => _loadedParkPath;
@@ -93,6 +96,7 @@ internal sealed class ViewerUiController
         applyFieldOfView(_fieldOfView);
         _sharpening = _appliedGraphicsOptions.Sharpening;
         _mipBias = _appliedGraphicsOptions.MipBias;
+        _shadowMappingEnabled = _appliedGraphicsOptions.ShadowMappingEnabled;
         _shadowRadius = _appliedGraphicsOptions.ShadowRadius;
         _selectedShadowResolution = _appliedShadowResolution;
         _editingGraphicsOptions = false;
@@ -123,6 +127,7 @@ internal sealed class ViewerUiController
         FieldOfView = _fieldOfView,
         Sharpening = _sharpening,
         MipBias = _mipBias,
+        ShadowMappingEnabled = _shadowMappingEnabled,
         ShadowResolution = _selectedShadowResolution,
         ShadowRadius = _shadowRadius
     };
@@ -278,6 +283,7 @@ internal sealed class ViewerUiController
                 ImGui.SliderFloat("Sharpening", ref _sharpening, 0.0f, 1.0f, "%.2f");
                 ImGui.SliderFloat("Mip Bias", ref _mipBias, -2.0f, 0.0f, "%.2f");
                 ImGui.SeparatorText("Shadows");
+                ImGui.Checkbox("Shadow Mapping", ref _shadowMappingEnabled);
                 var shadowResolutionIndex = _selectedShadowResolution switch {
                     512 => 0,
                     1024 => 1,

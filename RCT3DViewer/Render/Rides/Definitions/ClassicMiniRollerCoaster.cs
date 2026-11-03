@@ -38,44 +38,45 @@ internal class ClassicMiniRollerCoaster : RideDefinition
             ],
         };
 
-        var (vertices, indices) = BuildCylinder(0.055f, 5);
+        var brace = shape.AppendBracePart.Cylinder(
+            new Vector3(-0.42f, 0.28f, 0f),
+            new Vector3( 0.42f, 0.28f, 0f),
+            0.055f, 5);
 
-        shape.BraceParts.Add(new TrackBracePart(vertices, indices) {
-            Swatch = TrackRailSwatch.Main,
-            Specular = railSpecular,
-        });
+        brace.Swatch = TrackRailSwatch.Main;
+        brace.Specular = railSpecular;
 
         return shape;
     }
 
-    private (TrackBraceVertex[] vertices, uint[] indices) BuildCylinder(float radius, int segmentCount)
-    {
-        const float halfRailSpacing = 0.42f;
-        const float railHeight = 0.28f;
+    //private (TrackBraceVertex[] vertices, uint[] indices) BuildCylinder(float radius, int segmentCount)
+    //{
+    //    const float halfRailSpacing = 0.42f;
+    //    const float railHeight = 0.28f;
 
-        var vertices = new TrackBraceVertex[segmentCount * 2];
-        var indices = new uint[segmentCount * 6];
+    //    var vertices = new TrackBraceVertex[segmentCount * 2];
+    //    var indices = new uint[segmentCount * 6];
 
-        for (var segment = 0; segment < segmentCount; segment++) {
-            var angle = 2.0f * MathF.PI * segment / segmentCount;
-            var normal = new Vector3(0.0f, MathF.Cos(angle), MathF.Sin(angle));
-            var y = railHeight + radius * normal.Y;
-            var z = radius * normal.Z;
+    //    for (var segment = 0; segment < segmentCount; segment++) {
+    //        var angle = 2.0f * MathF.PI * segment / segmentCount;
+    //        var normal = new Vector3(0.0f, MathF.Cos(angle), MathF.Sin(angle));
+    //        var y = railHeight + radius * normal.Y;
+    //        var z = radius * normal.Z;
 
-            vertices[segment] = new TrackBraceVertex(new Vector3(-halfRailSpacing, y, z), normal);
-            vertices[segment + segmentCount] = new TrackBraceVertex(new Vector3(halfRailSpacing, y, z), normal);
+    //        vertices[segment] = new TrackBraceVertex(new Vector3(-halfRailSpacing, y, z), normal);
+    //        vertices[segment + segmentCount] = new TrackBraceVertex(new Vector3(halfRailSpacing, y, z), normal);
 
-            var next = (segment + 1) % segmentCount;
-            var index = segment * 6;
+    //        var next = (segment + 1) % segmentCount;
+    //        var index = segment * 6;
 
-            indices[index] = (uint)segment;
-            indices[index + 1] = (uint)(segment + segmentCount);
-            indices[index + 2] = (uint)(next + segmentCount);
-            indices[index + 3] = (uint)segment;
-            indices[index + 4] = (uint)(next + segmentCount);
-            indices[index + 5] = (uint)next;
-        }
+    //        indices[index] = (uint)segment;
+    //        indices[index + 1] = (uint)(segment + segmentCount);
+    //        indices[index + 2] = (uint)(next + segmentCount);
+    //        indices[index + 3] = (uint)segment;
+    //        indices[index + 4] = (uint)(next + segmentCount);
+    //        indices[index + 5] = (uint)next;
+    //    }
 
-        return (vertices, indices);
-    }
+    //    return (vertices, indices);
+    //}
 }

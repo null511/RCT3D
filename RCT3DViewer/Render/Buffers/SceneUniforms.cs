@@ -14,4 +14,5 @@ public struct SceneUniforms
     public float TaaSharpen;
     public float MipBias;
     public uint DebugView;
+    public uint ShadowMappingEnabled;
 }

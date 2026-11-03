@@ -11,7 +11,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 
     private readonly List<TerrainVertex> _vertices = new();
     private readonly List<uint> _indices = new();
-    private readonly List<Vector3> waterVertices = new();
+    private readonly List<WaterVertex> waterVertices = new();
     private readonly List<uint> waterIndices = new();
     private readonly List<RenderRegionIndexRange> _regions = new();
     private readonly List<RenderRegionIndexRange> waterRegions = new();
@@ -858,10 +858,10 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
     {
         var tileOrigin = waterVertices.Count;
 
-        waterVertices.Add(new Vector3((x + 1) * tileSize, waterHeight, (y + 1) * tileSize));
-        waterVertices.Add(new Vector3((x + 1) * tileSize, waterHeight, y * tileSize));
-        waterVertices.Add(new Vector3(x * tileSize, waterHeight, (y + 1) * tileSize));
-        waterVertices.Add(new Vector3(x * tileSize, waterHeight, y * tileSize));
+        waterVertices.Add(new WaterVertex(new Vector3((x + 1) * tileSize, waterHeight, (y + 1) * tileSize), Vector3.UnitY));
+        waterVertices.Add(new WaterVertex(new Vector3((x + 1) * tileSize, waterHeight, y * tileSize), Vector3.UnitY));
+        waterVertices.Add(new WaterVertex(new Vector3(x * tileSize, waterHeight, (y + 1) * tileSize), Vector3.UnitY));
+        waterVertices.Add(new WaterVertex(new Vector3(x * tileSize, waterHeight, y * tileSize), Vector3.UnitY));
 
         waterIndices.Add((uint)tileOrigin);
         waterIndices.Add((uint)tileOrigin + 1);
@@ -1023,7 +1023,7 @@ internal sealed record TerrainMeshData(
 
 internal sealed record TerrainMeshBuildData(TerrainMeshData Terrain, WaterMeshData Water);
 
-internal sealed record WaterMeshData(Vector3[] Vertices, uint[] Indices, RenderRegionIndexRange[] Regions)
+internal sealed record WaterMeshData(WaterVertex[] Vertices, uint[] Indices, RenderRegionIndexRange[] Regions)
 {
     public static WaterMeshData Combine(WaterMeshData first, WaterMeshData second)
     {
@@ -1032,7 +1032,7 @@ internal sealed record WaterMeshData(Vector3[] Vertices, uint[] Indices, RenderR
 
         var firstRegions = first.Regions.ToDictionary(range => range.Region);
         var secondRegions = second.Regions.ToDictionary(range => range.Region);
-        var vertices = new List<Vector3>();
+        var vertices = new List<WaterVertex>();
         var indices = new List<uint>();
         var regions = new List<RenderRegionIndexRange>();
 
@@ -1055,7 +1055,7 @@ internal sealed record WaterMeshData(Vector3[] Vertices, uint[] Indices, RenderR
         WaterMeshData mesh,
         IReadOnlyDictionary<RenderRegionCoordinate, RenderRegionIndexRange> ranges,
         RenderRegionCoordinate region,
-        List<Vector3> vertices,
+        List<WaterVertex> vertices,
         List<uint> indices)
     {
         if (!ranges.TryGetValue(region, out var range)) return;
