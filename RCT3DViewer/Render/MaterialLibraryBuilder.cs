@@ -6,22 +6,27 @@ namespace RCT3D.Render;
 internal class MaterialLibraryBuilder
 {
     private readonly List<ImageData> images = new();
-    private readonly Dictionary<uint, uint> _layers = new();
+    //private readonly Dictionary<uint, uint> _layers = new();
     private readonly HashSet<string> objectIds = new(StringComparer.Ordinal);
 
-    public IReadOnlyDictionary<uint, uint> Layers => _layers;
+    //public IReadOnlyDictionary<uint, uint> Layers => _layers;
     public int? Width {get; private set;}
     public int? Height {get; private set;}
 
 
-    public void AddImage(string objectId, string texture, string textureDirectory) {
+    public void AddImage(string objectId, string texture, string textureDirectory, Dictionary<uint, uint> layers)
+    {
+        var layer = (uint)images.Count;
+        if (!layers.TryAdd(HashObjectId(objectId), layer))
+            throw new InvalidDataException($"Terrain object identifier hash collision: {objectId}");
 
+        AddImage(objectId, texture, textureDirectory);
+    }
+
+    public void AddImage(string objectId, string texture, string textureDirectory)
+    {
         if (!objectIds.Add(objectId))
             throw new InvalidDataException("Terrain materials must have unique objectId and texture values.");
-
-        var layer = (uint)images.Count;
-        if (!_layers.TryAdd(HashObjectId(objectId), layer))
-            throw new InvalidDataException($"Terrain object identifier hash collision: {objectId}");
 
         var texturePath = Path.GetFullPath(Path.Combine(textureDirectory, texture));
         var rootPath = Path.GetFullPath(textureDirectory) + Path.DirectorySeparatorChar;

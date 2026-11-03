@@ -47,7 +47,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         }
 
         if (ShouldDrawSupports(path, surface))
-            AddSupports(path, surface, Materials.GetLayer(path.RailingsIdHash), geometry, supportStations);
+            AddSupports(path, surface, Materials.GetRailingLayer(path.RailingsIdHash), geometry, supportStations);
     }
 
     private void AddRailings(RCTTilePathData path, PathMeshGeometry geometry)
@@ -57,7 +57,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var south = path.TileY * WorldUnits.TileSize;
         var north = (path.TileY + 1) * WorldUnits.TileSize;
         var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit;
-        var material = Materials.GetLayer(path.RailingsIdHash);
+        var material = Materials.GetRailingLayer(path.RailingsIdHash);
 
         if (path.IsSloped) {
             if (path.SlopeDirection is DirectionWest or DirectionEast) {
@@ -116,7 +116,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var northEast = new Vector3(east, GetPathCornerHeight(path, false, true, baseHeight) + SurfaceBias, north);
         var northWest = new Vector3(west, GetPathCornerHeight(path, true, true, baseHeight) + SurfaceBias, north);
 
-        var material = Materials.GetLayer(path.SurfaceIdHash);
+        var material = Materials.GetSurfaceLayer(path.SurfaceIdHash);
 
         geometry.AddTriangle(northEast, new Vector2(1, 1), southEast, new Vector2(1, 0), northWest, new Vector2(0, 1), material);
         geometry.AddTriangle(southEast, new Vector2(1, 0), southWest, new Vector2(0, 0), northWest, new Vector2(0, 1), material);

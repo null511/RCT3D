@@ -5,7 +5,8 @@ namespace RCT3D.Render.Terrain;
 
 public sealed class TerrainMaterialLibrary : IMaterialLibrary
 {
-    private readonly IReadOnlyDictionary<uint, uint> _layersByObjectIdHash;
+    private readonly IReadOnlyDictionary<uint, uint> _surfaceLayersByObjectIdHash;
+    private readonly IReadOnlyDictionary<uint, uint> _sidingLayersByObjectIdHash;
 
     public int Width { get; }
     public int Height { get; }
@@ -17,7 +18,7 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
     public int LayerCount => ColorPixels.Length / (Width * Height * 4);
 
 
-    private TerrainMaterialLibrary(int width, int height, byte[] colorPixels, byte[] normalPixels, byte[] specularPixels, IReadOnlyDictionary<uint, uint> layersByObjectIdHash, uint fallbackLayer)
+    private TerrainMaterialLibrary(int width, int height, byte[] colorPixels, byte[] normalPixels, byte[] specularPixels, IReadOnlyDictionary<uint, uint> surfaceLayersByObjectIdHash, IReadOnlyDictionary<uint, uint> sidingLayersByObjectIdHash, uint fallbackLayer)
     {
         Width = width;
         Height = height;
@@ -26,16 +27,25 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
         SpecularPixels = specularPixels;
         FallbackLayer = fallbackLayer;
 
-        _layersByObjectIdHash = layersByObjectIdHash;
+        _surfaceLayersByObjectIdHash = surfaceLayersByObjectIdHash;
+        _sidingLayersByObjectIdHash = sidingLayersByObjectIdHash;
     }
 
-    public uint GetLayer(uint objectIdHash)
+    public uint GetSurfaceLayer(uint objectIdHash)
     {
-        return _layersByObjectIdHash.TryGetValue(objectIdHash, out var layer) ? layer : FallbackLayer;
+        return _surfaceLayersByObjectIdHash.TryGetValue(objectIdHash, out var layer) ? layer : FallbackLayer;
+    }
+
+    public uint GetSidingLayer(uint objectIdHash)
+    {
+        return _sidingLayersByObjectIdHash.TryGetValue(objectIdHash, out var layer) ? layer : FallbackLayer;
     }
 
     public static TerrainMaterialLibrary Load(string textureDirectory, string? additionalArrayProperty, string missingTexturePath)
     {
+        var surfaceLayers = new Dictionary<uint, uint>();
+        var sidingLayers = new Dictionary<uint, uint>();
+
         var builder = new MaterialLibraryBuilder();
 
         // missing/fallback image
@@ -47,15 +57,15 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
         builder.AddImage(string.Empty, Path.GetFileName(missingTextureFullPath), missingTextureDirectory);
 
         // load data
-        LoadSurfaces(textureDirectory, builder);
-        LoadSiding(textureDirectory, builder);
+        LoadSurfaces(textureDirectory, builder, surfaceLayers);
+        LoadSiding(textureDirectory, builder, sidingLayers);
 
         var (color, normal, specular) = builder.Build();
 
-        return new TerrainMaterialLibrary(builder.Width!.Value, builder.Height!.Value, color, normal, specular, builder.Layers, fallbackLayer);
+        return new TerrainMaterialLibrary(builder.Width!.Value, builder.Height!.Value, color, normal, specular, surfaceLayers, sidingLayers, fallbackLayer);
     }
 
-    private static void LoadSurfaces(string textureDirectory, MaterialLibraryBuilder builder)
+    private static void LoadSurfaces(string textureDirectory, MaterialLibraryBuilder builder, Dictionary<uint, uint> layers)
     {
         var surfaceDirectory = Path.Combine(textureDirectory, "terrain");
         var manifestPath = Path.Combine(surfaceDirectory, "materials.json");
@@ -70,11 +80,11 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
             if (string.IsNullOrWhiteSpace(objectId) || string.IsNullOrWhiteSpace(texture))
                 throw new InvalidDataException("Terrain materials must have non-empty objectId and texture values.");
 
-            builder.AddImage(objectId, texture, surfaceDirectory);
+            builder.AddImage(objectId, texture, surfaceDirectory, layers);
         }
     }
 
-    private static void LoadSiding(string textureDirectory, MaterialLibraryBuilder builder)
+    private static void LoadSiding(string textureDirectory, MaterialLibraryBuilder builder, Dictionary<uint, uint> layers)
     {
         var sideDirectory = Path.Combine(textureDirectory, "terrain_side");
         var manifestPath = Path.Combine(sideDirectory, "materials.json");
@@ -89,7 +99,7 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
             if (string.IsNullOrWhiteSpace(objectId) || string.IsNullOrWhiteSpace(texture))
                 throw new InvalidDataException("Terrain materials must have non-empty objectId and texture values.");
 
-            builder.AddImage(objectId, texture, sideDirectory);
+            builder.AddImage(objectId, texture, sideDirectory, layers);
         }
     }
 

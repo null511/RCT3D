@@ -45,7 +45,7 @@ internal sealed class WoodenPathGeometryBuilder(PathMaterialLibrary materials) :
 
     protected override void AddElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry)
     {
-        var material = Materials.GetLayer(TerrainMaterialLibrary.HashObjectId("rct2.footpath_railings.wood"));
+        var material = Materials.GetRailingLayer(TerrainMaterialLibrary.HashObjectId("rct2.footpath_railings.wood"));
 
         BuildElevatedPlatformSlab(path, geometry, material);
     }

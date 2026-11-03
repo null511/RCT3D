@@ -124,9 +124,9 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                 var cSouth = new Vector3(x * WorldUnits.TileSize, south, y * WorldUnits.TileSize);
                 var cWest = new Vector3(x * WorldUnits.TileSize, west, (y + 1) * WorldUnits.TileSize);
 
-                var materialId = GetMaterialLayer(surface);
+                var materialId = GetSurfaceLayer(surface);
 
-                var sidingMaterialId = GetMaterialLayer(surface);
+                var sidingMaterialId = GetSidingLayer(surface);
                 AddTerrainTile(x, y, width, height, surfaces, north, east, south, west, materialId);
                 if (tunnels is not null) {
                     foreach (var span in tunnels.GetSpans(x, y))
@@ -141,7 +141,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                     GetCornerHeights(eastNeighbor, out _, out _, out var neighborSouth, out var neighborWest);
 
                     AddSkirtEdge(cEast, east, cNorth, north, neighborSouth, neighborWest,
-                        sidingMaterialId, GetMaterialLayer(eastNeighbor), eastEdgeNormal,
+                        sidingMaterialId, GetSidingLayer(eastNeighbor), eastEdgeNormal,
                         GetOpening(tunnels, x, y, TerrainSide.East, x + 1, y, TerrainSide.West));
                 }
                 else {
@@ -157,7 +157,7 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                     GetCornerHeights(northNeighbor, out _, out var neighborEast, out var neighborSouth, out _);
 
                     AddSkirtEdge(cWest, west, cNorth, north, neighborSouth, neighborEast,
-                        sidingMaterialId, GetMaterialLayer(northNeighbor), northEdgeNormal,
+                        sidingMaterialId, GetSidingLayer(northNeighbor), northEdgeNormal,
                         GetOpening(tunnels, x, y, TerrainSide.North, x, y + 1, TerrainSide.South));
                 }
                 else {
@@ -196,9 +196,14 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                 waterRegions.ToArray()));
     }
 
-    private uint GetMaterialLayer(RCTTileSurfaceData surface)
+    private uint GetSurfaceLayer(RCTTileSurfaceData surface)
     {
-        return materials.GetLayer(surface.TerrainSurfaceIdHash);
+        return materials.GetSurfaceLayer(surface.TerrainSurfaceIdHash);
+    }
+
+    private uint GetSidingLayer(RCTTileSurfaceData surface)
+    {
+        return materials.GetSidingLayer(surface.TerrainEdgeIdHash);
     }
 
     private void AddTerrainTile(
