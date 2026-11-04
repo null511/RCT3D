@@ -32,6 +32,20 @@ internal sealed class PathMeshGeometry
         SupportRegions = supportRegions.ToArray()
     };
 
+    public uint AddIndexedVertex(Vector3 position, Vector3 normal, Vector2 uv, uint material)
+    {
+        var index = (uint)vertices.Count;
+        vertices.Add(new TerrainVertex(position, normal, uv, material));
+        return index;
+    }
+
+    public void AddIndexedTriangle(uint a, uint b, uint c)
+    {
+        indices.Add(a);
+        indices.Add(b);
+        indices.Add(c);
+    }
+
     public void AddTriangle(Vector3 a, Vector2 uvA, Vector3 b, Vector2 uvB, Vector3 c, Vector2 uvC, uint material, Vector3? expectedNormal = null)
     {
         var normal = expectedNormal ?? Vector3.Normalize(Vector3.Cross(b - a, c - a));

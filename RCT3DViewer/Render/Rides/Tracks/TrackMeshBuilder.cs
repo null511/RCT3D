@@ -115,8 +115,10 @@ internal sealed class TrackMeshBuilder
         var pieces = new Dictionary<TrackPieceKey, List<RCTTrackElementData>>();
 
         foreach (ref readonly var track in filteredTrackElements) {
-            if (!rideConfigurations.TryGetValue(track.RideType, out _)
-                || !pieceBuilders.TryResolve(track.Part, out _)) continue;
+            if (!rideConfigurations.TryGetValue(track.RideType, out var configuration)) continue;
+            if (configuration.DirectMeshBuilder is { } directBuilder
+                ? !directBuilder.Supports(track.Part)
+                : !pieceBuilders.TryResolve(track.Part, out _)) continue;
 
             var offset = RotateSequenceOffset(track.SequenceOffsetX, track.SequenceOffsetY, track.Direction);
 
@@ -137,6 +139,12 @@ internal sealed class TrackMeshBuilder
             pieceElements.Add(track);
         }
 
+        var pieceLocations = pieces
+            .Where(piece => piece.Value.Any(track => track.Sequence == 0))
+            .Select(piece => new TrackPieceLocation(
+                piece.Key.RideId, piece.Key.RideType, piece.Key.TrackType,
+                piece.Key.OriginTileX, piece.Key.OriginTileY, piece.Key.OriginBaseHeight))
+            .ToHashSet();
         var geometry = new TrackMeshGeometry();
         var waterGeometry = new WaterPlaneMeshGeometry();
         var supportGeometry = new RideSupportMeshGeometry();
@@ -146,9 +154,10 @@ internal sealed class TrackMeshBuilder
         foreach (var (key, pieceElements) in pieces) {
             pieceElements.Sort((left, right) => left.Sequence.CompareTo(right.Sequence));
             var configuration = rideConfigurations[key.RideType];
-            pieceBuilders.TryResolve(key.TrackType, out var pieceBuilder);
+            var requiresCompletePiece = configuration.DirectMeshBuilder is not null
+                || pieceBuilders.TryResolve(key.TrackType, out var pieceBuilder) && pieceBuilder.RequiresCompletePiece;
 
-            if (pieceBuilder.RequiresCompletePiece && !HasCompletePieceSequences(pieceElements))
+            if (requiresCompletePiece && !HasCompletePieceSequences(pieceElements))
                 Log.Warning(
                     "Track piece {TrackType} for ride {RideId} at ({TileX}, {TileY}) has incomplete sequence data; processing {RetainedSequenceCount} retained elements",
                     key.TrackType, key.RideId, key.OriginTileX, key.OriginTileY, pieceElements.Count);
@@ -187,8 +196,13 @@ internal sealed class TrackMeshBuilder
 
             foreach (var (key, configuration, piece) in regionPieces) {
                 var track = piece[0];
-                pieceBuilders.TryResolve(track.Part, out var pieceBuilder);
                 var pieceSpan = CollectionsMarshal.AsSpan(piece);
+                if (configuration.DirectMeshBuilder is { } directBuilder) {
+                    directBuilder.AddPiece(pieceSpan, pieceLocations, geometry, palette);
+                    continue;
+                }
+
+                pieceBuilders.TryResolve(track.Part, out var pieceBuilder);
                 var hasSupportPlacements = configuration.HasSupportPlacements;
                 geometry.SetVerticalOffset(configuration.CenterlineHeightOffset);
                 geometry.SetTrackBankAngleDegrees(configuration.TrackBankAngleDegrees);

@@ -29,6 +29,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
     protected float CarVerticalOffset = 0.0f;
     protected bool HasSupportPlacement = false;
     protected Vector2[]? WaterPlanePolyline;
+    protected IDirectTrackMeshBuilder? DirectMeshBuilder;
 
     /// <summary>
     /// Enables smoothing of vehicle movement by using the track centerline instead of the game-provided location/rotation.
@@ -47,17 +48,18 @@ internal abstract class RideDefinition(RCTRideType rideType)
                 _ => GetTrackShape(trackData));
         }
 
-        var partGenerators = new List<ITrackPartGenerator> {
+        IReadOnlyList<ITrackPartGenerator> partGenerators = DirectMeshBuilder is not null ? [] : new List<ITrackPartGenerator> {
             new SweptRailProfileGenerator(track => GetCachedTrackShape(track).RailShapes),
             new TrackBraceGenerator(GetCachedTrackShape),
         };
 
         return new TrackRideConfiguration(rideType, partGenerators, SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
             HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder, TrackBankAngleDegrees,
-            PlatformSurface, PlatformRailing, WaterPlanePolyline);
+            PlatformSurface, PlatformRailing, WaterPlanePolyline, DirectMeshBuilder);
     }
 
-    protected abstract TrackShape GetTrackShape(RCTTrackElementData track);
+    protected virtual TrackShape GetTrackShape(RCTTrackElementData track) =>
+        throw new InvalidOperationException("Swept-track rides must define their track shape.");
 
     protected virtual void GetSupportPlacements(RCTTrackElementData track, List<TrackSupportPlacement> placements)
     {

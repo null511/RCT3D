@@ -1,3 +1,4 @@
+using RCT3D.Render.Paths.Builders;
 using RCT3D.Render.Terrain;
 using System.Text.Json;
 
@@ -106,6 +107,12 @@ public sealed class PathMaterialLibrary : IMaterialLibrary
 
             builder.AddImage(objectId, texture, pathDirectory, railingLayers);
         }
+
+        if (!railingLayers.ContainsKey(TerrainMaterialLibrary.HashObjectId(BrownBambooPathGeometryBuilder.ObjectId)))
+            builder.AddSolidColor(BrownBambooPathGeometryBuilder.ObjectId, 145, 99, 51, railingLayers);
+
+        if (!railingLayers.ContainsKey(TerrainMaterialLibrary.HashObjectId(BlackBambooPathGeometryBuilder.ObjectId)))
+            builder.AddSolidColor(BlackBambooPathGeometryBuilder.ObjectId, 38, 32, 25, railingLayers);
     }
 
     private static readonly HashSet<uint> invisibleRailingIdHashes = [

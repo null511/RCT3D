@@ -1,8 +1,9 @@
 using System.Numerics;
 using RCT3D.Interop.Models;
+using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Terrain;
 
-namespace RCT3D.Render.Paths.Meshing;
+namespace RCT3D.Render.Paths.Builders;
 
 internal sealed class ConcretePathGeometryBuilder(PathMaterialLibrary materials) : PathTypeGeometryBuilder(materials)
 {

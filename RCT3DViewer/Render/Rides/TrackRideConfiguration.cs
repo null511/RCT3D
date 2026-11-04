@@ -20,9 +20,11 @@ internal class TrackRideConfiguration(
     float trackBankAngleDegrees,
     RidePlatformSurfaceType platformSurface = RidePlatformSurfaceType.Wood,
     RidePlatformRailingType platformRailing = RidePlatformRailingType.Chained,
-    Vector2[]? waterPlanePolyline = null)
+    Vector2[]? waterPlanePolyline = null,
+    IDirectTrackMeshBuilder? directMeshBuilder = null)
 {
     public RCTRideType RideType { get; } = rideType;
+    public IDirectTrackMeshBuilder? DirectMeshBuilder { get; } = directMeshBuilder;
     public IReadOnlyList<ITrackPartGenerator> PartGenerators { get; } = partGenerators;
     public RideSupportStyle SupportStyle { get; } = supportStyle;
     public float CenterlineHeightOffset { get; } = centerlineHeightOffset;
@@ -70,6 +72,7 @@ internal static class TrackRideConfigurations
         new Hypercoaster().Build(),
         new InvertedRollerCoaster().Build(),
         new JuniorRollerCoaster().Build(),
+        new LaunchedFreefall().Build(),
         new LogFlume().Build(),
         new LoopingRollerCoaster().Build(),
         new MineRide().Build(),

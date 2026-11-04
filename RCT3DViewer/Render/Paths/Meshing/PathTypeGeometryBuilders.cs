@@ -1,4 +1,5 @@
 using RCT3D.Interop.Models;
+using RCT3D.Render.Paths.Builders;
 using RCT3D.Render.Terrain;
 using System.Numerics;
 
@@ -6,8 +7,6 @@ namespace RCT3D.Render.Paths.Meshing;
 
 internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 {
-    //public const float TileSize = 3.0f;
-    //public const float BaseHeightScale = 0.75f;
     private const float SurfaceBias = 0.008f;
     private const float RailHeight = 0.62f;
     private const float RailThickness = 0.045f;
@@ -17,7 +16,6 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
     public const float CornerInset = WorldUnits.TileSize * 4.0f / 32.0f;
     public const float SupportBaseHalfWidth = 0.24f;
     public const float SupportBaseHeight = 0.18f;
-    private const float ElevatedPlatformThickness = 0.18f;
     private const float ElevatedPlatformTopOffset = 0.002f;
     private const float CornerHeightScale = 1.5f;
     protected const float HeightEpsilon = 0.0001f;
@@ -31,12 +29,20 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     protected PathMaterialLibrary Materials {get;} = materials;
 
+    protected virtual bool DrawSurfaceOverPlatform => true;
+
+    protected virtual float ElevatedPlatformThickness => 0.18f;
+
+    protected virtual uint GetRailingMaterial(RCTTilePathData path) => Materials.GetRailingLayer(path.RailingsIdHash);
+
 
     public void AddPath(RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry)
     {
-        AddSurface(path, geometry);
+        var drawPlatform = ShouldDrawSupports(path, surface);
+        if (!drawPlatform || DrawSurfaceOverPlatform)
+            AddSurface(path, geometry);
 
-        if (ShouldDrawSupports(path, surface))
+        if (drawPlatform)
             AddElevatedPlatformSlab(path, geometry);
     }
 
@@ -47,7 +53,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         }
 
         if (ShouldDrawSupports(path, surface))
-            AddSupports(path, surface, Materials.GetRailingLayer(path.RailingsIdHash), geometry, supportStations);
+            AddSupports(path, surface, GetRailingMaterial(path), geometry, supportStations);
     }
 
     private void AddRailings(RCTTilePathData path, PathMeshGeometry geometry)
@@ -57,7 +63,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var south = path.TileY * WorldUnits.TileSize;
         var north = (path.TileY + 1) * WorldUnits.TileSize;
         var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit;
-        var material = Materials.GetRailingLayer(path.RailingsIdHash);
+        var material = GetRailingMaterial(path);
 
         if (path.IsSloped) {
             if (path.SlopeDirection is DirectionWest or DirectionEast) {
@@ -193,6 +199,19 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     protected static void BuildRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, uint material, int postCount, PathMeshGeometry geometry)
     {
+        if (!PrepareRailingEdge(path, direction, ref start, ref end, baseHeight)) return;
+
+        for (var index = 0; index < postCount; index++) {
+            var ratio = postCount == 1 ? 0.5f : (float)index / (postCount - 1);
+            var post = Vector3.Lerp(start, end, ratio);
+            AddVerticalBeam(post, RailPostHalfWidth, post.Y, post.Y + RailHeight, material, geometry);
+        }
+
+        AddRailBeam(start, end, RailHeight, material, geometry);
+    }
+
+    protected static bool PrepareRailingEdge(RCTTilePathData path, byte direction, ref Vector3 start, ref Vector3 end, float baseHeight)
+    {
         var tileSize = WorldUnits.TileSize;
         var startHeight = GetPathCornerHeight(path, start.X == path.TileX * tileSize, start.Z == (path.TileY + 1) * tileSize, baseHeight);
         var endHeight = GetPathCornerHeight(path, end.X == path.TileX * tileSize, end.Z == (path.TileY + 1) * tileSize, baseHeight);
@@ -205,7 +224,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var endConnectedDiagonally = (path.Corners & (1 << endCorner)) != 0;
         var edge = end - start;
         var edgeLength = edge.Length();
-        if (edgeLength <= 2 * CornerInset) return;
+        if (edgeLength <= 2 * CornerInset) return false;
 
         var originalStartHeight = startHeight;
         var originalEndHeight = endHeight;
@@ -223,13 +242,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
             end.Y = endHeight;
         }
 
-        for (var index = 0; index < postCount; index++) {
-            var ratio = postCount == 1 ? 0.5f : (float)index / (postCount - 1);
-            var post = Vector3.Lerp(start, end, ratio);
-            AddVerticalBeam(post, RailPostHalfWidth, post.Y, post.Y + RailHeight, material, geometry);
-        }
-
-        AddRailBeam(start, end, RailHeight, material, geometry);
+        return true;
     }
 
     private static int CornerBitForEdge(byte direction, bool atStart)
@@ -382,16 +395,21 @@ internal static class PathGeometryBuilderResolver
     private static readonly uint ConcreteHash = TerrainMaterialLibrary.HashObjectId("rct2.footpath_railings.concrete");
     private static readonly uint ConcreteGreenHash = TerrainMaterialLibrary.HashObjectId("rct2.footpath_railings.concrete_green");
     //private static readonly uint SpaceHash = TerrainMaterialLibrary.HashObjectId("rct2.footpath_railings.space");
-    //private static readonly uint BambooBlackHash = TerrainMaterialLibrary.HashObjectId("rct2.footpath_railings.bamboo_black");
-    //private static readonly uint BambooBrownHash = TerrainMaterialLibrary.HashObjectId("rct2.footpath_railings.bamboo_brown");
+    private static readonly uint BambooBlackHash = TerrainMaterialLibrary.HashObjectId(BlackBambooPathGeometryBuilder.ObjectId);
+    private static readonly uint BambooBrownHash = TerrainMaterialLibrary.HashObjectId(BrownBambooPathGeometryBuilder.ObjectId);
+    private static readonly uint LegacyBambooBlackHash = TerrainMaterialLibrary.HashObjectId("rct2.railings.bambooblack");
+    private static readonly uint LegacyBambooBrownHash = TerrainMaterialLibrary.HashObjectId("rct2.railings.bamboobrown");
 
     public static PathTypeGeometryBuilder Resolve(PathMaterialLibrary materials, uint railingsIdHash)
     {
         if (railingsIdHash == ConcreteHash || railingsIdHash == ConcreteGreenHash)
             return new ConcretePathGeometryBuilder(materials);
 
-        //if (railingsIdHash == SpaceHash || railingsIdHash == BambooBlackHash || railingsIdHash == BambooBrownHash)
-        //    return new SpaceBambooPathGeometryBuilder(materials);
+        if (railingsIdHash == BambooBlackHash || railingsIdHash == LegacyBambooBlackHash)
+            return new BlackBambooPathGeometryBuilder(materials);
+
+        if (railingsIdHash == BambooBrownHash || railingsIdHash == LegacyBambooBrownHash)
+            return new BrownBambooPathGeometryBuilder(materials);
 
         return new WoodenPathGeometryBuilder(materials);
     }

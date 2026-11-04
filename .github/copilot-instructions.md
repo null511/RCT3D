@@ -14,6 +14,8 @@
 - Expect minimal, clean geometry changes; avoid unnecessary code expansion or overengineering. When fixing winding, use the existing project convention directly and avoid duplicate calculations or overly generalized helper signatures.
 - When diagnosing material ID mappings, verify the viewer's actual resolver and OpenRCT2 object identifiers including legacy aliases; an identifier listed in DefaultObjects alone does not establish that the viewer mapping will match.
 - For MetalStick ride supports, use `TrackSupportPlacementMode.TrackBased`, not `TileBased`.
+- For the planned bamboo railings (brown) path builder, omit the normal path surface layer only when a support platform is present. Railings consist of two horizontal bamboo poles and three vertical bamboo poles; supports use rounded bamboo poles.
+- For procedural mesh quality, use reusable parameterized geometry generation (e.g. endpoints, radius, radial segments), not hardcoded geometry. Do not interpret this as a request for centralized configuration or global/runtime quality controls.
 
 ## Rendering Guidelines
 - Request source-derived terrain direction reasoning rather than guess-and-test; validate rendering hypotheses before making further geometry changes.

@@ -68,6 +68,21 @@ internal class MaterialLibraryBuilder
         }
     }
 
+    public void AddSolidColor(string objectId, byte red, byte green, byte blue, Dictionary<uint, uint> layers)
+    {
+        ArgumentNullException.ThrowIfNull(Width);
+        ArgumentNullException.ThrowIfNull(Height);
+
+        if (!objectIds.Add(objectId) || !layers.TryAdd(HashObjectId(objectId), (uint)images.Count))
+            throw new InvalidDataException($"Material object identifier must be unique: {objectId}");
+
+        images.Add(new ImageData {
+            Pixels = CreateSolidPixels(Width.Value, Height.Value, red, green, blue, 255),
+            NormalPixels = CreateSolidPixels(Width.Value, Height.Value, 128, 128, 255, 255),
+            SpecularPixels = CreateSolidPixels(Width.Value, Height.Value, 255, 0, 0, 0),
+        });
+    }
+
     public (byte[] color, byte[] normal, byte[] specular) Build()
     {
         if (images.Count == 0)

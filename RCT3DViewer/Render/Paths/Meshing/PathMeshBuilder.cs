@@ -1,5 +1,6 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Terrain;
+using System.Numerics;
 
 namespace RCT3D.Render.Paths.Meshing;
 
@@ -68,6 +69,9 @@ internal sealed class PathSupportStationRegistry
 {
     private readonly HashSet<(int X, int Y, bool IsNorthSouth, byte Edge, uint RailingsIdHash)> _posts = new();
     private readonly HashSet<(int X, int Y, bool IsNorthSouth, uint RailingsIdHash)> _crossSections = new();
+    private readonly HashSet<(Vector3 Start, Vector3 End, uint Material)> _poles = new();
+
+    public bool TryAddPole(Vector3 start, Vector3 end, uint material) => _poles.Add((start, end, material));
 
     public bool TryAddPost(int x, int y, bool isNorthSouth, byte edge, uint railingsIdHash) =>
         _posts.Add((x, y, isNorthSouth, edge, railingsIdHash));
