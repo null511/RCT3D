@@ -10,6 +10,7 @@ internal enum RideSupportStyle
     MetalTubes,
     MetalTubesInverted,
     WoodenTruss,
+    MetalStick,
 }
 
 internal static class RideSupportMeshBuilders
@@ -20,6 +21,7 @@ internal static class RideSupportMeshBuilders
         RideSupportStyle.MetalTubes => new MetalTubesSupportMeshBuilder(),
         RideSupportStyle.MetalTubesInverted => new MetalTubesInvertedSupportMeshBuilder(),
         RideSupportStyle.WoodenTruss => new WoodenTrussSupportMeshBuilder(),
+        RideSupportStyle.MetalStick => new MetalStickSupportMeshBuilder(),
         _ => null,
     };
 }

@@ -67,6 +67,7 @@ internal static class TrackRideConfigurations
         new CorkscrewRollerCoaster().Build(),
         new GigaCoaster().Build(),
         new GoKarts().Build(),
+        new Hypercoaster().Build(),
         new InvertedRollerCoaster().Build(),
         new JuniorRollerCoaster().Build(),
         new LogFlume().Build(),
@@ -79,6 +80,7 @@ internal static class TrackRideConfigurations
         new ObservationTower().Build(),
         new RiverRapids().Build(),
         new SpiralRollerCoaster().Build(),
+        new Steeplechase().Build(),
         new WoodenRollerCoaster().Build(),
         new WoodenWildMouse().Build(),
     ];

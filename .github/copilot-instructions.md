@@ -13,6 +13,7 @@
 - For HalfLoopUp and HalfLoopDown roll handling, use separate per-piece endpoint rules derived from OpenRCT2 track metadata; do not assume both pieces share a constant 180-degree roll.
 - Expect minimal, clean geometry changes; avoid unnecessary code expansion or overengineering. When fixing winding, use the existing project convention directly and avoid duplicate calculations or overly generalized helper signatures.
 - When diagnosing material ID mappings, verify the viewer's actual resolver and OpenRCT2 object identifiers including legacy aliases; an identifier listed in DefaultObjects alone does not establish that the viewer mapping will match.
+- For MetalStick ride supports, use `TrackSupportPlacementMode.TrackBased`, not `TileBased`.
 
 ## Rendering Guidelines
 - Request source-derived terrain direction reasoning rather than guess-and-test; validate rendering hypotheses before making further geometry changes.

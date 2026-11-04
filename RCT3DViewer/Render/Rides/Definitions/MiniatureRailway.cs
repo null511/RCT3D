@@ -8,36 +8,53 @@ namespace RCT3D.Render.Rides.Definitions;
 
 internal class MiniatureRailway : RideDefinition
 {
+    private static readonly TrackRgba8 WoodColor = new(128, 107, 76, 255);
+    private static readonly TrackRailSpecularData WoodSpecular = new(250, 0);
+
+
     public MiniatureRailway() : base(RCTRideType.MiniatureRailway)
     {
-        StationBuilder = new DefaultTrackStationBuilder();
         SmoothMovement = true;
-        CarVerticalOffset = 1.0f;
+        CenterlineHeightOffset = 0.25f;
+        CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
+
+        StationBuilder = new DefaultTrackStationBuilder();
     }
 
     protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape();
-
-        // rails
-        shape.RailShapes.Add(CreateRailRectangle(-0.40f, 0.16f));
-        shape.RailShapes.Add(CreateRailRectangle(0.40f, 0.16f));
+        var shape = new TrackShape {
+            BraceInterval = 0.5f,
+            RailShapes = [
+                CreateRailRectangle(-0.40f, 0f),
+                CreateRailRectangle( 0.40f, 0f),
+            ],
+        };
 
         if (!track.Part.IsStationPlatform()) {
             // ballast
             shape.RailShapes.Add(new TrackRailProfileShape([
-                new Vector2(1.2f, -0.04f),
-                new Vector2(0.5f, 0.16f),
+                new Vector2( 1.2f, -0.28f),
+                new Vector2( 0.5f, -0.08f),
 
-                new Vector2(0.0f, 0.18f),
+                new Vector2( 0.0f, -0.06f),
 
-                new Vector2(-0.5f, 0.16f),
-                new Vector2(-1.2f, -0.04f),
+                new Vector2(-0.5f, -0.08f),
+                new Vector2(-1.2f, -0.28f),
             ], false) {
                 Color = new TrackRgba8(130, 113, 87, 255),
             });
+
+            // ties
+            shape.AppendBracePart.Box(
+                new Vector3(0f, -0.05f, 0f),
+                new Vector3(0.64f, 0.05f, 0.08f),
+                p => {
+                    p.Color = WoodColor;
+                    p.Specular = WoodSpecular;
+                });
         }
 
         return shape;

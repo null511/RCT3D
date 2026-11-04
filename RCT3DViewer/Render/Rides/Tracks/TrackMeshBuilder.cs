@@ -81,6 +81,7 @@ internal sealed class TrackMeshBuilder
 
         if (surfaces.Length < checked(mapWidth * mapHeight))
             throw new InvalidDataException("OpenRCT2 returned fewer terrain surfaces than the map dimensions require.");
+
         if (occupancy.Width != mapWidth || occupancy.Height != mapHeight)
             throw new InvalidDataException("The occupancy map dimensions do not match the terrain map.");
 
@@ -91,11 +92,13 @@ internal sealed class TrackMeshBuilder
                     "Skipping invalid track element: {Reason}; ride ID {RideId}, ride type {RideType}, part {Part}, tile ({TileX}, {TileY}), direction {Direction}, sequence {Sequence}/{SequenceCount}, base {BaseHeight}, clearance {ClearanceHeight}",
                     reason, track.RideId, track.RideType, track.Part, track.TileX, track.TileY, track.Direction,
                     track.Sequence, track.SequenceCount, track.BaseHeight, track.ClearanceHeight);
+
                 continue;
             }
 
             validTrackElements.Add(track);
         }
+
         var filteredTrackElements = CollectionsMarshal.AsSpan(validTrackElements);
 
         foreach (ref readonly var path in pathElements) {
@@ -104,6 +107,7 @@ internal sealed class TrackMeshBuilder
 
             occupancy.AddPath(path);
         }
+
         foreach (ref readonly var track in filteredTrackElements)
             occupancy.AddTrack(track);
 

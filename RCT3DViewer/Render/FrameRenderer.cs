@@ -388,12 +388,17 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         RecordImageBarrier(commandBuffer, deferredTargets.SceneOutputImage,
             sceneOutputInitialized ? ImageLayout.ShaderReadOnlyOptimal : ImageLayout.Undefined,
             ImageLayout.General,
-            sceneOutputInitialized ? PipelineStageFlags.ComputeShaderBit : PipelineStageFlags.TopOfPipeBit,
-            sceneOutputInitialized ? AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit : AccessFlags.None,
+            sceneOutputInitialized ? PipelineStageFlags.FragmentShaderBit : PipelineStageFlags.TopOfPipeBit,
+            sceneOutputInitialized ? AccessFlags.ShaderReadBit : AccessFlags.None,
             PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit);
 
         deferredPassResources.Composite.Dispatch(commandBuffer, 0, uniformDescriptorSet, renderDimensions);
         sceneOutputInitialized = true;
+
+        RecordImageBarrier(commandBuffer, deferredTargets.SceneOutputImage,
+            ImageLayout.General, ImageLayout.ShaderReadOnlyOptimal,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderWriteBit,
+            PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit);
 
         if (ui.TaaEnabled)
             RecordTaa(commandBuffer, uniformDescriptorSet, renderDimensions, deferredTargets, deferredPassResources);
