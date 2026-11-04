@@ -1,8 +1,8 @@
-using System.Numerics;
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Tracks.Builders;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
 
@@ -76,7 +76,7 @@ internal sealed class ClassicWoodenRollerCoaster : RideDefinition
 
             // side platforms
             shape.RailShapes.AddRange(CreateWoodProfile(-woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight, TrackRailSwatch.Alternate));
-            shape.RailShapes.AddRange(CreateWoodProfile(woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight, TrackRailSwatch.Alternate));
+            shape.RailShapes.AddRange(CreateWoodProfile( woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight, TrackRailSwatch.Alternate));
 
             const float WoodRailingWidth = 0.04f;
 

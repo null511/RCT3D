@@ -1,3 +1,4 @@
+using System.Numerics;
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
@@ -22,21 +23,33 @@ internal sealed class MineRide : RideDefinition
     {
         var railSpecular = new TrackRailSpecularData(80, 20);
 
-        return new TrackShape {
+        var shape = new TrackShape {
+            BraceInterval = 0.6f,
             RailShapes = [
-            new TrackRailProfileShape(CreateCircle(-0.42f, 0f, 0.075f, 5), true) {
-                Swatch = TrackRailSwatch.Alternate,
-                Specular = railSpecular,
-            },
-            new TrackRailProfileShape(CreateCircle( 0.42f, 0f, 0.075f, 5), true) {
-                Swatch = TrackRailSwatch.Alternate,
-                Specular = railSpecular,
-            },
-            .. CreateBox(0f, 0f, 0.08f, 0.07f, shape => {
-                shape.Swatch = TrackRailSwatch.Main;
-                shape.Specular = railSpecular;
-            }),
+                new TrackRailProfileShape(CreateCircle(-0.42f, 0f, 0.075f, 5), true) {
+                    Swatch = TrackRailSwatch.Alternate,
+                    Specular = railSpecular,
+                },
+                new TrackRailProfileShape(CreateCircle( 0.42f, 0f, 0.075f, 5), true) {
+                    Swatch = TrackRailSwatch.Alternate,
+                    Specular = railSpecular,
+                },
             ],
         };
+
+        shape.RailShapes.AddRange(CreateBox(0f, 0f, 0.06f, 0.05f, p => {
+            p.Swatch = TrackRailSwatch.Main;
+            p.Specular = railSpecular;
+        }));
+
+        shape.AppendBracePart.Cylinder(
+            new Vector3(-0.42f, 0f, 0f),
+            new Vector3( 0.42f, 0f, 0f),
+            0.05f, 4, p => {
+                p.Swatch = TrackRailSwatch.Main;
+                p.Specular = railSpecular;
+            });
+
+        return shape;
     }
 }

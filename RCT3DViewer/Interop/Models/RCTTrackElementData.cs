@@ -495,6 +495,7 @@ public struct RCTTrackElementData
     public byte IsRidePlatformBase;
     public byte TunnelSideMask;
     public byte ConnectionSideMask;
+    public byte IsShopOrFacility;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]

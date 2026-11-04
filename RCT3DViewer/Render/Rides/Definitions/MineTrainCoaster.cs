@@ -12,10 +12,11 @@ internal sealed class MineTrainCoaster : RideDefinition
 
     public MineTrainCoaster() : base(RCTRideType.MineTrainCoaster)
     {
-        StationBuilder = new DefaultTrackStationBuilder();
         SmoothMovement = true;
         CenterlineHeightOffset = 0.2f;
         CarVerticalOffset = 0.5f;
+
+        StationBuilder = new DefaultTrackStationBuilder();
     }
 
     protected override TrackShape GetTrackShape(RCTTrackElementData track)

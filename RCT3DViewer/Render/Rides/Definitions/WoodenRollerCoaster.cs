@@ -2,6 +2,7 @@ using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Tracks.Builders;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
 
@@ -14,12 +15,14 @@ internal sealed class WoodenRollerCoaster : RideDefinition
     private const float RailHalfHeight = 0.03f;
     private const float RailWoodInset = 0.2f;
 
+    private static readonly TrackRailSpecularData WoodSpecular = new(220, 0);
+
 
     public WoodenRollerCoaster() : base(RCTRideType.WoodenRollerCoaster)
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 1f;
-        //CarVerticalOffset = 0.5f;
+        CarVerticalOffset = -0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
         SupportTrackOffset = CenterlineHeightOffset - RailHalfHeight - SupportTopClearance;
@@ -29,11 +32,41 @@ internal sealed class WoodenRollerCoaster : RideDefinition
 
     protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape();
+        var shape = new TrackShape {
+            BraceInterval = 0.6f,
+        };
+
         shape.RailShapes.AddRange(CreateRail(-RailHalfSeparation, -0.2f));
-        shape.RailShapes.AddRange(CreateRail(RailHalfSeparation, -0.2f));
+        shape.RailShapes.AddRange(CreateRail( RailHalfSeparation, -0.2f));
 
         if (!track.Part.IsStationPlatform() && !track.Part.IsLoop()) {
+            // base beam
+            shape.AppendBracePart.Box(
+                new Vector3(0.0f, -0.4f, 0.0f),
+                new Vector3(1.45f, 0.12f, 0.12f),
+                part => {
+                    part.Swatch = TrackRailSwatch.Main;
+                    part.Specular = WoodSpecular;
+                });
+
+            // left beam
+            shape.AppendBracePart.Box(
+                new Vector3(-1.47f, 0f, 0.0f),
+                new Vector3(0.04f, 0.32f, 0.04f),
+                part => {
+                    part.Swatch = TrackRailSwatch.Main;
+                    part.Specular = WoodSpecular;
+                });
+
+            // right beam
+            shape.AppendBracePart.Box(
+                new Vector3( 1.47f, 0f, 0.0f),
+                new Vector3(0.04f, 0.32f, 0.04f),
+                part => {
+                    part.Swatch = TrackRailSwatch.Main;
+                    part.Specular = WoodSpecular;
+                });
+
             const float woodHalfMargin = (1.5f - (RailHalfSeparation - RailWoodInset)) * 0.5f;
             const float woodHeight = 0.06f;
 
@@ -42,7 +75,7 @@ internal sealed class WoodenRollerCoaster : RideDefinition
 
             // side platforms
             shape.RailShapes.AddRange(CreateWood(-woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight));
-            shape.RailShapes.AddRange(CreateWood(woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight));
+            shape.RailShapes.AddRange(CreateWood( woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight));
 
             const float WoodRailingWidth = 0.04f;
 

@@ -104,7 +104,8 @@ internal sealed class ParkSceneController(
                     PathAccessories: pathAccessoryMeshBuilder.Build(snapshot.PathData, snapshot.Width, snapshot.Height),
                     Trees: treeSceneryMeshBuilder.Build(snapshot.TreeData, snapshot.Width, snapshot.Height),
                     Tracks: tracks,
-                    RideEntrances: rideEntranceExitMeshBuilder.Build(snapshot.RideEntranceData, snapshot.Width, snapshot.Height));
+                    RideEntrances: rideEntranceExitMeshBuilder.Build(
+                        snapshot.RideEntranceData, snapshot.TrackData, snapshot.Width, snapshot.Height));
             });
 
             return new ParkLoadResult(

@@ -18,4 +18,5 @@ public struct RCTRideEntranceData
     public RCTRideEntranceType EntranceType;
     public byte BaseHeight;
     public byte Direction;
+    public byte ClearanceHeight;
 }
