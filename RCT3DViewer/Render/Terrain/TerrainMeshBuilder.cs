@@ -6,7 +6,7 @@ namespace RCT3D.Render.Terrain;
 internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 {
     private const float NormalInterpolationBoundaryFraction = 1.0f / 8.0f;
-    private const float WaterPlaneVerticalOffset = -0.06f;
+    public const float WaterPlaneVerticalOffset = -0.06f;
     private const float MatchingNormalDotThreshold = 0.999999f;
 
     private readonly List<TerrainVertex> _vertices = new();

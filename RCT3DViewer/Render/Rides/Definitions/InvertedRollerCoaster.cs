@@ -2,18 +2,20 @@ using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Tracks.Builders;
-using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
 
 internal sealed class InvertedRollerCoaster : RideDefinition
 {
+    private static readonly TrackRailSpecularData railSpecular = new(100, 0);
+
+
     public InvertedRollerCoaster() : base(RCTRideType.InvertedRollerCoaster)
     {
         StationBuilder = new DefaultTrackStationBuilder();
         SmoothMovement = true;
         CenterlineHeightOffset = 2.0f;
-        CarVerticalOffset = -0.3f;
+        CarVerticalOffset = -1.5f;
 
         SupportStyle = RideSupportStyle.MetalBoxed;
     }
@@ -23,51 +25,26 @@ internal sealed class InvertedRollerCoaster : RideDefinition
         const float railSeparation = 0.53f;
         const float railRadius = 0.07f;
 
-        var railSpecular = new TrackRailSpecularData(100, 0);
-
-        return new TrackShape {
+        var part = new TrackShape {
             RailShapes = [
-            new TrackRailProfileShape(CreateCircle(-railSeparation, 0.90f, railRadius, 5), true) {
-                Swatch = TrackRailSwatch.Alternate,
-                Specular = railSpecular,
-            },
-            new TrackRailProfileShape(CreateCircle( railSeparation, 0.90f, railRadius, 5), true) {
-                Swatch = TrackRailSwatch.Alternate,
-                Specular = railSpecular,
-            },
-            // main-top
-            new TrackRailProfileShape([
-                new Vector2( 0.30f, 1.60f),
-                new Vector2(-0.30f, 1.60f),
-            ], false) {
-                Swatch = TrackRailSwatch.Alternate,
-                Specular = railSpecular,
-            },
-            // main-bottom
-            new TrackRailProfileShape([
-                new Vector2(-0.30f, 1.10f),
-                new Vector2( 0.30f, 1.10f),
-            ], false) {
-                Swatch = TrackRailSwatch.Alternate,
-                Specular = railSpecular,
-            },
-            // main-left
-            new TrackRailProfileShape([
-                new Vector2(-0.30f, 1.60f),
-                new Vector2(-0.30f, 1.10f),
-            ], false) {
-                Swatch = TrackRailSwatch.Alternate,
-                Specular = railSpecular,
-            },
-            // main-right
-            new TrackRailProfileShape([
-                new Vector2( 0.30f, 1.10f),
-                new Vector2( 0.30f, 1.60f),
-            ], false) {
-                Swatch = TrackRailSwatch.Alternate,
-                Specular = railSpecular,
-            },
+                // left
+                new TrackRailProfileShape(CreateCircle(-railSeparation, 0.90f, railRadius, 5), true) {
+                    Swatch = TrackRailSwatch.Alternate,
+                    Specular = railSpecular,
+                },
+                // right
+                new TrackRailProfileShape(CreateCircle(railSeparation, 0.90f, railRadius, 5), true) {
+                    Swatch = TrackRailSwatch.Alternate,
+                    Specular = railSpecular,
+                },
+                // center
+                .. CreateBox(0f, 1.35f, 0.30f, 0.25f, p => {
+                    p.Swatch = TrackRailSwatch.Alternate;
+                    p.Specular = railSpecular;
+                })
             ],
         };
+
+        return part;
     }
 }

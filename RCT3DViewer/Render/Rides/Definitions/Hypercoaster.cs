@@ -2,11 +2,15 @@ using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Tracks.Builders;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
 
 internal class Hypercoaster : RideDefinition
 {
+    private static readonly TrackRailSpecularData paintSpecular = new(100, 0);
+
+
     public Hypercoaster() : base(RCTRideType.Hypercoaster)
     {
         SmoothMovement = true;
@@ -26,20 +30,50 @@ internal class Hypercoaster : RideDefinition
         var shape = new TrackShape {
             BraceInterval = 0.6f,
             RailShapes = [
+                // left rail
                 new TrackRailProfileShape(CreateCircle(-railSeparation, 0f, 0.08f, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
-                    Specular = new TrackRailSpecularData(100, 0),
+                    Specular = paintSpecular,
                 },
-                new TrackRailProfileShape(CreateCircle(0f, -0.24f, 0.14f, 6), true) {
-                    Swatch = TrackRailSwatch.Main,
-                    Specular = new TrackRailSpecularData(100, 0),
-                },
+                // right rail
                 new TrackRailProfileShape(CreateCircle(railSeparation, 0f, 0.08f, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
-                    Specular = new TrackRailSpecularData(100, 0),
+                    Specular = paintSpecular,
+                },
+                // center rail
+                new TrackRailProfileShape(CreateCircle(0f, -0.24f, 0.14f, 6), true) {
+                    Swatch = TrackRailSwatch.Main,
+                    Specular = paintSpecular,
                 },
             ],
         };
+
+        // center braces
+        shape.AppendBracePart.Cylinder(
+            new Vector3(-railSeparation, -0.26f, 0f),
+            new Vector3( railSeparation, -0.26f, 0f),
+            0.06f, 4, p => {
+                p.Swatch = TrackRailSwatch.Main;
+                p.Specular = paintSpecular;
+            });
+
+        // left brace
+        shape.AppendBracePart.Cylinder(
+            new Vector3(-railSeparation, -0.26f, 0f),
+            new Vector3(-railSeparation,  0.00f, 0f),
+            0.06f, 4, p => {
+                p.Swatch = TrackRailSwatch.Main;
+                p.Specular = paintSpecular;
+            });
+
+        // right brace
+        shape.AppendBracePart.Cylinder(
+            new Vector3( railSeparation, -0.26f, 0f),
+            new Vector3( railSeparation,  0.00f, 0f),
+            0.06f, 4, p => {
+                p.Swatch = TrackRailSwatch.Main;
+                p.Specular = paintSpecular;
+            });
 
         return shape;
     }

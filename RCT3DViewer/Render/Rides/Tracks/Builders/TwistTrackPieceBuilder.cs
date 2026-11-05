@@ -38,9 +38,15 @@ internal sealed class TwistTrackPieceBuilder(RCTTrackElementType pieceType) : Tr
             Vector3.Distance(start, end) / 3.0f,
             tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
         var (startRoll, endRoll) = PieceType switch {
-            RCTTrackElementType.LeftTwistDownToUp => (0.0f, HalfTwist),
+            RCTTrackElementType.LeftTwistDownToUp
+                or RCTTrackElementType.LeftFlyerTwistUp
+                or RCTTrackElementType.LeftFlyerTwistDown => (0.0f, HalfTwist),
+            RCTTrackElementType.RightTwistDownToUp
+                or RCTTrackElementType.RightFlyerTwistUp
+                or RCTTrackElementType.RightFlyerTwistDown => (0.0f, -HalfTwist),
+            RCTTrackElementType.LeftTwistUpToDown => (-HalfTwist, 0.0f),
             RCTTrackElementType.RightTwistUpToDown => (HalfTwist, 0.0f),
-            _ => (0.0f, -HalfTwist),
+            _ => throw new InvalidOperationException($"Unsupported twist track piece: {PieceType}."),
         };
 
         TrackCenterlineGeometry.AddParts(

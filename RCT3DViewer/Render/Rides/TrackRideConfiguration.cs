@@ -62,7 +62,9 @@ internal class TrackRideConfiguration(
 internal static class TrackRideConfigurations
 {
     private static readonly TrackRideConfiguration[] configurations = [
+        new BoatHire().Build(),
         new BobsleighCoaster().Build(),
+        new CarRide().Build(),
         new ClassicMiniRollerCoaster().Build(),
         new ClassicWoodenRollerCoaster().Build(),
         new CompactInvertedCoaster().Build(),
@@ -84,6 +86,7 @@ internal static class TrackRideConfigurations
         new RiverRapids().Build(),
         new SpiralRollerCoaster().Build(),
         new Steeplechase().Build(),
+        new VerticalDropRollerCoaster().Build(),
         new WoodenRollerCoaster().Build(),
         new WoodenWildMouse().Build(),
     ];

@@ -52,6 +52,15 @@ internal sealed class TrackPieceBuilderCatalog
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60ToFlat, Pitch.Slope60, Pitch.None));
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown60, Pitch.None, -Pitch.Slope60));
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60ToFlat, -Pitch.Slope60, Pitch.None));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.BrakeForDrop, Pitch.None, -Pitch.Slope60));
+
+        catalog.RegisterMany(type => new VerticalTrackPieceBuilder(type),
+            RCTTrackElementType.Up90,
+            RCTTrackElementType.Down90,
+            RCTTrackElementType.Up60ToUp90,
+            RCTTrackElementType.Down60ToDown90,
+            RCTTrackElementType.Up90ToUp60,
+            RCTTrackElementType.Down90ToDown60);
 
         catalog.RegisterMany(type => new LongBaseSlopeTrackPieceBuilder(type, Pitch.None, Pitch.Slope60),
             RCTTrackElementType.FlatToUp60LongBase);
@@ -288,8 +297,13 @@ internal sealed class TrackPieceBuilderCatalog
 
         catalog.RegisterMany(type => new TwistTrackPieceBuilder(type),
             RCTTrackElementType.LeftTwistDownToUp,
+            RCTTrackElementType.LeftTwistUpToDown,
             RCTTrackElementType.RightTwistDownToUp,
-            RCTTrackElementType.RightTwistUpToDown);
+            RCTTrackElementType.RightTwistUpToDown,
+            RCTTrackElementType.LeftFlyerTwistUp,
+            RCTTrackElementType.RightFlyerTwistUp,
+            RCTTrackElementType.LeftFlyerTwistDown,
+            RCTTrackElementType.RightFlyerTwistDown);
 
         return catalog;
     }

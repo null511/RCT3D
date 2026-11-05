@@ -14,7 +14,6 @@ internal class GigaCoaster : RideDefinition
     public GigaCoaster() : base(RCTRideType.GigaCoaster)
     {
         SmoothMovement = true;
-
         CenterlineHeightOffset = 0.8f;
 
         SupportStyle = RideSupportStyle.MetalTubes;
