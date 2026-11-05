@@ -91,6 +91,8 @@ internal sealed class ParkSceneController(
 
             var meshData = await Task.Run(() => {
                 var occupancy = new MapOccupancyMap(snapshot.SurfaceData, snapshot.Width, snapshot.Height);
+                foreach (var obstacle in snapshot.ObstacleData)
+                    occupancy.AddObstacle(obstacle);
                 var tracks = trackMeshBuilder.Build(snapshot.TrackData, snapshot.PathData, snapshot.RideEntranceData,
                     snapshot.SurfaceData, occupancy, snapshot.Width, snapshot.Height, snapshot.PaletteData);
                 var tunnelLayout = tunnelLayoutBuilder.Build(occupancy, terrainSkirtFloor);
@@ -99,7 +101,7 @@ internal sealed class ParkSceneController(
                 return (
                     Terrain: terrain,
                     Water: WaterMeshData.Combine(terrain.Water, tracks.Water),
-                    Paths: pathMeshBuilder.Build(snapshot.PathData, snapshot.SurfaceData, snapshot.Width, snapshot.Height),
+                    Paths: pathMeshBuilder.Build(snapshot.PathData, snapshot.SurfaceData, occupancy, snapshot.Width, snapshot.Height),
                     Navigation: new PathNavigation(snapshot.PathData),
                     PathAccessories: pathAccessoryMeshBuilder.Build(snapshot.PathData, snapshot.Width, snapshot.Height),
                     Trees: treeSceneryMeshBuilder.Build(snapshot.TreeData, snapshot.Width, snapshot.Height),

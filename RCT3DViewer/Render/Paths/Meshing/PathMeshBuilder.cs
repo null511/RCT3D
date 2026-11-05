@@ -9,10 +9,13 @@ internal sealed class PathMeshBuilder(PathMaterialLibrary materials)
     private readonly Dictionary<uint, PathTypeGeometryBuilder> buildersByRailingIdHash = new();
 
 
-    public PathMeshData Build(ReadOnlySpan<RCTTilePathData> paths, ReadOnlySpan<RCTTileSurfaceData> surfaces, int mapWidth, int mapHeight)
+    public PathMeshData Build(ReadOnlySpan<RCTTilePathData> paths, ReadOnlySpan<RCTTileSurfaceData> surfaces, MapOccupancyMap occupancy, int mapWidth, int mapHeight)
     {
         if (surfaces.Length < checked(mapWidth * mapHeight))
             throw new InvalidDataException("OpenRCT2 returned fewer terrain surfaces than the map dimensions require.");
+
+        if (occupancy.Width != mapWidth || occupancy.Height != mapHeight)
+            throw new InvalidDataException("The occupancy map dimensions do not match the terrain map.");
 
         var pathsByRegion = new Dictionary<RenderRegionCoordinate, List<RCTTilePathData>>();
 
@@ -57,7 +60,7 @@ internal sealed class PathMeshBuilder(PathMaterialLibrary materials)
             geometry.BeginRegion(region);
             foreach (var path in regionPaths)
                 buildersByRailingIdHash[path.RailingsIdHash].AddPathSupports(
-                    path, surfaces[path.TileY * mapWidth + path.TileX], geometry, supportStations);
+                    path, surfaces[path.TileY * mapWidth + path.TileX], occupancy, geometry, supportStations);
             geometry.EndRegion(supports: true);
         }
 
@@ -67,17 +70,9 @@ internal sealed class PathMeshBuilder(PathMaterialLibrary materials)
 
 internal sealed class PathSupportStationRegistry
 {
-    private readonly HashSet<(int X, int Y, bool IsNorthSouth, byte Edge, uint RailingsIdHash)> _posts = new();
-    private readonly HashSet<(int X, int Y, bool IsNorthSouth, uint RailingsIdHash)> _crossSections = new();
     private readonly HashSet<(Vector3 Start, Vector3 End, uint Material)> _poles = new();
 
     public bool TryAddPole(Vector3 start, Vector3 end, uint material) => _poles.Add((start, end, material));
-
-    public bool TryAddPost(int x, int y, bool isNorthSouth, byte edge, uint railingsIdHash) =>
-        _posts.Add((x, y, isNorthSouth, edge, railingsIdHash));
-
-    public bool TryAddCrossSection(int x, int y, bool isNorthSouth, uint railingsIdHash) =>
-        _crossSections.Add((x, y, isNorthSouth, railingsIdHash));
 }
 
 internal sealed record PathMeshData(TerrainVertex[] Vertices, uint[] Indices, RenderRegionIndexRange[] Regions)

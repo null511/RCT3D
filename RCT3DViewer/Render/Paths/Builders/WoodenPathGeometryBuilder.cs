@@ -7,41 +7,46 @@ namespace RCT3D.Render.Paths.Builders;
 
 internal sealed class WoodenPathGeometryBuilder(PathMaterialLibrary materials) : PathTypeGeometryBuilder(materials)
 {
+    private const float BeamHalfWidth = 0.08f;
+
+    protected override bool CanBuildAboveObstacles => true;
+
+    protected override float GetSupportTopHeight(RCTTilePathData path) =>
+        path.BaseZ * WorldUnits.HeightPerBaseUnit + ElevatedPlatformTopOffset - ElevatedPlatformThickness
+        + (path.IsSloped ? 2f * WorldUnits.HeightPerBaseUnit * (1f - BeamHalfWidth / WorldUnits.TileSize) : 0f);
+
     protected override void AddSupports(
         RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry,
-        PathSupportStationRegistry supportStations)
+        PathSupportStationRegistry supportStations, float? supportBaseHeight)
     {
-        var tileOriginX = path.TileX * WorldUnits.TileSize;
-        var tileOriginZ = path.TileY * WorldUnits.TileSize;
-        var isNorthSouth = path.SupportOrientation == RCTPathSupportOrientation.NorthWestSouthEast;
-        var firstEdge = isNorthSouth ? DirectionWest : DirectionSouth;
-        var secondEdge = isNorthSouth ? DirectionEast : DirectionNorth;
-        var startStation = (X: path.TileX, Y: path.TileY);
+        var terrainBottom = surface.BaseZ * WorldUnits.HeightPerBaseUnit
+            + Math.Min(Math.Min(surface.SouthCornerHeight, surface.EastCornerHeight),
+                Math.Min(surface.NorthCornerHeight, surface.WestCornerHeight)) * WorldUnits.TerrainCornerHeightScale;
+        var shortHeight = 2f * WorldUnits.HeightPerBaseUnit;
+        var bottom = MathF.Ceiling((supportBaseHeight ?? terrainBottom) / shortHeight) * shortHeight;
+        var top = path.BaseZ * WorldUnits.HeightPerBaseUnit + ElevatedPlatformTopOffset - ElevatedPlatformThickness;
+        if (bottom >= top + (path.IsSloped ? shortHeight : 0f)) return;
 
-        var endStation = isNorthSouth
-            ? (X: path.TileX, Y: path.TileY + 1)
-            : (X: path.TileX + 1, Y: path.TileY);
+        var wholeSegments = (int)MathF.Floor((top - bottom) / shortHeight);
+        if (wholeSegments >= 1 && bottom / WorldUnits.HeightPerBaseUnit % 4 >= 2) {
+            AddBoxSegment(path, bottom, bottom + shortHeight, false, material, geometry);
+            bottom += shortHeight;
+            wholeSegments--;
+        }
 
-        var firstStart = isNorthSouth
-            ? new Vector2(tileOriginX + CornerInset, tileOriginZ)
-            : new Vector2(tileOriginX, tileOriginZ + CornerInset);
+        while (wholeSegments >= 2) {
+            AddBoxSegment(path, bottom, bottom + 2f * shortHeight, true, material, geometry);
+            bottom += 2f * shortHeight;
+            wholeSegments -= 2;
+        }
 
-        var secondStart = isNorthSouth
-            ? new Vector2(tileOriginX + WorldUnits.TileSize - CornerInset, tileOriginZ)
-            : new Vector2(tileOriginX, tileOriginZ + WorldUnits.TileSize - CornerInset);
+        if (wholeSegments >= 1) {
+            AddBoxSegment(path, bottom, bottom + shortHeight, false, material, geometry);
+            bottom += shortHeight;
+        }
 
-        var firstEnd = isNorthSouth ? firstStart + new Vector2(0, WorldUnits.TileSize) : firstStart + new Vector2(WorldUnits.TileSize, 0);
-        var secondEnd = isNorthSouth ? secondStart + new Vector2(0, WorldUnits.TileSize) : secondStart + new Vector2(WorldUnits.TileSize, 0);
-
-        AddWoodenSupportStation(path, surface, material, geometry, supportStations, startStation, isNorthSouth, firstEdge, firstStart, secondEdge, secondStart);
-
-        AddWoodenSupportStation(path, surface, material, geometry, supportStations, endStation, isNorthSouth, firstEdge, firstEnd, secondEdge, secondEnd);
-
-        if ((path.Edges & (1 << firstEdge)) == 0)
-            AddWoodenSupportBay(path, surface, material, geometry, firstStart, firstEnd);
-
-        if ((path.Edges & (1 << secondEdge)) == 0)
-            AddWoodenSupportBay(path, surface, material, geometry, secondStart, secondEnd);
+        if (bottom < top + (path.IsSloped ? shortHeight : 0f) - HeightEpsilon)
+            AddBoxSegment(path, bottom, top + (path.IsSloped ? shortHeight : 0f), false, material, geometry);
     }
 
     protected override void AddElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry)
@@ -56,67 +61,59 @@ internal sealed class WoodenPathGeometryBuilder(PathMaterialLibrary materials) :
         BuildRailingEdge(path, direction, start, end, baseHeight, material, 3, geometry);
     }
 
-    private static void AddWoodenSupportStation(
-        RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry,
-        PathSupportStationRegistry supportStations, (int X, int Y) station, bool isNorthSouth,
-        byte firstEdge, Vector2 firstPosition, byte secondEdge, Vector2 secondPosition)
+    private void AddBoxSegment(
+        RCTTilePathData path, float bottom, float top, bool tall, uint material, PathMeshGeometry geometry)
     {
-        var firstSections = GetSupportColumnSections(path, surface, firstPosition);
-        var secondSections = GetSupportColumnSections(path, surface, secondPosition);
+        var west = path.TileX * WorldUnits.TileSize + BeamHalfWidth;
+        var east = (path.TileX + 1) * WorldUnits.TileSize - BeamHalfWidth;
+        var south = path.TileY * WorldUnits.TileSize + BeamHalfWidth;
+        var north = (path.TileY + 1) * WorldUnits.TileSize - BeamHalfWidth;
 
-        if ((path.Edges & (1 << firstEdge)) == 0 && firstSections.Count > 0 && supportStations.TryAddPost(station.X, station.Y, isNorthSouth, firstEdge, path.RailingsIdHash))
-            AddSupportColumn(firstPosition, firstSections, material, geometry);
+        Span<Vector3> corners = stackalloc Vector3[4] {
+            new(west, 0f, south), new(east, 0f, south),
+            new(east, 0f, north), new(west, 0f, north)
+        };
 
-        if ((path.Edges & (1 << secondEdge)) == 0 && secondSections.Count > 0 && supportStations.TryAddPost(station.X, station.Y, isNorthSouth, secondEdge, path.RailingsIdHash))
-            AddSupportColumn(secondPosition, secondSections, material, geometry);
+        for (var index = 0; index < corners.Length; index++) {
+            ref var corner = ref corners[index];
+            corner.Y = MathF.Min(top, GetPathHeight(path, corner.X, corner.Z)
+                + ElevatedPlatformTopOffset - ElevatedPlatformThickness);
+            if (corner.Y > bottom + HeightEpsilon)
+                AddBeam(new Vector3(corner.X, bottom, corner.Z), corner, BeamHalfWidth, material, geometry);
+            corner.Y -= BeamHalfWidth;
+        }
 
-        if ((path.Edges & (1 << firstEdge)) != 0 || (path.Edges & (1 << secondEdge)) != 0
-                                                 || firstSections.Count == 0 || secondSections.Count == 0
-                                                 || !supportStations.TryAddCrossSection(station.X, station.Y, isNorthSouth, path.RailingsIdHash))
-            return;
+        for (var index = 0; index < corners.Length; index++) {
+            var start = corners[index];
+            var end = corners[(index + 1) % corners.Length];
+            if (MathF.Min(start.Y, end.Y) - BeamHalfWidth >= bottom)
+                AddBeam(start, end, BeamHalfWidth, material, geometry);
+        }
 
-        for (var sectionIndex = 0; sectionIndex < Math.Min(firstSections.Count, secondSections.Count); sectionIndex += 2)
-            AddSectionBeam(firstPosition, firstSections[sectionIndex], secondPosition, secondSections[sectionIndex], material, geometry);
-    }
-
-    private static void AddWoodenSupportBay(RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry, Vector2 start, Vector2 end)
-    {
-        var startSections = GetSupportColumnSections(path, surface, start);
-        var endSections = GetSupportColumnSections(path, surface, end);
-        if (startSections.Count == 0 || endSections.Count == 0) return;
-
-        var sectionCount = Math.Max(startSections.Count, endSections.Count);
-
-        for (var sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
-            var startSection = sectionIndex < startSections.Count
-                ? startSections[sectionIndex]
-                : (startSections[^1].Top, startSections[^1].Top);
-
-            var endSection = sectionIndex < endSections.Count
-                ? endSections[sectionIndex]
-                : (endSections[^1].Top, endSections[^1].Top);
-
-            AddDiagonalBraces(start, startSection, end, endSection, material, geometry);
-
-            if ((sectionIndex & 1) == 0
-                && sectionIndex + 1 < startSections.Count
-                && sectionIndex + 1 < endSections.Count)
-            {
-                AddSectionBeam(start, startSections[sectionIndex], end, endSections[sectionIndex], material, geometry);
-            }
+        if (path.SupportOrientation == RCTPathSupportOrientation.NorthWestSouthEast) {
+            AddBracePair(corners[0], corners[3], bottom, tall, material, geometry);
+            AddBracePair(corners[1], corners[2], bottom, tall, material, geometry);
+        }
+        else {
+            AddBracePair(corners[0], corners[1], bottom, tall, material, geometry);
+            AddBracePair(corners[3], corners[2], bottom, tall, material, geometry);
         }
     }
 
-    private static void AddSectionBeam(
-        Vector2 start, (float Bottom, float Top) startSection,
-        Vector2 end, (float Bottom, float Top) endSection,
-        uint material, PathMeshGeometry geometry)
+    private static void AddBracePair(Vector3 start, Vector3 end, float bottom, bool tall, uint material, PathMeshGeometry geometry)
     {
-        AddBeam(
-            new Vector3(start.X, startSection.Top, start.Y),
-            new Vector3(end.X, endSection.Top, end.Y),
-            SupportHalfWidth,
-            material,
-            geometry);
+        if (MathF.Min(start.Y, end.Y) <= bottom + BeamHalfWidth + HeightEpsilon) return;
+
+        var lowerStart = new Vector3(start.X, bottom + BeamHalfWidth, start.Z);
+        var lowerEnd = new Vector3(end.X, bottom + BeamHalfWidth, end.Z);
+        if (tall) {
+            AddBeam(lowerStart, end, BeamHalfWidth, material, geometry);
+            AddBeam(start, lowerEnd, BeamHalfWidth, material, geometry);
+        }
+        else {
+            var upperCenter = (start + end) * 0.5f;
+            AddBeam(lowerStart, upperCenter, BeamHalfWidth, material, geometry);
+            AddBeam(upperCenter, lowerEnd, BeamHalfWidth, material, geometry);
+        }
     }
 }

@@ -12,11 +12,10 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
     private const float RailThickness = 0.045f;
     private const float RailPostHalfWidth = 0.055f;
     public const float SupportHalfWidth = 0.075f;
-    private const float FullSupportSectionHeight = 3.0f;
     public const float CornerInset = WorldUnits.TileSize * 4.0f / 32.0f;
     public const float SupportBaseHalfWidth = 0.24f;
     public const float SupportBaseHeight = 0.18f;
-    private const float ElevatedPlatformTopOffset = 0.002f;
+    protected const float ElevatedPlatformTopOffset = 0.002f;
     private const float CornerHeightScale = 1.5f;
     protected const float HeightEpsilon = 0.0001f;
 
@@ -33,6 +32,11 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     protected virtual float ElevatedPlatformThickness => 0.18f;
 
+    protected virtual bool CanBuildAboveObstacles => false;
+
+    protected virtual float GetSupportTopHeight(RCTTilePathData path) =>
+        GetPathHeight(path, (path.TileX + 0.5f) * WorldUnits.TileSize, (path.TileY + 0.5f) * WorldUnits.TileSize);
+
     protected virtual uint GetRailingMaterial(RCTTilePathData path) => Materials.GetRailingLayer(path.RailingsIdHash);
 
 
@@ -46,14 +50,27 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
             AddElevatedPlatformSlab(path, geometry);
     }
 
-    public void AddPathSupports(RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
+    public void AddPathSupports(RCTTilePathData path, RCTTileSurfaceData surface, MapOccupancyMap occupancy, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
     {
         if (Materials.HasVisibleRailings(path.RailingsIdHash) && (path.IsQueue || path.IsSloped || path.BaseZ != surface.BaseZ || surface.SlopeFlags != 0)) {
             AddRailings(path, geometry);
         }
 
-        if (ShouldDrawSupports(path, surface))
-            AddSupports(path, surface, GetRailingMaterial(path), geometry, supportStations);
+        if (!ShouldDrawSupports(path, surface)) return;
+
+        var bottom = surface.BaseZ * WorldUnits.HeightPerBaseUnit
+            + Math.Min(Math.Min(surface.SouthCornerHeight, surface.EastCornerHeight),
+                Math.Min(surface.NorthCornerHeight, surface.WestCornerHeight)) * WorldUnits.TerrainCornerHeightScale;
+        var top = GetSupportTopHeight(path);
+        if (top <= bottom + HeightEpsilon) return;
+
+        float? supportBaseHeight = null;
+        if (occupancy.TryGetHighestIntersection(path, bottom, top, out var highestObstacleTop)) {
+            if (!CanBuildAboveObstacles) return;
+            supportBaseHeight = highestObstacleTop;
+        }
+
+        AddSupports(path, surface, GetRailingMaterial(path), geometry, supportStations, supportBaseHeight);
     }
 
     private void AddRailings(RCTTilePathData path, PathMeshGeometry geometry)
@@ -106,7 +123,7 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     protected abstract void AddSupports(
         RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry,
-        PathSupportStationRegistry supportStations);
+        PathSupportStationRegistry supportStations, float? supportBaseHeight);
 
     protected void AddSurface(RCTTilePathData path, PathMeshGeometry geometry)
     {
@@ -159,40 +176,6 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         geometry.AddPrismFace(topSouthEast, bottomSouthEast, bottomNorthEast, topNorthEast, center, material);
         geometry.AddPrismFace(topSouthWest, bottomSouthWest, bottomSouthEast, topSouthEast, center, material);
         geometry.AddPrismFace(topNorthWest, topNorthEast, bottomNorthEast, bottomNorthWest, center, material);
-    }
-
-    protected static List<(float Bottom, float Top)> GetSupportColumnSections(
-        RCTTilePathData path, RCTTileSurfaceData surface, Vector2 position)
-    {
-        var sections = new List<(float Bottom, float Top)>();
-        var bottom = GetSurfaceHeight(surface, path.TileX, path.TileY, position.X, position.Y);
-        var top = GetPathHeight(path, position.X, position.Y);
-
-        while (top > bottom + HeightEpsilon) {
-            var sectionTop = MathF.Min(bottom + FullSupportSectionHeight, top);
-            sections.Add((bottom, sectionTop));
-            bottom = sectionTop;
-        }
-
-        return sections;
-    }
-
-    protected static void AddSupportColumn(Vector2 position, List<(float Bottom, float Top)> sections, uint material, PathMeshGeometry geometry)
-    {
-        foreach (var section in sections)
-            AddVerticalBeam(new Vector3(position.X, section.Bottom, position.Y), SupportHalfWidth, section.Bottom, section.Top, material, geometry);
-    }
-
-    protected static void AddDiagonalBraces(
-        Vector2 start, (float Bottom, float Top) startSection,
-        Vector2 end, (float Bottom, float Top) endSection,
-        uint material, PathMeshGeometry geometry)
-    {
-        AddBeam(new Vector3(start.X, startSection.Bottom, start.Y), new Vector3(end.X, endSection.Top, end.Y),
-            SupportHalfWidth, material, geometry);
-
-        AddBeam(new Vector3(start.X, startSection.Top, start.Y), new Vector3(end.X, endSection.Bottom, end.Y),
-            SupportHalfWidth, material, geometry);
     }
 
     protected abstract void AddRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, uint material, PathMeshGeometry geometry);

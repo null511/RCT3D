@@ -12,7 +12,7 @@ internal sealed class ConcretePathGeometryBuilder(PathMaterialLibrary materials)
         BuildRailingEdge(path, direction, start, end, baseHeight, material, 12, geometry);
     }
 
-    protected override void AddSupports(RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
+    protected override void AddSupports(RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry, PathSupportStationRegistry supportStations, float? supportBaseHeight)
     {
         var x = (path.TileX + 0.5f) * WorldUnits.TileSize;
         var z = (path.TileY + 0.5f) * WorldUnits.TileSize;

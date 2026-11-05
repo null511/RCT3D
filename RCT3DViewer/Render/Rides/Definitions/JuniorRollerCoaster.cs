@@ -42,8 +42,8 @@ internal sealed class JuniorRollerCoaster : RideDefinition
         };
 
         var brace = shape.AppendBracePart.Cylinder(
-            new Vector3(-0.42f, 0.28f, 0f),
-            new Vector3( 0.42f, 0.28f, 0f),
+            new Vector3(-RailSeparation, RailCenterY, 0f),
+            new Vector3( RailSeparation, RailCenterY, 0f),
             0.055f, 5);
 
         brace.Swatch = TrackRailSwatch.Main;

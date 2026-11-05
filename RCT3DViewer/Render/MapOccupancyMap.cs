@@ -28,8 +28,14 @@ internal sealed class MapOccupancyMap
     {
         var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit;
         var topHeight = path.ClearanceHeight * WorldUnits.HeightPerBaseUnit;
-        Add(path.TileX, path.TileY, baseHeight, topHeight, null, true, false, 0, 0, path.Edges, 0);
+        Add(path.TileX, path.TileY, baseHeight, topHeight, null, true, false, 0, 0, path.Edges, 0, path);
     }
+
+    public void AddObstacle(in RCTTileObstacleData obstacle) =>
+        Add(obstacle.TileX, obstacle.TileY,
+            obstacle.BaseHeight * WorldUnits.HeightPerBaseUnit,
+            obstacle.ClearanceHeight * WorldUnits.HeightPerBaseUnit,
+            null, false, false, 0, 0, 0, 0);
 
     public void AddTrack(in RCTTrackElementData track)
     {
@@ -86,6 +92,23 @@ internal sealed class MapOccupancyMap
         float supportTop,
         RCTTrackElementData? hostTrack,
         out float highestObjectTop)
+        => TryGetHighestIntersection(tileX, tileY, supportBottom, supportTop, hostTrack, null, out highestObjectTop);
+
+    public bool TryGetHighestIntersection(
+        in RCTTilePathData hostPath,
+        float supportBottom,
+        float supportTop,
+        out float highestObjectTop)
+        => TryGetHighestIntersection(hostPath.TileX, hostPath.TileY, supportBottom, supportTop, null, hostPath, out highestObjectTop);
+
+    private bool TryGetHighestIntersection(
+        int tileX,
+        int tileY,
+        float supportBottom,
+        float supportTop,
+        RCTTrackElementData? hostTrack,
+        RCTTilePathData? hostPath,
+        out float highestObjectTop)
     {
         highestObjectTop = float.NegativeInfinity;
         if (!occupiedByTile.TryGetValue((tileX, tileY), out var occupiedObjects))
@@ -93,6 +116,9 @@ internal sealed class MapOccupancyMap
 
         foreach (var occupiedObject in occupiedObjects) {
             if (hostTrack.HasValue && occupiedObject.TrackElement is { } track && track.Equals(hostTrack.Value))
+                continue;
+
+            if (hostPath.HasValue && occupiedObject.PathElement is { } path && path.Equals(hostPath.Value))
                 continue;
 
             if (occupiedObject.TopHeight < supportBottom || occupiedObject.BottomHeight > supportTop)
@@ -115,7 +141,8 @@ internal sealed class MapOccupancyMap
         byte direction,
         byte tunnelSideMask,
         byte connectionSideMask,
-        ushort rideId)
+        ushort rideId,
+        RCTTilePathData? pathElement = null)
     {
         if ((uint)tileX >= (uint)Width || (uint)tileY >= (uint)Height)
             throw new ArgumentOutOfRangeException(nameof(tileX));
@@ -128,7 +155,7 @@ internal sealed class MapOccupancyMap
         }
 
         occupiedObjects.Add(new OccupiedObject(
-            bottomHeight, topHeight, trackElement, isRoute, isTrack, direction, tunnelSideMask, connectionSideMask, rideId));
+            bottomHeight, topHeight, trackElement, pathElement, isRoute, isTrack, direction, tunnelSideMask, connectionSideMask, rideId));
     }
 
     private IEnumerable<RouteTileOccupancy> EnumerateRouteTiles()
@@ -149,6 +176,7 @@ internal sealed class MapOccupancyMap
         float BottomHeight,
         float TopHeight,
         RCTTrackElementData? TrackElement,
+        RCTTilePathData? PathElement,
         bool IsRoute,
         bool IsTrack,
         byte Direction,

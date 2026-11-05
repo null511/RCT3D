@@ -18,6 +18,13 @@ internal abstract class BambooPathGeometryBuilder(PathMaterialLibrary materials,
 
     protected override bool DrawSurfaceOverPlatform => false;
 
+    protected override float GetSupportTopHeight(RCTTilePathData path)
+    {
+        GetSupportPositions(path, out var first, out var second);
+        return MathF.Max(GetPathHeight(path, first.X, first.Y), GetPathHeight(path, second.X, second.Y))
+            - ElevatedPlatformThickness;
+    }
+
 
     protected override uint GetRailingMaterial(RCTTilePathData path) => Materials.GetRailingLayer(TerrainMaterialLibrary.HashObjectId(objectId));
 
@@ -39,7 +46,14 @@ internal abstract class BambooPathGeometryBuilder(PathMaterialLibrary materials,
 
     protected override void AddSupports(
         RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry,
-        PathSupportStationRegistry supportStations)
+        PathSupportStationRegistry supportStations, float? supportBaseHeight)
+    {
+        GetSupportPositions(path, out var first, out var second);
+        AddSupportPole(path, surface, first, material, geometry, supportStations);
+        AddSupportPole(path, surface, second, material, geometry, supportStations);
+    }
+
+    private static void GetSupportPositions(RCTTilePathData path, out Vector2 first, out Vector2 second)
     {
         var center = new Vector2((path.TileX + 0.5f) * WorldUnits.TileSize, (path.TileY + 0.5f) * WorldUnits.TileSize);
 
@@ -49,8 +63,8 @@ internal abstract class BambooPathGeometryBuilder(PathMaterialLibrary materials,
             ? new Vector2(SupportOffset, 0f)
             : new Vector2(0f, SupportOffset);
 
-        AddSupportPole(path, surface, center - offset, material, geometry, supportStations);
-        AddSupportPole(path, surface, center + offset, material, geometry, supportStations);
+        first = center - offset;
+        second = center + offset;
     }
 
     protected override void AddElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry)

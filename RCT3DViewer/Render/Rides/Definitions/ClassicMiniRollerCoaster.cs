@@ -31,7 +31,7 @@ internal class ClassicMiniRollerCoaster : RideDefinition
                     Swatch = TrackRailSwatch.Alternate,
                     Specular = railSpecular,
                 },
-                new TrackRailProfileShape(CreateCircle(0.42f, 0.28f, 0.075f, 5), true) {
+                new TrackRailProfileShape(CreateCircle( 0.42f, 0.28f, 0.075f, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
                     Specular = railSpecular,
                 },

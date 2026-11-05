@@ -88,6 +88,14 @@ public sealed class SimulationBridge : IDisposable
                     var treeData = new RCTTreeSceneryData[(int)treeCount];
                     openRCT2.CopyTreeData(treeData);
 
+                    reportProgress("Reading scenery and entrance clearance data...");
+                    var obstacleCount = openRCT2.GetObstacleCount();
+                    if (obstacleCount > int.MaxValue)
+                        throw new InvalidOperationException($"OpenRCT2 returned too many obstacle elements: {obstacleCount}.");
+
+                    var obstacleData = new RCTTileObstacleData[(int)obstacleCount];
+                    openRCT2.CopyObstacleData(obstacleData);
+
                     reportProgress("Reading ride track and palette data...");
                     var trackCount = openRCT2.GetTrackCount();
                     if (trackCount > int.MaxValue)
@@ -111,7 +119,7 @@ public sealed class SimulationBridge : IDisposable
                     Volatile.Write(ref gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                     Volatile.Write(ref vehicleSnapshots, new VehicleSnapshotPair(null, ReadVehicleSnapshot(openRCT2)));
                     Volatile.Write(ref parkLoaded, true);
-                    completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData, treeData, trackData, rideEntranceData, paletteData));
+                    completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData, treeData, trackData, rideEntranceData, paletteData, obstacleData));
                 }
                 catch (Exception ex) {
                     completion.TrySetException(ex);
@@ -400,7 +408,8 @@ public sealed record ParkSnapshot(
     RCTTreeSceneryData[] TreeData,
     RCTTrackElementData[] TrackData,
     RCTRideEntranceData[] RideEntranceData,
-    RCTPaletteEntry[] PaletteData);
+    RCTPaletteEntry[] PaletteData,
+    RCTTileObstacleData[] ObstacleData);
 
 public sealed record VehicleSnapshot(long Timestamp, ReadOnlyMemory<RCTVehicleData> Vehicles);
 
