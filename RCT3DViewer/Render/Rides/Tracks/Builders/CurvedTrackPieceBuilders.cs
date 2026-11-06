@@ -88,6 +88,28 @@ internal sealed class CorkscrewTrackPieceBuilder(RCTTrackElementType pieceType) 
     protected override bool SmoothRollTransition => true;
 }
 
+internal sealed class ZeroGRollTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
+{
+    private bool IsUp => PieceType is RCTTrackElementType.LeftZeroGRollUp
+        or RCTTrackElementType.RightZeroGRollUp
+        or RCTTrackElementType.LeftLargeZeroGRollUp
+        or RCTTrackElementType.RightLargeZeroGRollUp;
+    private float SignedHalfTwist => PieceType is RCTTrackElementType.LeftZeroGRollUp
+        or RCTTrackElementType.LeftZeroGRollDown
+        or RCTTrackElementType.LeftLargeZeroGRollUp
+        or RCTTrackElementType.LeftLargeZeroGRollDown
+        ? MathF.PI
+        : -MathF.PI;
+
+    protected override float GetRollBegin(in RCTTrackElementData track, float bankAngleDegrees) =>
+        IsUp ? 0.0f : -SignedHalfTwist;
+    protected override float GetRollEnd(in RCTTrackElementData track, float bankAngleDegrees) =>
+        IsUp ? SignedHalfTwist : 0.0f;
+    protected override bool SmoothRollTransition => true;
+    protected override int GetSubdivisions(int trackCount) =>
+        Math.Max(base.GetSubdivisions(trackCount), 32);
+}
+
 internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
 {
     protected override float GetRollBegin(in RCTTrackElementData track, float bankAngleDegrees) =>

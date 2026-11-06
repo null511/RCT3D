@@ -28,12 +28,12 @@ internal sealed class LogFlume : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape();
+        var shape = new TrackPart();
 
         // top
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2( 1.00f,  0.25f),
             new Vector2( 0.90f, -0.20f),
             new Vector2(-0.90f, -0.20f),
@@ -44,7 +44,7 @@ internal sealed class LogFlume : RideDefinition
         });
 
         // bottom
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(-1.02f,  0.23f),
             new Vector2(-0.92f, -0.22f),
             new Vector2( 0.92f, -0.22f),
@@ -55,7 +55,7 @@ internal sealed class LogFlume : RideDefinition
         });
 
         // left
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(-1.00f,  0.25f),
             new Vector2(-1.02f,  0.23f),
         ], false) {
@@ -64,7 +64,7 @@ internal sealed class LogFlume : RideDefinition
         });
 
         // right
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2( 1.02f,  0.23f),
             new Vector2( 1.00f,  0.25f),
         ], false) {

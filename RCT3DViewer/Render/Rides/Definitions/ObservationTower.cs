@@ -11,6 +11,6 @@ internal sealed class ObservationTower : RideDefinition
         PlatformRailing = RidePlatformRailingType.Fenced;
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
         => new();
 }

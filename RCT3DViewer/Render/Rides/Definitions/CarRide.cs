@@ -20,30 +20,30 @@ internal sealed class CarRide : RideDefinition
         CarVerticalOffset = 0.2f;
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var part = new TrackShape();
+        var part = new TrackPart();
 
         // left
-        part.RailShapes.AddRange(CreateBox(-0.55f, -0.05f, 0.02f, 0.08f, shape => {
+        part.RailProfiles.AddRange(CreateBox(-0.55f, -0.05f, 0.02f, 0.08f, shape => {
             shape.Color = metalColor;
             shape.Specular = metalSpecular;
         }));
 
         // center
-        part.RailShapes.AddRange(CreateBox( 0.00f, -0.05f, 0.02f, 0.08f, shape => {
+        part.RailProfiles.AddRange(CreateBox( 0.00f, -0.05f, 0.02f, 0.08f, shape => {
             shape.Color = metalColor;
             shape.Specular = metalSpecular;
         }));
 
         // right
-        part.RailShapes.AddRange(CreateBox( 0.55f, -0.05f, 0.02f, 0.08f, shape => {
+        part.RailProfiles.AddRange(CreateBox( 0.55f, -0.05f, 0.02f, 0.08f, shape => {
             shape.Color = metalColor;
             shape.Specular = metalSpecular;
         }));
 
         // top
-        part.RailShapes.Add(new TrackRailProfileShape([
+        part.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2( 0.55f, 0f),
             new Vector2(-0.55f, 0f),
         ], false) {
@@ -52,7 +52,7 @@ internal sealed class CarRide : RideDefinition
         });
 
         // bottom
-        part.RailShapes.Add(new TrackRailProfileShape([
+        part.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(-0.55f, -0.12f),
             new Vector2( 0.55f, -0.12f),
         ], false) {

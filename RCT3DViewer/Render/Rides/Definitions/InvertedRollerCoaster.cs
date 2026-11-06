@@ -20,13 +20,13 @@ internal sealed class InvertedRollerCoaster : RideDefinition
         SupportStyle = RideSupportStyle.MetalBoxed;
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
         const float railSeparation = 0.53f;
         const float railRadius = 0.07f;
 
-        var part = new TrackShape {
-            RailShapes = [
+        var part = new TrackPart {
+            RailProfiles = [
                 // left
                 new TrackRailProfileShape(CreateCircle(-railSeparation, 0.90f, railRadius, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,

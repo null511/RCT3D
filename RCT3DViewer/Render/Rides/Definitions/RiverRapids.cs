@@ -25,9 +25,9 @@ internal sealed class RiverRapids : RideDefinition
         ];
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape();
+        var shape = new TrackPart();
         const float thickness = 0.04f;
 
         const float sideCenterX = 1.46f;
@@ -37,19 +37,19 @@ internal sealed class RiverRapids : RideDefinition
         const float bottomCenterY = -0.75f + thickness * 0.5f;
 
         // left side
-        shape.RailShapes.AddRange(CreateBox(-sideCenterX, sideCenterY, thickness, 0.75f, part => {
+        shape.RailProfiles.AddRange(CreateBox(-sideCenterX, sideCenterY, thickness, 0.75f, part => {
             part.Swatch = TrackRailSwatch.Main;
             part.Specular = specular;
         }));
 
         // right side
-        shape.RailShapes.AddRange(CreateBox(sideCenterX, sideCenterY, thickness, 0.75f, part => {
+        shape.RailProfiles.AddRange(CreateBox(sideCenterX, sideCenterY, thickness, 0.75f, part => {
             part.Swatch = TrackRailSwatch.Main;
             part.Specular = specular;
         }));
 
         // bottom
-        shape.RailShapes.AddRange(CreateBox(bottomCenterX, bottomCenterY, 1.46f, thickness, part => {
+        shape.RailProfiles.AddRange(CreateBox(bottomCenterX, bottomCenterY, 1.46f, thickness, part => {
             part.Swatch = TrackRailSwatch.Main;
             part.Specular = specular;
         }));

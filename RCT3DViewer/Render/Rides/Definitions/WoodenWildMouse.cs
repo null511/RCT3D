@@ -18,9 +18,9 @@ internal class WoodenWildMouse : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape();
+        var shape = new TrackPart();
         var railColor = new TrackRgba8(200, 200, 200, 255);
         var railSpecular = new TrackRailSpecularData(180, 255);
 
@@ -34,7 +34,7 @@ internal class WoodenWildMouse : RideDefinition
         var sideHalfWidth = 0.04f;
 
         // left rail - top
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(centerLeftX + sideHalfWidth, centerY + halfHeight),
             new Vector2(centerLeftX - sideHalfWidth, centerY + halfHeight),
         ], false) {
@@ -43,7 +43,7 @@ internal class WoodenWildMouse : RideDefinition
         });
 
         // left rail - left
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(centerLeftX - sideHalfWidth, centerY + halfHeight),
             new Vector2(centerLeftX - sideHalfWidth, centerY - halfHeight),
         ], false) {
@@ -52,7 +52,7 @@ internal class WoodenWildMouse : RideDefinition
         });
 
         // left rail - bottom
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(centerLeftX - sideHalfWidth, centerY - halfHeight),
             new Vector2(centerLeftX + sideHalfWidth, centerY - halfHeight),
         ], false) {
@@ -61,7 +61,7 @@ internal class WoodenWildMouse : RideDefinition
         });
 
         // left rail - right
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(centerLeftX + sideHalfWidth, centerY - halfHeight),
             new Vector2(centerLeftX + sideHalfWidth, centerY + halfHeight),
         ], false) {
@@ -70,13 +70,13 @@ internal class WoodenWildMouse : RideDefinition
         });
 
         // center rail
-        shape.RailShapes.AddRange(CreateBox(centerX, centerY, halfWidth, halfHeight, part => {
+        shape.RailProfiles.AddRange(CreateBox(centerX, centerY, halfWidth, halfHeight, part => {
             part.Color = railColor;
             part.Specular = railSpecular;
         }));
 
         // right rail - top
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(centerRightX + sideHalfWidth, centerY + halfHeight),
             new Vector2(centerRightX - sideHalfWidth, centerY + halfHeight),
         ], false) {
@@ -85,7 +85,7 @@ internal class WoodenWildMouse : RideDefinition
         });
 
         // right rail - left
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(centerRightX - sideHalfWidth, centerY + halfHeight),
             new Vector2(centerRightX - sideHalfWidth, centerY - halfHeight),
         ], false) {
@@ -94,7 +94,7 @@ internal class WoodenWildMouse : RideDefinition
         });
 
         // right rail - bottom
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(centerRightX - sideHalfWidth, centerY - halfHeight),
             new Vector2(centerRightX + sideHalfWidth, centerY - halfHeight),
         ], false) {
@@ -103,7 +103,7 @@ internal class WoodenWildMouse : RideDefinition
         });
 
         // right rail - right
-        shape.RailShapes.Add(new TrackRailProfileShape([
+        shape.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(centerRightX + sideHalfWidth, centerY - halfHeight),
             new Vector2(centerRightX + sideHalfWidth, centerY + halfHeight),
         ], false) {

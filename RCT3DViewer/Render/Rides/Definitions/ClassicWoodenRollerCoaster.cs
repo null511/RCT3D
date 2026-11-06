@@ -31,14 +31,14 @@ internal sealed class ClassicWoodenRollerCoaster : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape {
+        var shape = new TrackPart {
             BraceInterval = 0.6f,
         };
 
-        shape.RailShapes.AddRange(CreateRailProfile(-RailHalfSeparation, -0.2f));
-        shape.RailShapes.AddRange(CreateRailProfile( RailHalfSeparation, -0.2f));
+        shape.RailProfiles.AddRange(CreateRailProfile(-RailHalfSeparation, -0.2f));
+        shape.RailProfiles.AddRange(CreateRailProfile( RailHalfSeparation, -0.2f));
 
         if (!track.Part.IsStationPlatform() && !track.Part.IsLoop()) {
             // base beam
@@ -75,8 +75,8 @@ internal sealed class ClassicWoodenRollerCoaster : RideDefinition
             const float woodPlatformCenterY = -0.26f;
 
             // side platforms
-            shape.RailShapes.AddRange(CreateWoodProfile(-woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight, TrackRailSwatch.Alternate));
-            shape.RailShapes.AddRange(CreateWoodProfile( woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight, TrackRailSwatch.Alternate));
+            shape.RailProfiles.AddRange(CreateWoodProfile(-woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight, TrackRailSwatch.Alternate));
+            shape.RailProfiles.AddRange(CreateWoodProfile( woodPlatformCenterX, woodPlatformCenterY, woodHalfMargin, woodHeight, TrackRailSwatch.Alternate));
 
             const float WoodRailingWidth = 0.04f;
 
@@ -84,8 +84,8 @@ internal sealed class ClassicWoodenRollerCoaster : RideDefinition
             var woodRailingCenterY = 0.36f;
 
             // side railing
-            shape.RailShapes.AddRange(CreateWoodProfile(-woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth, TrackRailSwatch.Main));
-            shape.RailShapes.AddRange(CreateWoodProfile(woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth, TrackRailSwatch.Main));
+            shape.RailProfiles.AddRange(CreateWoodProfile(-woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth, TrackRailSwatch.Main));
+            shape.RailProfiles.AddRange(CreateWoodProfile(woodRailingCenterX, woodRailingCenterY, WoodRailingWidth, WoodRailingWidth, TrackRailSwatch.Main));
         }
 
         return shape;

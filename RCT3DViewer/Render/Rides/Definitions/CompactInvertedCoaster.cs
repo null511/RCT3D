@@ -18,10 +18,10 @@ internal sealed class CompactInvertedCoaster : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        return new TrackShape {
-            RailShapes = [
+        return new TrackPart {
+            RailProfiles = [
                 new TrackRailProfileShape(CreateCircle(-0.42f, 1.12f, 0.06f, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
                     Specular = new TrackRailSpecularData(100, 0),

@@ -15,9 +15,9 @@ internal sealed record TrackBracePart(TrackBraceVertex[] Vertices, uint[] Indice
     public TrackRailSpecularData Specular { get; set; } = SpecularDefault;
 }
 
-internal sealed class TrackBraceGenerator(Func<RCTTrackElementData, TrackShape> getShape) : ITrackPartGenerator
+internal sealed class TrackBraceGenerator(Func<RCTTrackElementData, TrackPart> getShape) : ITrackPartGenerator
 {
-    private readonly ConcurrentDictionary<(RCTTrackElementType TrackType, byte HasChainLift), TrackShape> partsByTrackType = new();
+    private readonly ConcurrentDictionary<(RCTTrackElementType TrackType, byte HasChainLift), TrackPart> partsByTrackType = new();
 
     public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd, Vector3? startTangent, Vector3? endTangent, Vector3? preferredSide, bool smoothRollTransition)
     {

@@ -23,11 +23,11 @@ internal class MiniatureRailway : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape {
+        var shape = new TrackPart {
             BraceInterval = 0.5f,
-            RailShapes = [
+            RailProfiles = [
                 CreateRailRectangle(-0.40f, 0f),
                 CreateRailRectangle( 0.40f, 0f),
             ],
@@ -35,7 +35,7 @@ internal class MiniatureRailway : RideDefinition
 
         if (!track.Part.IsStationPlatform()) {
             // ballast
-            shape.RailShapes.Add(new TrackRailProfileShape([
+            shape.RailProfiles.Add(new TrackRailProfileShape([
                 new Vector2( 1.2f, -0.28f),
                 new Vector2( 0.5f, -0.08f),
 

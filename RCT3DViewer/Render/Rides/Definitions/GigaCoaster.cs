@@ -21,11 +21,11 @@ internal class GigaCoaster : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape {
+        var shape = new TrackPart {
             BraceInterval = 0.5f,
-            RailShapes = [
+            RailProfiles = [
                 new TrackRailProfileShape(CreateCircle(-0.32f, -0.15f, 0.075f, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
                     Specular = railSpecular,

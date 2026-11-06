@@ -20,12 +20,12 @@ internal sealed class BoatHire : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
         const float separation = 0.75f;
 
-        var part = new TrackShape {
-            RailShapes = [
+        var part = new TrackPart {
+            RailProfiles = [
                 // left
                 new TrackRailProfileShape(CreateCircle(-separation, TerrainMeshBuilder.WaterPlaneVerticalOffset, 0.09f, 5), true) {
                     Swatch = TrackRailSwatch.Main,

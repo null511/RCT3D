@@ -14,10 +14,10 @@ internal sealed class GoKarts : RideDefinition
         SupportStyle = RideSupportStyle.WoodenTruss;
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        return new TrackShape {
-            RailShapes = [
+        return new TrackPart {
+            RailProfiles = [
             // left-outside
             new TrackRailProfileShape([
                 new Vector2(-1.40f, 0.3f),

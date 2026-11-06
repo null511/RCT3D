@@ -19,16 +19,16 @@ internal sealed class MineTrainCoaster : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
         const float RailSeparation = 0.48f;
 
-        var shape = new TrackShape {
+        var shape = new TrackPart {
             BraceInterval = 0.36f,
         };
 
-        shape.RailShapes.AddRange(CreateRail(-RailSeparation*0.5f));
-        shape.RailShapes.AddRange(CreateRail( RailSeparation*0.5f));
+        shape.RailProfiles.AddRange(CreateRail(-RailSeparation*0.5f));
+        shape.RailProfiles.AddRange(CreateRail( RailSeparation*0.5f));
 
         if (!track.Part.IsStationPlatform()) {
             shape.AppendBracePart.Box(

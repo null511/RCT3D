@@ -16,6 +16,7 @@
 - For MetalStick ride supports, use `TrackSupportPlacementMode.TrackBased`, not `TileBased`.
 - For the planned bamboo railings (brown) path builder, omit the normal path surface layer only when a support platform is present. Railings consist of two horizontal bamboo poles and three vertical bamboo poles; supports use rounded bamboo poles.
 - For procedural mesh quality, use reusable parameterized geometry generation (e.g. endpoints, radius, radial segments), not hardcoded geometry. Do not interpret this as a request for centralized configuration or global/runtime quality controls.
+- When diagnosing inverted track centerline heights, note a roughly 1-world-unit excess across loops, corkscrews, barrel rolls, and other inverted parts. The constant global CenterlineHeightOffset is known and is not relevant to this inversion-specific issue; do not attribute it to that offset.
 
 ## Rendering Guidelines
 - Request source-derived terrain direction reasoning rather than guess-and-test; validate rendering hypotheses before making further geometry changes.

@@ -90,6 +90,22 @@ internal static class TrackCenterlineGeometry
 
     public static float GetPitchSlope(RCTTrackElementType pieceType, bool atStart)
     {
+        if (pieceType is RCTTrackElementType.LeftZeroGRollUp
+            or RCTTrackElementType.RightZeroGRollUp)
+            return atStart ? Pitch.Slope25 : Pitch.None;
+
+        if (pieceType is RCTTrackElementType.LeftZeroGRollDown
+            or RCTTrackElementType.RightZeroGRollDown)
+            return atStart ? Pitch.None : -Pitch.Slope25;
+
+        if (pieceType is RCTTrackElementType.LeftLargeZeroGRollUp
+            or RCTTrackElementType.RightLargeZeroGRollUp)
+            return atStart ? Pitch.Slope60 : Pitch.None;
+
+        if (pieceType is RCTTrackElementType.LeftLargeZeroGRollDown
+            or RCTTrackElementType.RightLargeZeroGRollDown)
+            return atStart ? Pitch.None : -Pitch.Slope60;
+
         if (pieceType is RCTTrackElementType.LeftQuarterTurn1TileUp60
             or RCTTrackElementType.RightQuarterTurn1TileUp60)
             return Pitch.Slope60;
@@ -124,6 +140,10 @@ internal static class TrackCenterlineGeometry
             or RCTTrackElementType.Up25ToRightBankedUp25
             or RCTTrackElementType.LeftBankedUp25ToUp25
             or RCTTrackElementType.RightBankedUp25ToUp25
+            or RCTTrackElementType.LeftEighthToDiagUp25
+            or RCTTrackElementType.RightEighthToDiagUp25
+            or RCTTrackElementType.LeftEighthToOrthogonalUp25
+            or RCTTrackElementType.RightEighthToOrthogonalUp25
             or RCTTrackElementType.LeftEighthBankToDiagUp25
             or RCTTrackElementType.RightEighthBankToDiagUp25
             or RCTTrackElementType.LeftEighthBankToOrthogonalUp25
@@ -136,6 +156,10 @@ internal static class TrackCenterlineGeometry
             or RCTTrackElementType.Down25ToRightBankedDown25
             or RCTTrackElementType.LeftBankedDown25ToDown25
             or RCTTrackElementType.RightBankedDown25ToDown25
+            or RCTTrackElementType.LeftEighthToDiagDown25
+            or RCTTrackElementType.RightEighthToDiagDown25
+            or RCTTrackElementType.LeftEighthToOrthogonalDown25
+            or RCTTrackElementType.RightEighthToOrthogonalDown25
             or RCTTrackElementType.LeftEighthBankToDiagDown25
             or RCTTrackElementType.RightEighthBankToDiagDown25
             or RCTTrackElementType.LeftEighthBankToOrthogonalDown25

@@ -31,11 +31,11 @@ internal class LoopingRollerCoaster : RideDefinition
         SupportTrackOffset = 0.20f;
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var part = new TrackShape {
+        var part = new TrackPart {
             BraceInterval = 0.8f,
-            RailShapes = [
+            RailProfiles = [
                 // left
                 new TrackRailProfileShape(CreateCircle(-RailSeparation, RailCenterY, RailRadius, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
@@ -66,7 +66,7 @@ internal class LoopingRollerCoaster : RideDefinition
         }));
 
         if (track.HasChainLift != 0) {
-            part.RailShapes.AddRange(CreateBox(0f, RailCenterY, RailSeparation - 0.08f, RailRadius, p => {
+            part.RailProfiles.AddRange(CreateBox(0f, RailCenterY, RailSeparation - 0.08f, RailRadius, p => {
                 p.Swatch = TrackRailSwatch.Main;
                 p.Specular = railSpecular;
             }));

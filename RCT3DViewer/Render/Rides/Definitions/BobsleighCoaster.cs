@@ -19,10 +19,10 @@ internal sealed class BobsleighCoaster : RideDefinition
         SupportTrackOffset = -0.45f;
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        return new TrackShape {
-            RailShapes = (track.HasChainLift != 0 || track.Part.IsStationPlatform()
+        return new TrackPart {
+            RailProfiles = (track.HasChainLift != 0 || track.Part.IsStationPlatform()
                 ? GetTrackedRailParts(track.Part) : GetBeddedRailParts()).ToList(),
         };
     }

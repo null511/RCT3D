@@ -84,6 +84,7 @@ internal static class TrackRideConfigurations
         new MonsterTrucks().Build(),
         new ObservationTower().Build(),
         new RiverRapids().Build(),
+        new SingleRailRollerCoaster().Build(),
         new SpiralRollerCoaster().Build(),
         new Steeplechase().Build(),
         new VerticalDropRollerCoaster().Build(),

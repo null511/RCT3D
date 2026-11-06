@@ -295,6 +295,16 @@ internal sealed class TrackPieceBuilderCatalog
             RCTTrackElementType.RightLargeCorkscrewDown,
             RCTTrackElementType.RightLargeCorkscrewUp);
 
+        catalog.RegisterMany(type => new ZeroGRollTrackPieceBuilder(type),
+            RCTTrackElementType.LeftZeroGRollUp,
+            RCTTrackElementType.RightZeroGRollUp,
+            RCTTrackElementType.LeftZeroGRollDown,
+            RCTTrackElementType.RightZeroGRollDown,
+            RCTTrackElementType.LeftLargeZeroGRollUp,
+            RCTTrackElementType.RightLargeZeroGRollUp,
+            RCTTrackElementType.LeftLargeZeroGRollDown,
+            RCTTrackElementType.RightLargeZeroGRollDown);
+
         catalog.RegisterMany(type => new TwistTrackPieceBuilder(type),
             RCTTrackElementType.LeftTwistDownToUp,
             RCTTrackElementType.LeftTwistUpToDown,

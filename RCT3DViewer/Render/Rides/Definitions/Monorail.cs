@@ -18,10 +18,10 @@ internal class Monorail : RideDefinition
         SupportTrackOffset = 0.2f;
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        return new TrackShape {
-            RailShapes = [
+        return new TrackPart {
+            RailProfiles = [
             new TrackRailProfileShape([
                 new Vector2(0.20f, 0.40f),
                 new Vector2(0.20f, 0.50f),

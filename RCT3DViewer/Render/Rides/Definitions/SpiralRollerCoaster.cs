@@ -22,11 +22,11 @@ internal class SpiralRollerCoaster : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape {
+        var shape = new TrackPart {
             BraceInterval = 0.8f,
-            RailShapes = [
+            RailProfiles = [
                 new TrackRailProfileShape(CreateCircle(-0.42f, 0f, 0.075f, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
                     Specular = railSpecular,

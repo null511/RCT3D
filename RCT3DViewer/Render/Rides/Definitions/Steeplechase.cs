@@ -22,11 +22,11 @@ internal sealed class Steeplechase : RideDefinition
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
-    protected override TrackShape GetTrackShape(RCTTrackElementData track)
+    protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackShape {
+        var shape = new TrackPart {
             BraceInterval = 0.6f,
-            RailShapes = [
+            RailProfiles = [
                 // upper
                 new TrackRailProfileShape(CreateCircle(0f, 0.2f, 0.08f, 5), true) {
                     Swatch = TrackRailSwatch.Main,
