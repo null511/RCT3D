@@ -10,7 +10,15 @@ internal class VerticalDropRollerCoaster : RideDefinition
 {
     private static readonly TrackRailSpecularData railSpecular = new(100, 0);
 
-    private const float RailSeparation = 0.65f;
+    private const float BeamHalfWidth = 0.38f;
+    private const float BeamHalfHeight = 0.42f;
+    private const float BeamCenterY = -0.70f;
+
+    private const float RailSeparation = 0.67f;
+    private const float RailCenterY = 0.0f;
+    private const float RailRadius = 0.07f;
+
+    private const float BraceHalfThickness = 0.03f;
 
 
     public VerticalDropRollerCoaster() : base(RCTRideType.VerticalDropRollerCoaster)
@@ -20,30 +28,28 @@ internal class VerticalDropRollerCoaster : RideDefinition
         CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.MetalBoxed;
+        SupportTrackOffset = -0.5f;
 
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
     protected override TrackShape GetTrackShape(RCTTrackElementData track)
     {
-        const float railCenterY = 0.0f;
-        const float railRadius = 0.08f;
-
         var part = new TrackShape {
             BraceInterval = 0.8f,
             RailShapes = [
                 // left
-                new TrackRailProfileShape(CreateCircle(-RailSeparation, railCenterY, railRadius, 5), true) {
+                new TrackRailProfileShape(CreateCircle(-RailSeparation, RailCenterY, RailRadius, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
                     Specular = railSpecular,
                 },
                 // right
-                new TrackRailProfileShape(CreateCircle( RailSeparation, railCenterY, railRadius, 5), true) {
+                new TrackRailProfileShape(CreateCircle( RailSeparation, RailCenterY, RailRadius, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
                     Specular = railSpecular,
                 },
                 // center
-                .. CreateBox(0f, -0.50f, 0.24f, 0.20f, p => {
+                .. CreateBox(0f, BeamCenterY, BeamHalfWidth, BeamHalfHeight, p => {
                     p.Swatch = TrackRailSwatch.Main;
                     p.Specular = railSpecular;
                 })
@@ -52,13 +58,9 @@ internal class VerticalDropRollerCoaster : RideDefinition
 
         var builder = new BraceMeshBuilder();
 
-        var frontFace = BuildBraceFace(false);
-        builder.Append(frontFace.vertices, frontFace.indices);
-
-        var backFace = BuildBraceFace(true);
-        builder.Append(backFace.vertices, backFace.indices);
-
-        // TODO: exposed side faces
+        AppendBraceFace(builder, false);
+        AppendBraceFace(builder, true);
+        AppendBraceEdges(builder);
 
         part.BraceParts.Add(builder.Build(p => {
             p.Swatch = TrackRailSwatch.Main;
@@ -68,18 +70,18 @@ internal class VerticalDropRollerCoaster : RideDefinition
         return part;
     }
 
-    private static (TrackBraceVertex[] vertices, uint[] indices) BuildBraceFace(bool isBackFace)
+    private static void AppendBraceFace(BraceMeshBuilder builder, bool isBackFace)
     {
-        const float halfThickness = 0.03f;
-
-        var z = isBackFace ? halfThickness : -halfThickness;
+        var z = isBackFace ? BraceHalfThickness : -BraceHalfThickness;
+        var beamTop = BeamCenterY + BeamHalfHeight;
+        var splitY = beamTop + 0.1f;
 
         var vertices = new TrackBraceVertex[7];
         var indices = new uint[15];
 
-        vertices[0] = V(new Vector3(    0f, -0.20f, z));
-        vertices[1] = V(new Vector3(-0.24f, -0.30f, z));
-        vertices[2] = V(new Vector3( 0.24f, -0.30f, z));
+        vertices[0] = V(new Vector3(    0f, splitY, z));
+        vertices[1] = V(new Vector3(-BeamHalfWidth, beamTop, z));
+        vertices[2] = V(new Vector3( BeamHalfWidth, beamTop, z));
 
         vertices[3] = V(new Vector3( RailSeparation, -0.08f, z));
         vertices[4] = V(new Vector3( RailSeparation,  0.00f, z));
@@ -93,7 +95,8 @@ internal class VerticalDropRollerCoaster : RideDefinition
         I( 9, 1, 0, 6);
         I(12, 6, 0, 5);
 
-        return (vertices, indices);
+        builder.Append(vertices, indices);
+        return;
 
         void I(int index, uint v1, uint v2, uint v3) {
             if (isBackFace) {
@@ -111,8 +114,47 @@ internal class VerticalDropRollerCoaster : RideDefinition
         TrackBraceVertex V(Vector3 position) {
             return new TrackBraceVertex {
                 Position = position,
-                Normal = isBackFace ? Vector3.UnitZ : -Vector3.UnitZ, // TODO: this may be reversed
+                Normal = isBackFace ? Vector3.UnitZ : -Vector3.UnitZ,
             };
         }
+    }
+
+    private static void AppendBraceEdges(BraceMeshBuilder builder)
+    {
+        var beamTop = BeamCenterY + BeamHalfHeight;
+        var splitY = beamTop + 0.1f;
+
+        var p1_1 = new Vector3(    0f, splitY, -BraceHalfThickness);
+        var p1_2 = new Vector3(    0f, splitY,  BraceHalfThickness);
+
+        var p5_1 = new Vector3( RailSeparation,  0.00f, -BraceHalfThickness);
+        var p5_2 = new Vector3( RailSeparation,  0.00f,  BraceHalfThickness);
+
+        var p6_1 = new Vector3(-RailSeparation,  0.00f, -BraceHalfThickness);
+        var p6_2 = new Vector3(-RailSeparation,  0.00f,  BraceHalfThickness);
+
+        // top right
+        builder.AppendQuad(p1_2, p1_1, p5_1, p5_2);
+
+        // top left
+        builder.AppendQuad(p1_1, p1_2, p6_2, p6_1);
+
+        // bottom left
+        var p2_1 = new Vector3(-BeamHalfWidth, beamTop, -BraceHalfThickness);
+        var p2_2 = new Vector3(-BeamHalfWidth, beamTop,  BraceHalfThickness);
+
+        var p7_1 = new Vector3(-RailSeparation, -0.08f, -BraceHalfThickness);
+        var p7_2 = new Vector3(-RailSeparation, -0.08f,  BraceHalfThickness);
+
+        builder.AppendQuad(p2_2, p2_1, p7_1, p7_2);
+
+        // bottom right
+        var p3_1 = new Vector3( BeamHalfWidth, beamTop, -BraceHalfThickness);
+        var p3_2 = new Vector3( BeamHalfWidth, beamTop,  BraceHalfThickness);
+
+        var p4_1 = new Vector3( RailSeparation, -0.08f, -BraceHalfThickness);
+        var p4_2 = new Vector3( RailSeparation, -0.08f,  BraceHalfThickness);
+
+        builder.AppendQuad(p3_1, p3_2, p4_2, p4_1);
     }
 }

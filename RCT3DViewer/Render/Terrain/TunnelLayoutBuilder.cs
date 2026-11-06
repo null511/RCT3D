@@ -24,7 +24,16 @@ internal readonly record struct TunnelOpening(
 
 internal readonly record struct TunnelStepSkirt(float BottomHeight, float TopHeight, bool FacesCurrentTile);
 
-internal sealed class TunnelLayout(TunnelSpan[] spans, TunnelOpening[] openings)
+internal readonly record struct TunnelSurfaceOpening(float X, float Z, float SurfaceHeight, float BottomHeight)
+{
+    public float HalfWidth => (WorldUnits.TileSize - 2.0f * TunnelProfile.WallThickness) * 0.5f;
+    public float MinX => X - HalfWidth;
+    public float MaxX => X + HalfWidth;
+    public float MinZ => Z - HalfWidth;
+    public float MaxZ => Z + HalfWidth;
+}
+
+internal sealed class TunnelLayout(TunnelSpan[] spans, TunnelOpening[] openings, TunnelSurfaceOpening[] surfaceOpenings)
 {
     private readonly Dictionary<(int TileX, int TileY), TunnelSpan[]> spansByTile = spans
         .GroupBy(span => (span.TileX, span.TileY))
@@ -41,6 +50,13 @@ internal sealed class TunnelLayout(TunnelSpan[] spans, TunnelOpening[] openings)
 
     public TunnelSpan[] Spans { get; } = spans;
     public TunnelOpening[] Openings { get; } = openings;
+    public TunnelSurfaceOpening[] SurfaceOpenings { get; } = surfaceOpenings;
+
+    public IEnumerable<TunnelSurfaceOpening> GetSurfaceOpenings(int tileX, int tileY) =>
+        SurfaceOpenings.Where(opening => opening.MinX < (tileX + 1) * WorldUnits.TileSize
+            && opening.MaxX > tileX * WorldUnits.TileSize
+            && opening.MinZ < (tileY + 1) * WorldUnits.TileSize
+            && opening.MaxZ > tileY * WorldUnits.TileSize);
 
     public IReadOnlyList<TunnelSpan> GetSpans(int tileX, int tileY) =>
         spansByTile.TryGetValue((tileX, tileY), out var tileSpans) ? tileSpans : Array.Empty<TunnelSpan>();
@@ -146,6 +162,22 @@ internal sealed class TunnelLayoutBuilder
 
         var spans = new List<TunnelSpan>();
         var openings = new List<TunnelOpening>();
+        var surfaceOpenings = new List<TunnelSurfaceOpening>();
+        foreach (var route in routes.Where(route => route.IsTrack))
+        foreach (var crossing in occupancy.GetTrackSurfaceCrossings(route)) {
+            var existing = surfaceOpenings.FindIndex(opening => MathF.Abs(opening.X - crossing.X) < 0.001f
+                && MathF.Abs(opening.Z - crossing.Z) < 0.001f
+                && MathF.Abs(opening.SurfaceHeight - crossing.Y) < 0.001f);
+            if (existing >= 0)
+                surfaceOpenings[existing] = surfaceOpenings[existing] with {
+                    BottomHeight = MathF.Min(surfaceOpenings[existing].BottomHeight, route.FloorHeight) };
+            else
+                surfaceOpenings.Add(new TunnelSurfaceOpening(crossing.X, crossing.Z, crossing.Y, route.FloorHeight));
+            if (!undergroundRouteIds.Contains(route.RouteId) && crossing.Y > route.FloorHeight
+                && !spans.Any(span => span.TileX == route.TileX && span.TileY == route.TileY
+                    && span.FloorHeight == route.FloorHeight && span.RoofHeight == crossing.Y))
+                spans.Add(new TunnelSpan(route.TileX, route.TileY, route.FloorHeight, crossing.Y, 0));
+        }
 
         foreach (var route in routes.Where(route => undergroundRouteIds.Contains(route.RouteId))) {
             var candidateSideMask = GetCandidateSideMask(route);
@@ -187,7 +219,7 @@ internal sealed class TunnelLayoutBuilder
                 GetRoofHeight(route), connectedSideMask));
         }
 
-        return new TunnelLayout(spans.ToArray(), openings.Distinct().ToArray());
+        return new TunnelLayout(spans.ToArray(), openings.Distinct().ToArray(), surfaceOpenings.ToArray());
     }
 
     private static float GetRoofHeight(RouteTileOccupancy route) =>

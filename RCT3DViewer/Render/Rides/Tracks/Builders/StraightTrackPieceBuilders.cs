@@ -47,7 +47,8 @@ internal sealed class BankedSlopeTrackPieceBuilder(RCTTrackElementType pieceType
         TrackCenterlineGeometry.AddParts(track, geometry, points, partGenerators, paletteEntries,
             TrackCenterlineGeometry.GetRollRadians(track.RollBegin, geometry.TrackBankAngleDegrees),
             TrackCenterlineGeometry.GetRollRadians(track.RollEnd, geometry.TrackBankAngleDegrees),
-            startTangent: startDirection, endTangent: endDirection);
+            startTangent: startDirection, endTangent: endDirection,
+            smoothRollTransition: track.RollBegin != track.RollEnd);
     }
 }
 

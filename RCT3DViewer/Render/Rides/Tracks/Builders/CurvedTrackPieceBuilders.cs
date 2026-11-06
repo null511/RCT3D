@@ -60,6 +60,8 @@ internal sealed class SteepQuarterTurnTrackPieceBuilder(RCTTrackElementType piec
 
 internal sealed class BankedCurveTrackPieceBuilder(RCTTrackElementType pieceType) : CurveTrackPieceBuilder(pieceType)
 {
+    protected override bool SmoothRollTransition => true;
+
     protected override float GetRollBegin(in RCTTrackElementData track, float bankAngleDegrees) =>
         TrackCenterlineGeometry.GetRollRadians(track.RollBegin, bankAngleDegrees);
     protected override float GetRollEnd(in RCTTrackElementData track, float bankAngleDegrees) =>
@@ -109,13 +111,11 @@ internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveT
         var originHeight = (first.BaseHeight - first.SequenceOffsetZ) * WorldUnits.HeightPerBaseUnit;
         start.Y = originHeight + first.SplineZBegin * WorldUnits.HeightPerBaseUnit;
         end.Y = originHeight + first.SplineZEnd * WorldUnits.HeightPerBaseUnit;
-        var smoothTransition = PieceType is RCTTrackElementType.DiagRightBankToDown25
-            or RCTTrackElementType.DiagDown25ToLeftBank;
         var transitionPitches = TrackCenterlineGeometry.GetDiagonalSlopeTransitionPitches(PieceType);
         var horizontalDistance = Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(end.X, end.Z));
         var risePerRun = horizontalDistance > float.Epsilon ? (end.Y - start.Y) / horizontalDistance : 0.0f;
-        var startPitch = transitionPitches?.Start ?? (smoothTransition ? TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: true) : risePerRun);
-        var endPitch = transitionPitches?.End ?? (smoothTransition ? TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: false) : risePerRun);
+        var startPitch = transitionPitches?.Start ?? risePerRun;
+        var endPitch = transitionPitches?.End ?? risePerRun;
         var pitchedStartDirection = Vector3.Normalize(startDirection + Vector3.UnitY * startPitch);
         var pitchedEndDirection = Vector3.Normalize(endDirection + Vector3.UnitY * endPitch);
         var points = TrackCenterlineGeometry.CreateCubicCurvePoints(start, end, pitchedStartDirection, pitchedEndDirection,
@@ -125,7 +125,7 @@ internal class DiagonalTrackPieceBuilder(RCTTrackElementType pieceType) : CurveT
             TrackCenterlineGeometry.GetRollRadians(first.RollBegin, geometry.TrackBankAngleDegrees),
             TrackCenterlineGeometry.GetRollRadians(first.RollEnd, geometry.TrackBankAngleDegrees),
             startTangent: pitchedStartDirection, endTangent: pitchedEndDirection,
-            smoothRollTransition: smoothTransition);
+            smoothRollTransition: first.RollBegin != first.RollEnd);
     }
 }
 

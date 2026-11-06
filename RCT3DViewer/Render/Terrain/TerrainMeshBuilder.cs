@@ -127,11 +127,15 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
                 var materialId = GetSurfaceLayer(surface);
 
                 var sidingMaterialId = GetSidingLayer(surface);
+                var terrainFirstIndex = _indices.Count;
                 AddTerrainTile(x, y, width, height, surfaces, north, east, south, west, materialId);
+                if (tunnels is not null)
+                    ClipSurfaceOpenings(terrainFirstIndex, tunnels.GetSurfaceOpenings(x, y));
                 if (tunnels is not null) {
                     foreach (var span in tunnels.GetSpans(x, y))
                         AddTunnelSpan(span, tunnels, sidingMaterialId);
                     AddTunnelStepSkirts(x, y, tunnels, sidingMaterialId);
+                    AddSurfaceShaftWalls(x, y, north, east, south, west, tunnels, sidingMaterialId);
                 }
 
                 var eastEdgeNormal = Vector3.UnitX;
@@ -308,6 +312,70 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
             _indices.Add(subdividedFirstVertex + index);
     }
 
+    private void ClipSurfaceOpenings(int firstIndex, IEnumerable<TunnelSurfaceOpening> openings)
+    {
+        var holes = openings.ToArray();
+        if (holes.Length == 0) return;
+        var sourceIndices = _indices.GetRange(firstIndex, _indices.Count - firstIndex);
+        _indices.RemoveRange(firstIndex, _indices.Count - firstIndex);
+        for (var index = 0; index < sourceIndices.Count; index += 3) {
+            var polygons = new List<List<TerrainVertex>> { new() {
+                _vertices[(int)sourceIndices[index]], _vertices[(int)sourceIndices[index + 1]],
+                _vertices[(int)sourceIndices[index + 2]] } };
+            foreach (var hole in holes) {
+                var remaining = new List<List<TerrainVertex>>();
+                foreach (var polygon in polygons) {
+                    var inside = polygon;
+                    foreach (var (axisX, boundary, greater) in new[] {
+                        (true, hole.MinX, true), (true, hole.MaxX, false),
+                        (false, hole.MinZ, true), (false, hole.MaxZ, false) }) {
+                        var outside = ClipPolygon(inside, axisX, boundary, !greater);
+                        if (outside.Count >= 3) remaining.Add(outside);
+                        inside = ClipPolygon(inside, axisX, boundary, greater);
+                        if (inside.Count < 3) break;
+                    }
+                }
+                polygons = remaining;
+            }
+            foreach (var polygon in polygons) {
+                var first = checked((uint)_vertices.Count);
+                _vertices.AddRange(polygon);
+                for (var vertex = 1; vertex + 1 < polygon.Count; vertex++) {
+                    if (Vector3.Cross(polygon[vertex].Position - polygon[0].Position,
+                        polygon[vertex + 1].Position - polygon[0].Position).LengthSquared() < 0.00000001f)
+                        continue;
+                    _indices.Add(first);
+                    _indices.Add(first + (uint)vertex);
+                    _indices.Add(first + (uint)vertex + 1);
+                }
+            }
+        }
+    }
+
+    private static List<TerrainVertex> ClipPolygon(List<TerrainVertex> polygon, bool axisX, float boundary, bool greater)
+    {
+        var result = new List<TerrainVertex>();
+        if (polygon.Count == 0) return result;
+        var previous = polygon[^1];
+        var previousDistance = (axisX ? previous.Position.X : previous.Position.Z) - boundary;
+        foreach (var current in polygon) {
+            var distance = (axisX ? current.Position.X : current.Position.Z) - boundary;
+            var previousInside = greater ? previousDistance >= 0.0f : previousDistance <= 0.0f;
+            var currentInside = greater ? distance >= 0.0f : distance <= 0.0f;
+            if (previousInside != currentInside) {
+                var amount = previousDistance / (previousDistance - distance);
+                result.Add(new TerrainVertex(Vector3.Lerp(previous.Position, current.Position, amount),
+                    Vector3.Lerp(previous.Normal, current.Normal, amount),
+                    Vector2.Lerp(previous.TextureCoordinate, current.TextureCoordinate, amount),
+                    (uint)current.MaterialId));
+            }
+            if (currentInside) result.Add(current);
+            previous = current;
+            previousDistance = distance;
+        }
+        return result;
+    }
+
     private static TunnelOpening? GetOpening(
         TunnelLayout? tunnels, int tileX, int tileY, TerrainSide side,
         int neighborX = -1, int neighborY = -1, TerrainSide neighborSide = TerrainSide.West)
@@ -319,6 +387,64 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
 
         return neighborX >= 0 && tunnels.TryGetOpening(neighborX, neighborY, neighborSide, out opening)
             ? opening : null;
+    }
+
+    private void AddSurfaceShaftWalls(int tileX, int tileY, float north, float east, float south, float west,
+        TunnelLayout tunnels, uint materialId)
+    {
+        var tileX0 = tileX * WorldUnits.TileSize;
+        var tileZ0 = tileY * WorldUnits.TileSize;
+        var tileX1 = tileX0 + WorldUnits.TileSize;
+        var tileZ1 = tileZ0 + WorldUnits.TileSize;
+        var openings = tunnels.GetSurfaceOpenings(tileX, tileY).ToArray();
+        foreach (var opening in openings)
+        foreach (var side in Enum.GetValues<TerrainSide>()) {
+            var xAxis = side is TerrainSide.West or TerrainSide.East;
+            var fixedCoordinate = side switch {
+                TerrainSide.West => opening.MinX, TerrainSide.East => opening.MaxX,
+                TerrainSide.South => opening.MinZ, _ => opening.MaxZ,
+            };
+            var tileMin = xAxis ? tileX0 : tileZ0;
+            var tileMax = xAxis ? tileX1 : tileZ1;
+            if (fixedCoordinate < tileMin || fixedCoordinate >= tileMax) continue;
+            var begin = MathF.Max(xAxis ? opening.MinZ : opening.MinX, xAxis ? tileZ0 : tileX0);
+            var end = MathF.Min(xAxis ? opening.MaxZ : opening.MaxX, xAxis ? tileZ1 : tileX1);
+            if (end <= begin) continue;
+            var flip = TerrainSurfaceSampler.ShouldFlipDiagonal(north, east, south, west);
+            var fraction = (fixedCoordinate - tileMin) / WorldUnits.TileSize;
+            var diagonal = (xAxis ? tileZ0 : tileX0) + (flip ? fraction : 1.0f - fraction) * WorldUnits.TileSize;
+            var breaks = new List<float> { begin, end };
+            if (diagonal > begin && diagonal < end) breaks.Add(diagonal);
+            foreach (var other in openings) {
+                if (other == opening) continue;
+                foreach (var value in xAxis ? new[] { other.MinZ, other.MaxZ } : new[] { other.MinX, other.MaxX })
+                    if (value > begin && value < end) breaks.Add(value);
+            }
+            var sorted = breaks.Distinct().Order().ToArray();
+            for (var index = 1; index < sorted.Length; index++) {
+                var a = sorted[index - 1];
+                var b = sorted[index];
+                var middle = (a + b) * 0.5f;
+                var mx = xAxis ? fixedCoordinate : middle;
+                var mz = xAxis ? middle : fixedCoordinate;
+                if (openings.Any(other => other != opening && mx > other.MinX && mx < other.MaxX
+                    && mz > other.MinZ && mz < other.MaxZ)) continue;
+                var first = xAxis ? new Vector3(fixedCoordinate, 0.0f, a) : new Vector3(a, 0.0f, fixedCoordinate);
+                var second = xAxis ? new Vector3(fixedCoordinate, 0.0f, b) : new Vector3(b, 0.0f, fixedCoordinate);
+                first.Y = TerrainSurfaceSampler.GetHeight(north, east, south, west,
+                    (first.X - tileX0) / WorldUnits.TileSize, (first.Z - tileZ0) / WorldUnits.TileSize);
+                second.Y = TerrainSurfaceSampler.GetHeight(north, east, south, west,
+                    (second.X - tileX0) / WorldUnits.TileSize, (second.Z - tileZ0) / WorldUnits.TileSize);
+                if (first.Y <= opening.BottomHeight || second.Y <= opening.BottomHeight) continue;
+                if (side is TerrainSide.East or TerrainSide.South) (first, second) = (second, first);
+                var normal = side switch {
+                    TerrainSide.West => Vector3.UnitX, TerrainSide.East => -Vector3.UnitX,
+                    TerrainSide.North => -Vector3.UnitZ, _ => Vector3.UnitZ,
+                };
+                AddTunnelWallQuad(new Vector3(first.X, opening.BottomHeight, first.Z),
+                    new Vector3(second.X, opening.BottomHeight, second.Z), second, first, normal, materialId);
+            }
+        }
     }
 
     private void AddTunnelStepSkirts(int tileX, int tileY, TunnelLayout tunnels, uint materialId)
@@ -364,15 +490,21 @@ internal sealed class TerrainMeshBuilder(TerrainMaterialLibrary materials)
         if (roof <= floor)
             return;
 
+        var floorFirstIndex = _indices.Count;
         AddTunnelQuad(
             new Vector3(tileX0, floor, tileZ0), new Vector3(tileX1, floor, tileZ0),
             new Vector3(tileX1, floor, tileZ1), new Vector3(tileX0, floor, tileZ1),
             Vector3.UnitY, materialId);
+        ClipSurfaceOpenings(floorFirstIndex, tunnels.GetSurfaceOpenings(span.TileX, span.TileY)
+            .Where(opening => floor > opening.BottomHeight && floor < opening.SurfaceHeight));
 
+        var roofFirstIndex = _indices.Count;
         AddTunnelQuad(
             new Vector3(tileX0, roof, tileZ0), new Vector3(tileX0, roof, tileZ1),
             new Vector3(tileX1, roof, tileZ1), new Vector3(tileX1, roof, tileZ0),
             -Vector3.UnitY, materialId);
+        ClipSurfaceOpenings(roofFirstIndex, tunnels.GetSurfaceOpenings(span.TileX, span.TileY)
+            .Where(opening => roof >= opening.BottomHeight && roof < opening.SurfaceHeight));
 
         var connectsWest = tunnels.HasTunnelConnection(span.TileX, span.TileY, TerrainSide.West, floor, span.RoofHeight);
         var connectsNorth = tunnels.HasTunnelConnection(span.TileX, span.TileY, TerrainSide.North, floor, span.RoofHeight);

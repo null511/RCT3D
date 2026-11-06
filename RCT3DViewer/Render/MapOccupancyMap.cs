@@ -59,6 +59,79 @@ internal sealed class MapOccupancyMap
     public void AddTrackCenterlines(RCTTrackElementData track, Vector3[][] paths) =>
         trackCenterlines[track] = paths;
 
+    public IEnumerable<Vector3> GetTrackSurfaceCrossings(RouteTileOccupancy route)
+    {
+        if (route.TrackElement is not { } track || !trackCenterlines.TryGetValue(track, out var paths))
+            yield break;
+
+        var surface = terrainSurfaces[route.TileY * Width + route.TileX];
+        TerrainSurfaceSampler.GetCornerHeights(surface, out var north, out var east, out var south, out var west);
+        var flip = TerrainSurfaceSampler.ShouldFlipDiagonal(north, east, south, west);
+        foreach (var points in paths)
+        for (var index = 1; index < points.Length; index++) {
+            var first = points[index - 1];
+            var delta = points[index] - first;
+            var u = first.X / WorldUnits.TileSize - route.TileX;
+            var v = first.Z / WorldUnits.TileSize - route.TileY;
+            var du = delta.X / WorldUnits.TileSize;
+            var dv = delta.Z / WorldUnits.TileSize;
+            var begin = 0.0f;
+            var end = 1.0f;
+            if (!ClipInterval(u, du, ref begin, ref end) || !ClipInterval(v, dv, ref begin, ref end))
+                continue;
+
+            var diagonalStart = flip ? u - v : u + v - 1.0f;
+            var diagonalDelta = flip ? du - dv : du + dv;
+            var split = MathF.Abs(diagonalDelta) > 0.00001f ? -diagonalStart / diagonalDelta : begin;
+            var breaks = split > begin && split < end ? new[] { begin, split, end } : new[] { begin, end };
+            for (var part = 1; part < breaks.Length; part++) {
+                var a = breaks[part - 1];
+                var b = breaks[part];
+                var heightA = first.Y + delta.Y * a - TerrainSurfaceSampler.GetHeight(surface,
+                    Math.Clamp(u + du * a, 0.0f, 1.0f), Math.Clamp(v + dv * a, 0.0f, 1.0f));
+                var heightB = first.Y + delta.Y * b - TerrainSurfaceSampler.GetHeight(surface,
+                    Math.Clamp(u + du * b, 0.0f, 1.0f), Math.Clamp(v + dv * b, 0.0f, 1.0f));
+                if (MathF.Abs(heightA - heightB) < 0.00001f || heightA * heightB > 0.0f)
+                    continue;
+                var amount = a + (b - a) * heightA / (heightA - heightB);
+                var crossing = first + delta * amount;
+                if (crossing.Y < route.FloorHeight || crossing.Y > route.ClearanceHeight)
+                    continue;
+
+                // Confirm a crossing, not a tangent touch at a polyline vertex or terrain diagonal.
+                var before = amount > 0.00001f ? first + delta * MathF.Max(0.0f, amount - 0.001f)
+                    : index > 1 ? Vector3.Lerp(first, points[index - 2], 0.001f) : first;
+                var after = amount < 0.99999f ? first + delta * MathF.Min(1.0f, amount + 0.001f)
+                    : index + 1 < points.Length ? Vector3.Lerp(points[index], points[index + 1], 0.001f) : points[index];
+                if (TryGetSurfaceDistance(before, out var beforeDistance)
+                    && TryGetSurfaceDistance(after, out var afterDistance)
+                    && beforeDistance * afterDistance < 0.0f)
+                    yield return crossing;
+            }
+        }
+    }
+
+    private bool TryGetSurfaceDistance(Vector3 point, out float distance)
+    {
+        var x = (int)MathF.Floor(point.X / WorldUnits.TileSize);
+        var y = (int)MathF.Floor(point.Z / WorldUnits.TileSize);
+        distance = 0.0f;
+        if ((uint)x >= (uint)Width || (uint)y >= (uint)Height) return false;
+        distance = point.Y - GetTerrainHeight(x, y,
+            point.X / WorldUnits.TileSize - x, point.Z / WorldUnits.TileSize - y);
+        return true;
+    }
+
+    private static bool ClipInterval(float origin, float delta, ref float begin, ref float end)
+    {
+        if (MathF.Abs(delta) < 0.00001f) return origin >= 0.0f && origin <= 1.0f;
+        var first = -origin / delta;
+        var second = (1.0f - origin) / delta;
+        begin = MathF.Max(begin, MathF.Min(first, second));
+        end = MathF.Min(end, MathF.Max(first, second));
+        return begin < end;
+    }
+
     public IEnumerable<Vector3> GetTrackEdgeCrossings(RouteTileOccupancy route, TerrainSide side)
     {
         if (route.TrackElement is not { } track || !trackCenterlines.TryGetValue(track, out var paths))

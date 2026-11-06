@@ -201,6 +201,14 @@ internal static class TrackCenterlineGeometry
     }
 
     public static (float Start, float End)? GetDiagonalSlopeTransitionPitches(RCTTrackElementType pieceType) => pieceType switch {
+        RCTTrackElementType.DiagLeftBankToUp25 or RCTTrackElementType.DiagRightBankToUp25
+            => (Pitch.None, Pitch.Slope25),
+        RCTTrackElementType.DiagUp25ToLeftBank or RCTTrackElementType.DiagUp25ToRightBank
+            => (Pitch.Slope25, Pitch.None),
+        RCTTrackElementType.DiagLeftBankToDown25 or RCTTrackElementType.DiagRightBankToDown25
+            => (Pitch.None, -Pitch.Slope25),
+        RCTTrackElementType.DiagDown25ToLeftBank or RCTTrackElementType.DiagDown25ToRightBank
+            => (-Pitch.Slope25, Pitch.None),
         RCTTrackElementType.DiagFlatToUp25 => (Pitch.None, Pitch.Slope25),
         RCTTrackElementType.DiagUp25ToFlat => (Pitch.Slope25, Pitch.None),
         RCTTrackElementType.DiagFlatToDown25 => (Pitch.None, -Pitch.Slope25),

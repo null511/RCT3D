@@ -10,12 +10,15 @@ internal sealed class LogFlume : RideDefinition
 {
     private static readonly TrackRailSpecularData specular = new(220, 0);
 
+
     public LogFlume() : base(RCTRideType.LogFlume)
     {
+        SmoothMovement = true;
         CenterlineHeightOffset = 0.5f;
+        CarVerticalOffset = -0.25f;
 
         SupportStyle = RideSupportStyle.MetalBoxed;
-        SupportTrackOffset = -0.5f;
+        SupportTrackOffset = -0.21f;
 
         WaterPlanePolyline = [
             new Vector2(-1.0f, 0.1f),
