@@ -22,7 +22,8 @@ internal sealed unsafe class TerrainGraphicsResources(
     uint colorAttachmentCount = 1,
     bool useTrackVertexColor = false,
     DescriptorSetLayout sharedModelMaterialDescriptorSetLayout = default,
-    DescriptorSetLayout sharedModelSamplerDescriptorSetLayout = default) : IDisposable
+    DescriptorSetLayout sharedModelSamplerDescriptorSetLayout = default,
+    PrimitiveTopology topology = PrimitiveTopology.TriangleList) : IDisposable
 {
     private CommandPool _commandPool;
     private DescriptorSetLayout _descriptorSetLayout;
@@ -167,7 +168,7 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var inputAssembly = new PipelineInputAssemblyStateCreateInfo {
             SType = StructureType.PipelineInputAssemblyStateCreateInfo,
-            Topology = PrimitiveTopology.TriangleList,
+            Topology = topology,
         };
         
         var viewportState = new PipelineViewportStateCreateInfo {
@@ -189,7 +190,7 @@ internal sealed unsafe class TerrainGraphicsResources(
         var rasterizer = new PipelineRasterizationStateCreateInfo {
             SType = StructureType.PipelineRasterizationStateCreateInfo,
             PolygonMode = PolygonMode.Fill,
-            CullMode = CullModeFlags.BackBit,
+            CullMode = topology == PrimitiveTopology.LineList ? CullModeFlags.None : CullModeFlags.BackBit,
             FrontFace = FrontFace.CounterClockwise,
             LineWidth = 1.0f,
         };

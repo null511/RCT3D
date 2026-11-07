@@ -334,6 +334,19 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
                 batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch, ui.WireframeEnabled);
         }
 
+        if (ui.DebugTrackPaths && resources.VehiclePathGraphicsResources is { IndexCount: > 0 } lineResources) {
+            Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, lineResources.Pipeline);
+            Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, lineResources.PipelineLayout,
+                0, 1, in uniformDescriptorSet, 0, null);
+            var lineVertexBuffer = lineResources.VertexBuffer;
+            Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in lineVertexBuffer, in offset);
+            Vk.CmdBindIndexBuffer(commandBuffer, lineResources.IndexBuffer, 0, IndexType.Uint32);
+            foreach (var region in parkRegions) {
+                if (region.VehiclePaths is { } range && region.CameraVisible && region.RidesInRange)
+                    Vk.CmdDrawIndexed(commandBuffer, range.IndexCount, 1, range.FirstIndex, 0, 0);
+            }
+        }
+
         Vk.CmdEndRenderPass(commandBuffer);
 
         if (ui.ShadowMappingEnabled || !shadowMapInitialized)

@@ -73,6 +73,7 @@ internal sealed class ParkRenderRegion(RenderRegionCoordinate coordinate)
     public RenderRegionIndexRange? Paths { get; set; }
     public RenderRegionIndexRange? PathSupports { get; set; }
     public RenderRegionIndexRange? Tracks { get; set; }
+    public RenderRegionIndexRange? VehiclePaths { get; set; }
     public RenderRegionIndexRange? RideSupports { get; set; }
     public RenderRegionIndexRange? RideEntrances { get; set; }
     public List<RenderRegionModelBatch> PathAccessories { get; } = new();

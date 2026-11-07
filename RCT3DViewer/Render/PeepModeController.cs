@@ -1,6 +1,5 @@
 using RCT3D.Simulation;
 using Silk.NET.Input;
-using System.Diagnostics;
 using System.Numerics;
 using RCT3D.Interop.Models;
 
@@ -36,6 +35,25 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
     public bool IsEnabled => peepEntityId.HasValue;
     public bool IsEntering => createPeepTask is not null;
     public string? StatusMessage => statusMessage;
+
+    public void UpdateRideCamera()
+    {
+        var peep = scene.Simulation.Peep;
+        if (!rideInteractionActive || peepEntityId != peep?.EntityId
+            || peep is null || (NativePeepState)peep.State != NativePeepState.OnRide) {
+            ClearRideCameraRotation();
+            return;
+        }
+
+        if (!scene.TryGetVehiclePose(peep.VehicleEntityId, peep.RideId, out var pose)) {
+            ClearRideCameraRotation();
+            return;
+        }
+
+        camera.SetBaseRotation(pose.Rotation);
+        rideCameraAttached = true;
+        camera.Position = pose.Position;
+    }
 
 
     public void Toggle()
@@ -224,11 +242,6 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
             case NativePeepState.OnRide:
                 hasRidden = true;
                 statusMessage = "Riding...";
-                if (TryGetVehicleCenter(peep, out var vehiclePosition, out var vehicleRotation)) {
-                    camera.SetBaseRotation(vehicleRotation);
-                    rideCameraAttached = true;
-                    camera.Position = vehiclePosition;
-                }
                 return true;
             case NativePeepState.LeavingRide:
                 ClearRideCameraRotation();
@@ -283,91 +296,12 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
         return true;
     }
 
-    private bool TryGetVehicleCenter(PeepSnapshot peep, out Vector3 position, out Matrix4x4 rotation)
-    {
-        position = default;
-        rotation = Matrix4x4.Identity;
-        var snapshots = scene.Simulation.VehicleSnapshots;
-        if (snapshots is null || peep.TrainHeadEntityId == ushort.MaxValue) return false;
-
-        RCTVehicleData? current = null;
-        foreach (var vehicle in snapshots.Current.Vehicles.Span) {
-            if (vehicle.EntityId == peep.TrainHeadEntityId && vehicle.RideId == peep.RideId) {
-                current = vehicle;
-                break;
-            }
-        }
-        if (current is not RCTVehicleData currentVehicle) return false;
-
-        var nativeX = (float)currentVehicle.X;
-        var nativeY = (float)currentVehicle.Y;
-        var nativeZ = (float)currentVehicle.Z;
-        var yaw = GetVehicleYaw(currentVehicle.Orientation);
-        var pitch = currentVehicle.PitchRadians;
-        var roll = currentVehicle.RollRadians;
-        var centerlineResolved = false;
-        var snapshotAlpha = 1.0f;
-        var previousVehicleForCenterline = currentVehicle;
-        var hasPreviousVehicle = false;
-        if (snapshots.Previous is { } previousSnapshot) {
-            foreach (var previousVehicle in previousSnapshot.Vehicles.Span) {
-                if (previousVehicle.EntityId != currentVehicle.EntityId) continue;
-                previousVehicleForCenterline = previousVehicle;
-                hasPreviousVehicle = true;
-
-                var previousTimestamp = previousSnapshot.Timestamp;
-                var interval = snapshots.Current.Timestamp - previousTimestamp;
-                var targetTimestamp = Stopwatch.GetTimestamp() - Stopwatch.Frequency / 40;
-                var alpha = interval <= 0 ? 1.0f : Math.Clamp((float)(targetTimestamp - previousTimestamp) / interval, 0.0f, 1.0f);
-                snapshotAlpha = alpha;
-                nativeX = previousVehicle.X + (currentVehicle.X - previousVehicle.X) * alpha;
-                nativeY = previousVehicle.Y + (currentVehicle.Y - previousVehicle.Y) * alpha;
-                nativeZ = previousVehicle.Z + (currentVehicle.Z - previousVehicle.Z) * alpha;
-                yaw = LerpAngle(GetVehicleYaw(previousVehicle.Orientation), yaw, alpha);
-                pitch = LerpAngle(previousVehicle.PitchRadians, pitch, alpha);
-                roll = LerpAngle(previousVehicle.RollRadians, roll, alpha);
-                break;
-            }
-        }
-
-        if (scene.UsesSmoothMovement(currentVehicle.RideId)
-            && hasPreviousVehicle
-            && scene.TryGetCenterlinePose(previousVehicleForCenterline, currentVehicle, snapshotAlpha, out var centerlinePosition, out var centerlineFrame)) {
-            nativeX = centerlinePosition.X * NativeUnitsPerWorldUnit;
-            nativeY = centerlinePosition.Z * NativeUnitsPerWorldUnit;
-            nativeZ = centerlinePosition.Y / WorldUnitsPerNativeHeightUnit;
-            rotation = centerlineFrame.ToRotation();
-            centerlineResolved = true;
-        }
-        if (!centerlineResolved) {
-            rotation = Matrix4x4.CreateRotationZ(roll)
-                * Matrix4x4.CreateRotationX(-pitch)
-                * Matrix4x4.CreateRotationY(yaw);
-        }
-
-        position = new Vector3(
-            nativeX * WorldUnits.TileSize / 32.0f,
-            nativeZ * WorldUnits.HeightPerBaseUnit / 8.0f,
-            nativeY * WorldUnits.TileSize / 32.0f);
-        position += Vector3.TransformNormal(
-            new Vector3(0.0f, scene.GetCarVerticalOffset(currentVehicle.RideId), 0.0f), rotation);
-        return true;
-    }
-
     private void ClearRideCameraRotation()
     {
         if (!rideCameraAttached) return;
 
         camera.ClearBaseRotationPreservingOrientation();
         rideCameraAttached = false;
-    }
-
-    private static float GetVehicleYaw(byte orientation) => orientation * (MathF.Tau / 32.0f) - (MathF.PI / 2.0f);
-
-    private static float LerpAngle(float start, float end, float amount)
-    {
-        var delta = MathF.IEEERemainder(end - start, MathF.Tau);
-        return start + delta * amount;
     }
 
     private static Vector3 ToWorldCameraPosition(PeepSnapshot peep) => new(

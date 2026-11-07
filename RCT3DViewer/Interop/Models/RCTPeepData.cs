@@ -16,5 +16,6 @@ public struct RCTPeepData
     public byte CarIndex;
     public byte SeatIndex;
     public ushort TrainHeadEntityId;
+    public ushort VehicleEntityId;
     public byte Reserved;
 }

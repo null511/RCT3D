@@ -29,6 +29,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
     public TerrainGraphicsResources? TerrainGraphicsResources { get; private set; }
     public TerrainGraphicsResources? PathGraphicsResources { get; private set; }
     public TerrainGraphicsResources? TrackGraphicsResources { get; private set; }
+    public TerrainGraphicsResources? VehiclePathGraphicsResources { get; private set; }
     public TerrainGraphicsResources? RideSupportGraphicsResources { get; private set; }
     public TerrainGraphicsResources? RideEntranceGraphicsResources { get; private set; }
     public WaterGraphicsResources? WaterGraphicsResources { get; private set; }
@@ -227,6 +228,25 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         }
         catch {
             trackResources.Dispose();
+            throw;
+        }
+    }
+
+    public void CreateVehiclePathGraphicsResources()
+    {
+        VehiclePathGraphicsResources?.Dispose();
+        VehiclePathGraphicsResources = null;
+        var lineResources = new TerrainGraphicsResources(
+            DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout,
+            MaterialTextureArrayData.From(TerrainMaterials!),
+            shaderNameOverride: Path.Combine("object", "vehiclePathDebug"), colorAttachmentCount: 3,
+            useTrackVertexColor: true, topology: PrimitiveTopology.LineList);
+        try {
+            lineResources.CreatePipeline();
+            VehiclePathGraphicsResources = lineResources;
+        }
+        catch {
+            lineResources.Dispose();
             throw;
         }
     }
@@ -493,6 +513,10 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         var trackResources = TrackGraphicsResources;
         TrackGraphicsResources = null;
         trackResources?.Dispose();
+
+        var vehiclePathResources = VehiclePathGraphicsResources;
+        VehiclePathGraphicsResources = null;
+        vehiclePathResources?.Dispose();
 
         var rideSupportResources = RideSupportGraphicsResources;
         RideSupportGraphicsResources = null;

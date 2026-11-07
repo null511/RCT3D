@@ -126,6 +126,9 @@ void main(uint2 globalPos: SV_DispatchThreadID) {
 
         color += specular;
 
+        if (normalsMap.x < 0.0)
+            color = albedo;
+
 
 
         //float3 directLighting = (diffuseWeight * albedo * (diffuseNdotL / PI) + specular * nDotL) * sunLight;

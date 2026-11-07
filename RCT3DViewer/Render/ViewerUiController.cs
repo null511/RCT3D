@@ -16,6 +16,7 @@ internal sealed class ViewerUiController
     private bool _showSkyModal;
     private bool _showGraphicsOptions;
     private bool _showDebug;
+    private bool _debugTrackPaths;
     private bool _showParkLoadError;
     private bool _useGameTime = false;
     private float _timeOfDayHours = 9.0f;
@@ -75,6 +76,7 @@ internal sealed class ViewerUiController
     public bool WireframeEnabled => _wireframeEnabled;
     public bool TaaEnabled => _taaEnabled;
     public uint DebugView => (uint)_debugView;
+    public bool DebugTrackPaths => _debugTrackPaths;
     public float Sharpening => _sharpening;
     public float MipBias => _mipBias;
     public float RidesRenderDistance => _ridesRenderDistance;
@@ -233,6 +235,7 @@ internal sealed class ViewerUiController
                 else if (graphicsOptionsWereOpen && !_showGraphicsOptions)
                     CancelGraphicsOptionsEdit(applyFieldOfView);
                 ImGui.MenuItem("Debug", string.Empty, ref _showDebug);
+                ImGui.MenuItem("Debug track paths", string.Empty, ref _debugTrackPaths);
                 ImGui.EndMenu();
             }
 

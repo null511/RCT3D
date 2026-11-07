@@ -19,10 +19,12 @@ public sealed class SimulationBridge : IDisposable
     private bool isPaused;
     private float gameTimeOfDayHours;
     private VehicleSnapshotPair? vehicleSnapshots;
+    private RCTVehiclePathSample[] vehiclePathSamples = [];
     private PeepSnapshot? peepSnapshot;
     private int activePeepEntityId = -1;
 
     public VehicleSnapshotPair? VehicleSnapshots => Volatile.Read(ref vehicleSnapshots);
+    public ReadOnlyMemory<RCTVehiclePathSample> VehiclePathSamples => Volatile.Read(ref vehiclePathSamples);
     public PeepSnapshot? Peep => Volatile.Read(ref peepSnapshot);
     public float? GameTimeOfDayHours => Volatile.Read(ref parkLoaded) ? Volatile.Read(ref gameTimeOfDayHours) : null;
     public bool? IsPaused => Volatile.Read(ref parkLoaded) ? Volatile.Read(ref isPaused) : null;
@@ -59,6 +61,7 @@ public sealed class SimulationBridge : IDisposable
                     reportProgress("Loading park file...");
                     Volatile.Write(ref parkLoaded, false);
                     Volatile.Write(ref vehicleSnapshots, null);
+                    Volatile.Write(ref vehiclePathSamples, []);
                     Volatile.Write(ref peepSnapshot, null);
                     Volatile.Write(ref activePeepEntityId, -1);
                     Volatile.Write(ref simulationFailure, null);
@@ -118,6 +121,8 @@ public sealed class SimulationBridge : IDisposable
                     Volatile.Write(ref isPaused, openRCT2.GetPauseState());
                     Volatile.Write(ref gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                     Volatile.Write(ref vehicleSnapshots, new VehicleSnapshotPair(null, ReadVehicleSnapshot(openRCT2)));
+                    reportProgress("Reading native vehicle paths...");
+                    Volatile.Write(ref vehiclePathSamples, openRCT2.ReadVehiclePathSamples());
                     Volatile.Write(ref parkLoaded, true);
                     completion.TrySetResult(new ParkSnapshot(width, height, surfaceData, pathData, treeData, trackData, rideEntranceData, paletteData, obstacleData));
                 }
@@ -371,7 +376,7 @@ public sealed class SimulationBridge : IDisposable
 
     private static PeepSnapshot ToPeepSnapshot(RCTPeepData data) => new(
         data.EntityId, data.X, data.Y, data.Z, data.State, data.RideId,
-        data.StationIndex, data.TrainIndex, data.CarIndex, data.SeatIndex, data.TrainHeadEntityId);
+        data.StationIndex, data.TrainIndex, data.CarIndex, data.SeatIndex, data.TrainHeadEntityId, data.VehicleEntityId);
 
     private static VehicleSnapshot ReadVehicleSnapshot(LibOpenRCT2 openRCT2)
     {
@@ -426,4 +431,5 @@ public sealed record PeepSnapshot(
     byte TrainIndex,
     byte CarIndex,
     byte SeatIndex,
-    ushort TrainHeadEntityId);
+    ushort TrainHeadEntityId,
+    ushort VehicleEntityId);

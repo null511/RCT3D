@@ -11,6 +11,7 @@ internal sealed class SingleRailRollerCoaster : RideDefinition
     {
         //SmoothMovement = true;
         CenterlineHeightOffset = 0.3f;
+        //CarVerticalOffset = 1.4f;
 
         SupportStyle = RideSupportStyle.MetalTubes;
 
@@ -19,7 +20,7 @@ internal sealed class SingleRailRollerCoaster : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        const float RailCenterY = 0.0f;
+        const float RailCenterY = 0f;
         const float RailHalfWidth = 0.08f;
         const float RailHalfHeight = 0.08f;
 

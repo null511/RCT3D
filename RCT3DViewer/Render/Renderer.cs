@@ -197,6 +197,7 @@ public sealed class Renderer : IDisposable
     private void PrepareFrame(double activeFrameTimeMilliseconds)
     {
         parkScene!.Update(frameCoordinator!.CurrentFrame);
+        peepMode!.UpdateRideCamera();
         var cameraTileX = (int)MathF.Floor(camera.Position.X / WorldUnits.TileSize);
         var cameraTileY = (int)MathF.Floor(camera.Position.Z / WorldUnits.TileSize);
         var sectionMetrics = frameRenderer!.SectionMetrics;

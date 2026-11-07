@@ -7,8 +7,9 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 36;
+    private const uint ExpectedAbiVersion = 38;
     private const int ExpectedTrackElementDataSize = 36;
+    private const int ExpectedPeepDataSize = 26;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersionDelegate();
@@ -74,6 +75,9 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private delegate int CopyVehicleDataDelegate(IntPtr context, RCTVehicleData* output, ulong capacity);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int CopyVehiclePathSamplesDelegate(IntPtr context, RCTVehiclePathSample* output, ulong capacity);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int CreatePeepDelegate(IntPtr context, int x, int y, int z, out ushort entityId);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -121,6 +125,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private readonly GetTimeOfDayHoursDelegate _getTimeOfDayHours;
     private readonly GetVehicleCountDelegate _getVehicleCount;
     private readonly CopyVehicleDataDelegate _copyVehicleData;
+    private readonly GetVehicleCountDelegate _getVehiclePathSampleCount;
+    private readonly CopyVehiclePathSamplesDelegate _copyVehiclePathSamples;
     private readonly CreatePeepDelegate _createPeep;
     private readonly MovePeepDelegate _movePeep;
     private readonly TakeControlPeepDelegate _takeControlPeep;
@@ -143,6 +149,10 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
         var trackElementDataSize = Marshal.SizeOf<RCTTrackElementData>();
         if (trackElementDataSize != ExpectedTrackElementDataSize)
             throw new InvalidOperationException($"Managed track element data has size {trackElementDataSize}; expected {ExpectedTrackElementDataSize} bytes for adapter ABI {ExpectedAbiVersion}.");
+
+        var peepDataSize = Marshal.SizeOf<RCTPeepData>();
+        if (peepDataSize != ExpectedPeepDataSize)
+            throw new InvalidOperationException($"Managed peep data has size {peepDataSize}; expected {ExpectedPeepDataSize} bytes for adapter ABI {ExpectedAbiVersion}.");
 
         _libraryPath = Path.GetFullPath(libraryPath);
         if (!NativeLoader.TryLoadNativeLibrary(_libraryPath, out _nativeHandle, out var error))
@@ -170,9 +180,6 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             if (Marshal.SizeOf<RCTVehicleData>() != 56)
                 throw new InvalidOperationException("RCTVehicleData must be 56 bytes to match the OpenRCT2 adapter ABI.");
 
-            if (Marshal.SizeOf<RCTPeepData>() != 24)
-                throw new InvalidOperationException("RCTPeepData must be 24 bytes to match the OpenRCT2 adapter ABI.");
-
             if (Marshal.SizeOf<RCTRideEntranceData>() != 15)
                 throw new InvalidOperationException("RCTRideEntranceData must be 15 bytes to match the OpenRCT2 adapter ABI.");
 
@@ -180,6 +187,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
                 throw new InvalidOperationException("RCTPaletteEntry must be 4 bytes to match the OpenRCT2 adapter ABI.");
 
             var initialize = Bind<InitializeDelegate>("rct3d_openrct2_initialize");
+            if (Marshal.SizeOf<RCTVehiclePathSample>() != 28)
+                throw new InvalidOperationException("RCTVehiclePathSample must be 28 bytes to match the OpenRCT2 adapter ABI.");
             _loadPark = Bind<LoadParkDelegate>("rct3d_openrct2_load_park");
             _getMapDimensions = Bind<GetMapDimensionsDelegate>("rct3d_openrct2_get_map_dimensions");
             _copySurfaceData = Bind<CopySurfaceDataDelegate>("rct3d_openrct2_copy_surface_data");
@@ -200,6 +209,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             _getTimeOfDayHours = Bind<GetTimeOfDayHoursDelegate>("rct3d_openrct2_get_time_of_day_hours");
             _getVehicleCount = Bind<GetVehicleCountDelegate>("rct3d_openrct2_get_vehicle_count");
             _copyVehicleData = Bind<CopyVehicleDataDelegate>("rct3d_openrct2_copy_vehicle_data");
+            _getVehiclePathSampleCount = Bind<GetVehicleCountDelegate>("rct3d_openrct2_get_vehicle_path_sample_count");
+            _copyVehiclePathSamples = Bind<CopyVehiclePathSamplesDelegate>("rct3d_openrct2_copy_vehicle_path_samples");
             _createPeep = Bind<CreatePeepDelegate>("rct3d_openrct2_create_peep");
             _movePeep = Bind<MovePeepDelegate>("rct3d_openrct2_move_peep");
             _takeControlPeep = Bind<TakeControlPeepDelegate>("rct3d_openrct2_take_control_peep");
@@ -317,6 +328,17 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     }
 
     public void AdvanceSimulation() => ThrowIfFailed(_advanceSimulation(_context));
+
+    public RCTVehiclePathSample[] ReadVehiclePathSamples()
+    {
+        ThrowIfFailed(_getVehiclePathSampleCount(_context, out var count));
+        if (count > int.MaxValue)
+            throw new InvalidOperationException($"OpenRCT2 returned too many vehicle path samples: {count}.");
+        var samples = new RCTVehiclePathSample[(int)count];
+        fixed (RCTVehiclePathSample* pointer = samples)
+            ThrowIfFailed(_copyVehiclePathSamples(_context, pointer, count));
+        return samples;
+    }
 
     public bool GetPauseState()
     {
