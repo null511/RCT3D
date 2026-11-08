@@ -30,13 +30,7 @@ internal sealed class TwistTrackPieceBuilder(RCTTrackElementType pieceType) : Tr
         start.Y = startHeight + first.SplineZBegin * WorldUnits.HeightPerBaseUnit;
         end.Y = endHeight + last.SplineZEnd * WorldUnits.HeightPerBaseUnit;
 
-        var centerline = TrackCenterlineGeometry.CreateCubicCurvePoints(
-            start,
-            end,
-            startDirection,
-            endDirection,
-            Vector3.Distance(start, end) / 3.0f,
-            tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
+        var controlLength = Vector3.Distance(start, end) / 3.0f;
         var (startRoll, endRoll) = PieceType switch {
             RCTTrackElementType.LeftTwistDownToUp
                 or RCTTrackElementType.LeftFlyerTwistUp
@@ -48,6 +42,17 @@ internal sealed class TwistTrackPieceBuilder(RCTTrackElementType pieceType) : Tr
             RCTTrackElementType.RightTwistUpToDown => (HalfTwist, 0.0f),
             _ => throw new InvalidOperationException($"Unsupported twist track piece: {PieceType}."),
         };
+        if (MathF.Abs(startRoll) > MathF.PI / 2.0f)
+            start.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
+        if (MathF.Abs(endRoll) > MathF.PI / 2.0f)
+            end.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
+        var centerline = TrackCenterlineGeometry.CreateCubicCurvePoints(
+            start,
+            end,
+            startDirection,
+            endDirection,
+            controlLength,
+            tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
 
         TrackCenterlineGeometry.AddParts(
             first,

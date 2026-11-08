@@ -44,6 +44,10 @@ internal sealed class LargeHalfLoopTrackPieceBuilder(RCTTrackElementType pieceTy
             preferredSide = -preferredSide;
 
         var controlLength = Vector3.Distance(start, end) * 0.4f;
+        if (isUp)
+            end.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
+        else
+            start.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
         var points = TrackCenterlineGeometry.CreateCubicCurvePoints(
             start, end, startTangent, endTangent, controlLength,
             tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);

@@ -38,10 +38,15 @@ internal sealed class VerticalTrackPieceBuilder(RCTTrackElementType pieceType) :
         var slopeDirection = Vector3.Normalize(direction + verticalDirection * Pitch.Slope60);
         var startTangent = startVertical ? verticalDirection : slopeDirection;
         var endTangent = endVertical ? verticalDirection : slopeDirection;
+        var controlLength = Vector3.Distance(start, end) * 0.4f;
+        if (startVertical)
+            start.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
+        if (endVertical)
+            end.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
         var points = startVertical && endVertical
             ? new[] { start, end }
             : TrackCenterlineGeometry.CreateCubicCurvePoints(
-                start, end, startTangent, endTangent, Vector3.Distance(start, end) * 0.4f,
+                start, end, startTangent, endTangent, controlLength,
                 TrackCenterlineGeometry.CurveSubdivisionsPerTile);
 
         TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, palette,

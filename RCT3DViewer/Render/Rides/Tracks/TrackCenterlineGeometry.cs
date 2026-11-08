@@ -6,6 +6,7 @@ namespace RCT3D.Render.Rides.Tracks;
 internal static class TrackCenterlineGeometry
 {
     public const int CurveSubdivisionsPerTile = 8;
+    public const float VerticalInvertedAnchorOffset = -1.5f;
 
 
     public static Vector3 GetDirection(byte direction) => direction switch {

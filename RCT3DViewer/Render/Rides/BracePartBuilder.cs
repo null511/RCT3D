@@ -5,41 +5,40 @@ namespace RCT3D.Render.Rides;
 
 internal class BracePartBuilder(List<TrackBracePart> braces)
 {
-    public TrackBracePart Box(Vector3 center, Vector3 halfSize, Action<TrackBracePart>? partAction = null)
+    public TrackBracePart Box(Vector3[] points, Action<TrackBracePart>? partAction = null)
     {
-        var minX = center.X - halfSize.X;
-        var maxX = center.X + halfSize.X;
-        var minY = center.Y - halfSize.Y;
-        var maxY = center.Y + halfSize.Y;
-        var minZ = center.Z - halfSize.Z;
-        var maxZ = center.Z + halfSize.Z;
+        ArgumentNullException.ThrowIfNull(points);
 
-        var a = new Vector3(minX, minY, maxZ);
-        var b = new Vector3(minX, minY, minZ);
-        var c = new Vector3(maxX, minY, minZ);
-        var d = new Vector3(maxX, minY, maxZ);
-        var e = new Vector3(minX, maxY, maxZ);
-        var f = new Vector3(minX, maxY, minZ);
-        var g = new Vector3(maxX, maxY, minZ);
-        var h = new Vector3(maxX, maxY, maxZ);
+        if (points.Length != 8)
+            throw new ArgumentException("A box requires exactly eight points.", nameof(points));
+
+        var a = points[0];
+        var b = points[1];
+        var c = points[2];
+        var d = points[3];
+        var e = points[4];
+        var f = points[5];
+        var g = points[6];
+        var h = points[7];
 
         var vertices = new TrackBraceVertex[24];
         var indices = new uint[36];
         var nextVertex = 0;
 
-        AddFace(a, b, c, d, -Vector3.UnitY);
-        AddFace(e, h, g, f, Vector3.UnitY);
-        AddFace(a, e, f, b, -Vector3.UnitX);
-        AddFace(d, c, g, h, Vector3.UnitX);
-        AddFace(a, d, h, e, Vector3.UnitZ);
-        AddFace(b, f, g, c, -Vector3.UnitZ);
+        AddFace(a, b, c, d);
+        AddFace(e, h, g, f);
+        AddFace(a, e, f, b);
+        AddFace(d, c, g, h);
+        AddFace(a, d, h, e);
+        AddFace(b, f, g, c);
 
         var part = new TrackBracePart(vertices, indices);
         partAction?.Invoke(part);
         braces.Add(part);
         return part;
 
-        void AddFace(Vector3 first, Vector3 second, Vector3 third, Vector3 fourth, Vector3 normal) {
+        void AddFace(Vector3 first, Vector3 second, Vector3 third, Vector3 fourth) {
+            var normal = Vector3.Normalize(Vector3.Cross(second - first, third - first));
             var vertexOffset = nextVertex;
             var indexOffset = vertexOffset / 4 * 6;
 
@@ -57,6 +56,27 @@ internal class BracePartBuilder(List<TrackBracePart> braces)
 
             nextVertex += 4;
         }
+    }
+
+    public TrackBracePart Box(Vector3 center, Vector3 halfSize, Action<TrackBracePart>? partAction = null)
+    {
+        var minX = center.X - halfSize.X;
+        var maxX = center.X + halfSize.X;
+        var minY = center.Y - halfSize.Y;
+        var maxY = center.Y + halfSize.Y;
+        var minZ = center.Z - halfSize.Z;
+        var maxZ = center.Z + halfSize.Z;
+
+        return Box([
+            new Vector3(minX, minY, maxZ),
+            new Vector3(minX, minY, minZ),
+            new Vector3(maxX, minY, minZ),
+            new Vector3(maxX, minY, maxZ),
+            new Vector3(minX, maxY, maxZ),
+            new Vector3(minX, maxY, minZ),
+            new Vector3(maxX, maxY, minZ),
+            new Vector3(maxX, maxY, maxZ),
+        ], partAction);
     }
 
     public TrackBracePart Cylinder(Vector3 start, Vector3 end, float radius, int segmentCount, Action<TrackBracePart>? partAction = null)

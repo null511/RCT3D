@@ -8,13 +8,20 @@ namespace RCT3D.Render.Rides.Definitions;
 
 internal class ClassicMiniRollerCoaster : RideDefinition
 {
+    private const float RailHalfSeparation = 0.42f;
+    private const float RailRadius = 0.075f;
+    private const float RailCenterY = 0.0f;
+
+    private const float BraceRadius = 0.055f;
+
     private static readonly TrackRailSpecularData railSpecular = new(80, 80);
 
 
     public ClassicMiniRollerCoaster() : base(RCTRideType.ClassicMiniRollerCoaster)
     {
         SmoothMovement = true;
-        CarVerticalOffset = 0.85f;
+        CenterlineHeightOffset = 0.5f;
+        CarVerticalOffset = 0.25f;
 
         SupportTrackOffset = 0.25f;
         SupportStyle = RideSupportStyle.MetalFork;
@@ -27,11 +34,11 @@ internal class ClassicMiniRollerCoaster : RideDefinition
         var shape = new TrackPart {
             BraceInterval = 0.8f,
             RailProfiles = [
-                new TrackRailProfileShape(CreateCircle(-0.42f, 0.28f, 0.075f, 5), true) {
+                new TrackRailProfileShape(CreateCircle(-RailHalfSeparation, RailCenterY, RailRadius, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
                     Specular = railSpecular,
                 },
-                new TrackRailProfileShape(CreateCircle( 0.42f, 0.28f, 0.075f, 5), true) {
+                new TrackRailProfileShape(CreateCircle( RailHalfSeparation, RailCenterY, RailRadius, 5), true) {
                     Swatch = TrackRailSwatch.Alternate,
                     Specular = railSpecular,
                 },
@@ -39,44 +46,13 @@ internal class ClassicMiniRollerCoaster : RideDefinition
         };
 
         var brace = shape.AppendBracePart.Cylinder(
-            new Vector3(-0.42f, 0.28f, 0f),
-            new Vector3( 0.42f, 0.28f, 0f),
-            0.055f, 5);
+            new Vector3(-RailHalfSeparation, RailCenterY, 0f),
+            new Vector3( RailHalfSeparation, RailCenterY, 0f),
+            BraceRadius, 5);
 
         brace.Swatch = TrackRailSwatch.Main;
         brace.Specular = railSpecular;
 
         return shape;
     }
-
-    //private (TrackBraceVertex[] vertices, uint[] indices) BuildCylinder(float radius, int segmentCount)
-    //{
-    //    const float halfRailSpacing = 0.42f;
-    //    const float railHeight = 0.28f;
-
-    //    var vertices = new TrackBraceVertex[segmentCount * 2];
-    //    var indices = new uint[segmentCount * 6];
-
-    //    for (var segment = 0; segment < segmentCount; segment++) {
-    //        var angle = 2.0f * MathF.PI * segment / segmentCount;
-    //        var normal = new Vector3(0.0f, MathF.Cos(angle), MathF.Sin(angle));
-    //        var y = railHeight + radius * normal.Y;
-    //        var z = radius * normal.Z;
-
-    //        vertices[segment] = new TrackBraceVertex(new Vector3(-halfRailSpacing, y, z), normal);
-    //        vertices[segment + segmentCount] = new TrackBraceVertex(new Vector3(halfRailSpacing, y, z), normal);
-
-    //        var next = (segment + 1) % segmentCount;
-    //        var index = segment * 6;
-
-    //        indices[index] = (uint)segment;
-    //        indices[index + 1] = (uint)(segment + segmentCount);
-    //        indices[index + 2] = (uint)(next + segmentCount);
-    //        indices[index + 3] = (uint)segment;
-    //        indices[index + 4] = (uint)(next + segmentCount);
-    //        indices[index + 5] = (uint)next;
-    //    }
-
-    //    return (vertices, indices);
-    //}
 }

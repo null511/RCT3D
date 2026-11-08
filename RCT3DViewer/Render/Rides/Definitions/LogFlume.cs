@@ -20,17 +20,17 @@ internal sealed class LogFlume : RideDefinition
         SupportStyle = RideSupportStyle.MetalBoxed;
         SupportTrackOffset = -0.21f;
 
-        WaterPlanePolyline = [
-            new Vector2(-1.0f, 0.1f),
-            new Vector2( 1.0f, 0.1f),
-        ];
-
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackPart();
+        var shape = new TrackPart {
+            WaterPlane = [
+                new Vector2(-1.0f, 0.1f),
+                new Vector2( 1.0f, 0.1f),
+            ],
+        };
 
         // top
         shape.RailProfiles.Add(new TrackRailProfileShape([

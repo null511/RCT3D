@@ -42,11 +42,18 @@ internal class CurveTrackPieceBuilder(RCTTrackElementType pieceType) : TrackPiec
         var endPitch = TrackCenterlineGeometry.GetPitchSlope(PieceType, atStart: false);
         var pitchedStartDirection = Vector3.Normalize(startDirection + Vector3.UnitY * startPitch);
         var pitchedEndDirection = Vector3.Normalize(endDirection + Vector3.UnitY * endPitch);
+        var controlLength = GetControlLength(start, end);
+        var rollBegin = GetRollBegin(first, geometry.TrackBankAngleDegrees);
+        var rollEnd = GetRollEnd(first, geometry.TrackBankAngleDegrees);
+        if (MathF.Abs(rollBegin) > MathF.PI / 2.0f)
+            start.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
+        if (MathF.Abs(rollEnd) > MathF.PI / 2.0f)
+            end.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
         var points = TrackCenterlineGeometry.CreateCubicCurvePoints(start, end, pitchedStartDirection, pitchedEndDirection,
-            GetControlLength(start, end), GetSubdivisions(tracks.Length));
+            controlLength, GetSubdivisions(tracks.Length));
 
         TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, paletteEntries,
-            GetRollBegin(first, geometry.TrackBankAngleDegrees), GetRollEnd(first, geometry.TrackBankAngleDegrees),
+            rollBegin, rollEnd,
             startTangent: pitchedStartDirection, endTangent: pitchedEndDirection,
             smoothRollTransition: SmoothRollTransition);
     }

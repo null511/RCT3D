@@ -20,7 +20,7 @@ internal class TrackRideConfiguration(
     float trackBankAngleDegrees,
     RidePlatformSurfaceType platformSurface = RidePlatformSurfaceType.Wood,
     RidePlatformRailingType platformRailing = RidePlatformRailingType.Chained,
-    Vector2[]? waterPlanePolyline = null,
+    Func<RCTTrackElementData, Vector2[]?>? getWaterPlane = null,
     IDirectTrackMeshBuilder? directMeshBuilder = null)
 {
     public RCTRideType RideType { get; } = rideType;
@@ -35,7 +35,7 @@ internal class TrackRideConfiguration(
     public ITrackStationBuilder? StationBuilder { get; } = stationBuilder;
     public RidePlatformSurfaceType PlatformSurface { get; } = platformSurface;
     public RidePlatformRailingType PlatformRailing { get; } = platformRailing;
-    public Vector2[]? WaterPlanePolyline { get; } = waterPlanePolyline;
+    public Func<RCTTrackElementData, Vector2[]?>? GetWaterPlane { get; } = getWaterPlane;
     public IRideSupportMeshBuilder? SupportMeshBuilder { get; } = RideSupportMeshBuilders.Resolve(supportStyle);
     public Action<RCTTrackElementData, List<TrackSupportPlacement>>? GetSupportPlacements { get; } = getSupportPlacements;
 
@@ -69,6 +69,7 @@ internal static class TrackRideConfigurations
         new ClassicWoodenRollerCoaster().Build(),
         new CompactInvertedCoaster().Build(),
         new CorkscrewRollerCoaster().Build(),
+        new GhostTrain().Build(),
         new GigaCoaster().Build(),
         new GoKarts().Build(),
         new Hypercoaster().Build(),
@@ -80,14 +81,17 @@ internal static class TrackRideConfigurations
         new MineRide().Build(),
         new MineTrainCoaster().Build(),
         new MiniatureRailway().Build(),
+        new MiniHelicopters().Build(),
         new Monorail().Build(),
         new MonsterTrucks().Build(),
         new ObservationTower().Build(),
         new RiverRapids().Build(),
+        new SideFrictionRollerCoaster().Build(),
         new SingleRailRollerCoaster().Build(),
         new SpiralRollerCoaster().Build(),
         new Steeplechase().Build(),
         new VerticalDropRollerCoaster().Build(),
+        new WaterCoaster().Build(),
         new WoodenRollerCoaster().Build(),
         new WoodenWildMouse().Build(),
     ];

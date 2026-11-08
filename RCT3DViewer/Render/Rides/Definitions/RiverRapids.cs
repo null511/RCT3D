@@ -18,16 +18,17 @@ internal sealed class RiverRapids : RideDefinition
         SupportStyle = RideSupportStyle.WoodenTruss;
 
         StationBuilder = new DefaultTrackStationBuilder();
-
-        WaterPlanePolyline = [
-            new Vector2(-1.46f, 0.7f),
-            new Vector2( 1.46f, 0.7f),
-        ];
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackPart();
+        var shape = new TrackPart {
+            WaterPlane = [
+                new Vector2(-1.46f, 0.7f),
+                new Vector2( 1.46f, 0.7f),
+            ],
+        };
+
         const float thickness = 0.04f;
 
         const float sideCenterX = 1.46f;

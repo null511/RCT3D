@@ -28,7 +28,6 @@ internal abstract class RideDefinition(RCTRideType rideType)
 
     protected float CarVerticalOffset = 0.0f;
     protected bool HasSupportPlacement = false;
-    protected Vector2[]? WaterPlanePolyline;
     protected IDirectTrackMeshBuilder? DirectMeshBuilder;
 
     /// <summary>
@@ -55,7 +54,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
 
         return new TrackRideConfiguration(rideType, partGenerators, SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
             HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder, TrackBankAngleDegrees,
-            PlatformSurface, PlatformRailing, WaterPlanePolyline, DirectMeshBuilder);
+            PlatformSurface, PlatformRailing, DirectMeshBuilder is null ? track => GetCachedTrackShape(track).WaterPlane : null, DirectMeshBuilder);
     }
 
     protected virtual TrackPart GetTrackShape(RCTTrackElementData track) =>

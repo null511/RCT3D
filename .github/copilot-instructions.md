@@ -16,7 +16,7 @@
 - For MetalStick ride supports, use `TrackSupportPlacementMode.TrackBased`, not `TileBased`.
 - For the planned bamboo railings (brown) path builder, omit the normal path surface layer only when a support platform is present. Railings consist of two horizontal bamboo poles and three vertical bamboo poles; supports use rounded bamboo poles.
 - For procedural mesh quality, use reusable parameterized geometry generation (e.g. endpoints, radius, radial segments), not hardcoded geometry. Do not interpret this as a request for centralized configuration or global/runtime quality controls.
-- When diagnosing inverted track centerline heights, note a roughly 1-world-unit excess across loops, corkscrews, barrel rolls, and other inverted parts. The constant global CenterlineHeightOffset is known and is not relevant to this inversion-specific issue; do not attribute it to that offset.
+- When diagnosing inverted track centerline heights, note a roughly 1-world-unit excess across loops, corkscrews, barrel rolls, and other inverted parts. The constant global CenterlineHeightOffset is known and is not relevant to this inversion-specific issue; do not attribute it to that offset. Focus on shared incorrect assumptions across inversion families; do not alter manually tuned individual loop geometry as a substitute for finding the broad cause.
 - When diagnosing current RCT3DViewer vehicle placement, treat the reported rotation matching a 90-degree right roll but vehicle translation shifting left as a positional/reference-path handedness issue to verify against native movement samples and local attachment transforms, not as evidence to flip the already-correct visible rotation or blame the constant world-height offset.
 
 ## Rendering Guidelines

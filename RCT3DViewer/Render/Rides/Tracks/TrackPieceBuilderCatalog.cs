@@ -26,6 +26,7 @@ internal sealed class TrackPieceBuilderCatalog
             RCTTrackElementType.Down25Brakes,
             RCTTrackElementType.EndStation,
             RCTTrackElementType.Flat,
+            RCTTrackElementType.FlatCovered,
             RCTTrackElementType.LeftBank,
             RCTTrackElementType.MiddleStation,
             RCTTrackElementType.OnRidePhoto,
@@ -269,6 +270,19 @@ internal sealed class TrackPieceBuilderCatalog
             RCTTrackElementType.LeftVerticalLoop,
             RCTTrackElementType.RightVerticalLoop);
 
+        catalog.RegisterMany(type => new VerticalQuarterTurnTrackPieceBuilder(type),
+            RCTTrackElementType.LeftQuarterTurn1TileUp90,
+            RCTTrackElementType.RightQuarterTurn1TileUp90,
+            RCTTrackElementType.LeftQuarterTurn1TileDown90,
+            RCTTrackElementType.RightQuarterTurn1TileDown90);
+
+        catalog.RegisterMany(type => new QuarterLoopTrackPieceBuilder(type),
+            RCTTrackElementType.Up90ToInvertedFlatQuarterLoop,
+            RCTTrackElementType.InvertedFlatToDown90QuarterLoop,
+            RCTTrackElementType.MultiDimUp90ToInvertedFlatQuarterLoop,
+            RCTTrackElementType.MultiDimFlatToDown90QuarterLoop,
+            RCTTrackElementType.MultiDimInvertedUp90ToFlatQuarterLoop);
+
         catalog.RegisterMany(type => new HalfLoopTrackPieceBuilder(type),
             RCTTrackElementType.HalfLoopDown,
             RCTTrackElementType.HalfLoopUp);
@@ -304,6 +318,12 @@ internal sealed class TrackPieceBuilderCatalog
             RCTTrackElementType.RightLargeZeroGRollUp,
             RCTTrackElementType.LeftLargeZeroGRollDown,
             RCTTrackElementType.RightLargeZeroGRollDown);
+
+        catalog.RegisterMany(type => new BarrelRollTrackPieceBuilder(type),
+            RCTTrackElementType.LeftBarrelRollUpToDown,
+            RCTTrackElementType.RightBarrelRollUpToDown,
+            RCTTrackElementType.LeftBarrelRollDownToUp,
+            RCTTrackElementType.RightBarrelRollDownToUp);
 
         catalog.RegisterMany(type => new TwistTrackPieceBuilder(type),
             RCTTrackElementType.LeftTwistDownToUp,

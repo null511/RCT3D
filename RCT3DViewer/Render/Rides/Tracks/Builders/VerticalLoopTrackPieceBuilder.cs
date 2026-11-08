@@ -63,9 +63,14 @@ internal sealed class VerticalLoopTrackPieceBuilder(RCTTrackElementType pieceTyp
         var lowerExitAnchor = loopCenter
             - horizontalDirection * (totalWidth * 0.5f)
             + Vector3.UnitY * midpointHeight;
+        var lowerEntryControlLength = Vector3.Distance(loopStart, lowerEntryAnchor) * 0.4f;
+        var lowerExitControlLength = Vector3.Distance(lowerExitAnchor, loopEnd) * 0.4f;
+        lowerEntryAnchor.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
+        apex.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
+        lowerExitAnchor.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
         var lowerEntry = TrackCenterlineGeometry.CreateCubicCurvePoints(
             loopStart, lowerEntryAnchor, startTangent, Vector3.UnitY,
-            Vector3.Distance(loopStart, lowerEntryAnchor) * 0.4f, curveSubdivisions);
+            lowerEntryControlLength, curveSubdivisions);
         var upperEntry = TrackCenterlineGeometry.CreateCubicCurvePoints(
             lowerEntryAnchor, apex, Vector3.UnitY, -horizontalDirection,
             Vector3.Distance(lowerEntryAnchor, apex) * 0.4f, curveSubdivisions);
@@ -74,7 +79,7 @@ internal sealed class VerticalLoopTrackPieceBuilder(RCTTrackElementType pieceTyp
             Vector3.Distance(apex, lowerExitAnchor) * 0.4f, curveSubdivisions);
         var lowerExit = TrackCenterlineGeometry.CreateCubicCurvePoints(
             lowerExitAnchor, loopEnd, -Vector3.UnitY, endTangent,
-            Vector3.Distance(lowerExitAnchor, loopEnd) * 0.4f, curveSubdivisions);
+            lowerExitControlLength, curveSubdivisions);
         var centerline = new List<Vector3>(2 * slopeSubdivisions + 4 * curveSubdivisions + 1);
 
         for (var i = 0; i <= slopeSubdivisions; i++)

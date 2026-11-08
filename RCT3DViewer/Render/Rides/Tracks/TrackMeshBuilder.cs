@@ -116,6 +116,7 @@ internal sealed class TrackMeshBuilder
 
         foreach (ref readonly var track in filteredTrackElements) {
             if (!rideConfigurations.TryGetValue(track.RideType, out var configuration)) continue;
+
             if (configuration.DirectMeshBuilder is { } directBuilder
                 ? !directBuilder.Supports(track.Part)
                 : !pieceBuilders.TryResolve(track.Part, out _)) continue;
@@ -145,6 +146,7 @@ internal sealed class TrackMeshBuilder
                 piece.Key.RideId, piece.Key.RideType, piece.Key.TrackType,
                 piece.Key.OriginTileX, piece.Key.OriginTileY, piece.Key.OriginBaseHeight))
             .ToHashSet();
+
         var geometry = new TrackMeshGeometry();
         var waterGeometry = new WaterPlaneMeshGeometry();
         var supportGeometry = new RideSupportMeshGeometry();
@@ -237,9 +239,10 @@ internal sealed class TrackMeshBuilder
                 var occupancyPaths = centerlines.Select(centerline => centerline.Points).ToArray();
                 foreach (ref readonly var sequenceTrack in pieceSpan)
                     occupancy.AddTrackCenterlines(sequenceTrack, occupancyPaths);
-                if (configuration.WaterPlanePolyline is { } waterPlanePolyline) {
+
+                if (configuration.GetWaterPlane?.Invoke(track) is { } waterPlane) {
                     foreach (var centerline in centerlines)
-                        waterGeometry.AddSweptPolyline(waterPlanePolyline, centerline);
+                        waterGeometry.AddSweptPolyline(waterPlane, centerline);
                 }
 
                 if (configuration.SmoothMovement && centerlines.Length > 0) {
@@ -251,6 +254,7 @@ internal sealed class TrackMeshBuilder
                             sequenceTrack = candidate;
                             break;
                         }
+
                         sequences[i] = new TrackCenterlineSequence(
                             sequenceTrack.TileX, sequenceTrack.TileY, sequenceTrack.BaseHeight, centerlines[i]);
                     }
