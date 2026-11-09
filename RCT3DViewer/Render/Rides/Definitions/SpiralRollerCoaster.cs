@@ -24,28 +24,32 @@ internal class SpiralRollerCoaster : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackPart {
+        const float railSeparation = 0.42f;
+        const float railRadius = 0.075f;
+        const float railCenterY = 0f;
+
+        var part = new TrackPart {
             BraceInterval = 0.8f,
-            RailProfiles = [
-                new TrackRailProfileShape(CreateCircle(-0.42f, 0f, 0.075f, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = railSpecular,
-                },
-                new TrackRailProfileShape(CreateCircle( 0.42f, 0f, 0.075f, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = railSpecular,
-                },
-            ],
         };
 
-        var brace = shape.AppendBracePart.Cylinder(
-            new Vector3(-0.42f, 0f, 0f),
-            new Vector3( 0.42f, 0f, 0f),
-            0.055f, 5);
+        part.AppendRailPart.Circle(-railSeparation, railCenterY, railRadius, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = railSpecular;
+        });
 
-        brace.Swatch = TrackRailSwatch.Main;
-        brace.Specular = railSpecular;
+        part.AppendRailPart.Circle( railSeparation, railCenterY, railRadius, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = railSpecular;
+        });
 
-        return shape;
+        part.AppendBracePart.Cylinder(
+            new Vector3(-railSeparation, railCenterY, 0f),
+            new Vector3( railSeparation, railCenterY, 0f),
+            0.055f, 5, shape => {
+                shape.Swatch = TrackRailSwatch.Main;
+                shape.Specular = railSpecular;
+            });
+
+        return part;
     }
 }

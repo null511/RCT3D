@@ -8,7 +8,6 @@ namespace RCT3D.Render.Rides.Definitions;
 
 internal sealed class MiniHelicopters : RideDefinition
 {
-    private const float RailSeparation = 0.42f;
     private const float RailRadius = 0.075f;
     private const float RailCenterY = 0.0f;
 
@@ -27,30 +26,34 @@ internal sealed class MiniHelicopters : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackPart {
+        const float railSeparation = 0.42f;
+
+        var part = new TrackPart {
             BraceInterval = 0.8f,
-            RailProfiles = [
-                new TrackRailProfileShape(CreateCircle(-RailSeparation, RailCenterY, RailRadius, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = railSpecular,
-                },
-                new TrackRailProfileShape(CreateCircle( RailSeparation, RailCenterY, RailRadius, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = railSpecular,
-                },
-            ],
         };
+
+        // left rail
+        part.AppendRailPart.Circle(-railSeparation, RailCenterY, RailRadius, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = railSpecular;
+        });
+
+        // right rail
+        part.AppendRailPart.Circle( railSeparation, RailCenterY, RailRadius, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = railSpecular;
+        });
 
         const float braceCenterY = RailCenterY - 1.5f * RailRadius;
 
-        shape.AppendBracePart.Cylinder(
-            new Vector3(-RailSeparation, braceCenterY, 0f),
-            new Vector3( RailSeparation, braceCenterY, 0f),
-            0.055f, 5, p => {
-                p.Swatch = TrackRailSwatch.Main;
-                p.Specular = railSpecular;
+        part.AppendBracePart.Cylinder(
+            new Vector3(-railSeparation, braceCenterY, 0f),
+            new Vector3( railSeparation, braceCenterY, 0f),
+            0.055f, 5, shape => {
+                shape.Swatch = TrackRailSwatch.Main;
+                shape.Specular = railSpecular;
             });
 
-        return shape;
+        return part;
     }
 }

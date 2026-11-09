@@ -7,6 +7,9 @@ namespace RCT3D.Render.Rides.Definitions;
 
 internal sealed class SingleRailRollerCoaster : RideDefinition
 {
+    private static readonly TrackRailSpecularData paintSpecular = new(80, 20);
+
+
     public SingleRailRollerCoaster() : base(RCTRideType.SingleRailRollerCoaster)
     {
         //SmoothMovement = true;
@@ -24,13 +27,13 @@ internal sealed class SingleRailRollerCoaster : RideDefinition
         const float RailHalfWidth = 0.08f;
         const float RailHalfHeight = 0.08f;
 
-        var shape = new TrackPart();
+        var part = new TrackPart();
 
-        shape.RailProfiles.AddRange(CreateBox(0f, RailCenterY, RailHalfWidth, RailHalfHeight, p => {
-            p.Swatch = TrackRailSwatch.Main;
-            p.Specular = new TrackRailSpecularData(80, 20);
-        }));
+        part.AppendRailPart.Box(0f, RailCenterY, RailHalfWidth, RailHalfHeight, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = paintSpecular;
+        });
 
-        return shape;
+        return part;
     }
 }

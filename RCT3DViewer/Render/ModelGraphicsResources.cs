@@ -11,6 +11,8 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
     private readonly TerrainGraphicsResources _graphicsResources;
     private readonly ModelTextureHeap _textureHeap;
     private readonly uint _baseTextureIndex;
+    private ModelRegionRange[] regionBatches = [];
+    private int regionBatchCount;
 
     public Pipeline Pipeline => _graphicsResources.Pipeline;
     public Pipeline WireframePipeline => _graphicsResources.WireframePipeline;
@@ -20,7 +22,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
     public Buffer IndexBuffer => _graphicsResources.IndexBuffer;
     public Buffer InstanceBuffer => _graphicsResources.InstanceBuffer;
     public uint IndexCount => _graphicsResources.IndexCount;
-    public ModelRegionBatch[] RegionBatches { get; private set; } = Array.Empty<ModelRegionBatch>();
+    public ReadOnlySpan<ModelRegionRange> RegionBatches => regionBatches.AsSpan(0, regionBatchCount);
 
 
     public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout,
@@ -66,20 +68,35 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
             totalInstances = checked(totalInstances + region.Instances.Length);
 
         var instances = new ModelInstance[totalInstances];
-        var uploadedRegions = new ModelRegionBatch[regions.Length];
+        var uploadedRegions = new ModelRegionRange[regions.Length];
         var firstInstance = 0;
         for (var i = 0; i < regions.Length; i++) {
             var region = regions[i];
             region.Instances.CopyTo(instances, firstInstance);
-            uploadedRegions[i] = region with { FirstInstance = checked((uint)firstInstance) };
+            uploadedRegions[i] = new ModelRegionRange(
+                region.Region, region.Bounds, checked((uint)firstInstance), region.InstanceCount);
             firstInstance += region.Instances.Length;
         }
 
-        _graphicsResources.UploadInstances(instances);
-        RegionBatches = uploadedRegions;
+        UploadInstances(instances, uploadedRegions);
     }
 
-    public void DrawInstanced(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, ModelRegionBatch region, bool wireframe = false)
+    public void UploadInstances(ReadOnlySpan<ModelInstance> instances, ReadOnlySpan<ModelRegionRange> regions)
+    {
+        regionBatchCount = 0;
+        if (instances.IsEmpty) return;
+
+        if (regionBatches.Length < regions.Length)
+            Array.Resize(ref regionBatches, Math.Max(regions.Length, regionBatches.Length * 2));
+
+        _graphicsResources.UploadInstances(instances);
+        regions.CopyTo(regionBatches);
+        regionBatchCount = regions.Length;
+    }
+
+    public void ClearInstances() => regionBatchCount = 0;
+
+    public void DrawInstanced(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, ModelRegionRange region, bool wireframe = false)
     {
         if (IndexCount == 0 || region.InstanceCount == 0)
             return;

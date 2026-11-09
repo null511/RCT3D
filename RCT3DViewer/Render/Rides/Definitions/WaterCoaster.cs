@@ -32,17 +32,17 @@ internal class WaterCoaster : RideDefinition
     {
         var part = new TrackPart {
             BraceInterval = 0.8f,
-            RailProfiles = [
-                new TrackRailProfileShape(CreateCircle(-RailHalfSeparation, RailCenterY, RailRadius, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = railSpecular,
-                },
-                new TrackRailProfileShape(CreateCircle( RailHalfSeparation, RailCenterY, RailRadius, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = railSpecular,
-                },
-            ],
         };
+
+        part.AppendRailPart.Circle(-RailHalfSeparation, RailCenterY, RailRadius, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = railSpecular;
+        });
+
+        part.AppendRailPart.Circle(RailHalfSeparation, RailCenterY, RailRadius, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = railSpecular;
+        });
 
         part.AppendBracePart.Cylinder(
             new Vector3(-RailHalfSeparation, RailCenterY, 0f),
@@ -54,12 +54,12 @@ internal class WaterCoaster : RideDefinition
 
         if (track.HasChainLift != 0) {
             // chain
-            part.RailProfiles.AddRange(CreateBox(0f, 0.05f, 0.05f, 0.03f, shape => {
+            part.AppendRailPart.Box(0f, 0.05f, 0.05f, 0.03f, shape => {
                 shape.Color = new TrackRgba8(30, 30, 30, 255);
                 shape.Specular = new TrackRailSpecularData(100, 255);
-            }));
+            });
         }
-        else if (IsWaterChannel(track.Part)) {
+        else if (track.Part.IsCovered()) {
             part.WaterPlane = [
                 new Vector2(-1.0f, 0.1f),
                 new Vector2(1.0f, 0.1f),
@@ -108,13 +108,4 @@ internal class WaterCoaster : RideDefinition
 
         return part;
     }
-
-    private static bool IsWaterChannel(RCTTrackElementType part) => part is
-        RCTTrackElementType.FlatCovered or
-        RCTTrackElementType.LeftQuarterTurn5TilesCovered or
-        RCTTrackElementType.RightQuarterTurn5TilesCovered or
-        RCTTrackElementType.LeftQuarterTurn3TilesCovered or
-        RCTTrackElementType.RightQuarterTurn3TilesCovered or
-        RCTTrackElementType.SBendLeftCovered or
-        RCTTrackElementType.SBendRightCovered;
 }

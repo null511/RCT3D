@@ -346,6 +346,53 @@ internal static class TrackCenterlineGeometry
         < 0 => -bankAngleDegrees * (MathF.PI / 180.0f),
     };
 
+    public static void AddVerticallyAlignedParts(
+        in RCTTrackElementData track,
+        TrackMeshGeometry geometry,
+        ReadOnlySpan<Vector3> centerline,
+        IReadOnlyList<ITrackPartGenerator> partGenerators,
+        ReadOnlySpan<RCTPaletteEntry> paletteEntries,
+        bool verticalAnchorAtStart,
+        float rollBegin = 0.0f,
+        float rollEnd = 0.0f,
+        Vector3? startTangent = null,
+        Vector3? endTangent = null,
+        Vector3? preferredSide = null,
+        bool smoothRollTransition = false)
+    {
+        var frames = TrackMeshPartGenerator.CreateFrames(
+            centerline, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
+        if (frames.Length != centerline.Length) return;
+
+        geometry.SetProfileOffset(GetVerticalProfileOffset(
+            track, partGenerators, frames[verticalAnchorAtStart ? 0 : frames.Length - 1]));
+
+        try {
+            AddParts(track, geometry, centerline, partGenerators, paletteEntries,
+                rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
+        }
+        finally {
+            geometry.SetProfileOffset(Vector3.Zero);
+        }
+    }
+
+    public static Vector3 GetVerticalProfileOffset(
+        in RCTTrackElementData track,
+        IReadOnlyList<ITrackPartGenerator> partGenerators,
+        TrackCenterlineFrame frame)
+    {
+        var wallNormal = -frame.Up;
+        var maximumProfileProjection = float.NegativeInfinity;
+        foreach (var partGenerator in partGenerators)
+            maximumProfileProjection = MathF.Max(
+                maximumProfileProjection,
+                partGenerator.GetMaximumProfileProjection(track, wallNormal, frame));
+
+        return float.IsFinite(maximumProfileProjection)
+            ? wallNormal * (WorldUnits.TileSize * 0.5f - maximumProfileProjection)
+            : Vector3.Zero;
+    }
+
     public static void AddParts(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries, float rollBegin = 0.0f, float rollEnd = 0.0f, Vector3? startTangent = null, Vector3? endTangent = null, Vector3? preferredSide = null, bool smoothRollTransition = false)
     {
         geometry.CaptureCenterline(

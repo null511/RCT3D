@@ -62,8 +62,10 @@ internal sealed class ParkRenderRegion(RenderRegionCoordinate coordinate)
         ? hasDynamicBounds ? staticBounds.Encapsulate(dynamicBounds) : staticBounds
         : dynamicBounds;
     public bool HasBounds => hasStaticBounds || hasDynamicBounds;
+    public bool HasDynamicBounds => hasDynamicBounds;
     public bool CameraVisible { get; set; }
     public bool ShadowVisible { get; set; }
+    public bool VehicleInstancesVisible { get; set; }
     public bool RidesInRange { get; set; }
     public bool SupportsInRange { get; set; }
     public bool SceneryInRange { get; set; }
@@ -100,7 +102,10 @@ internal sealed class ParkRenderRegion(RenderRegionCoordinate coordinate)
     }
 }
 
-internal readonly record struct RenderRegionModelBatch(ModelGraphicsResources Resources, ModelRegionBatch Batch);
+internal readonly record struct RenderRegionModelBatch(ModelGraphicsResources Resources, ModelRegionRange Batch);
+
+internal readonly record struct ModelRegionRange(
+    RenderRegionCoordinate Region, AxisAlignedBounds Bounds, uint FirstInstance, uint InstanceCount);
 
 internal readonly record struct AxisAlignedBounds
 {

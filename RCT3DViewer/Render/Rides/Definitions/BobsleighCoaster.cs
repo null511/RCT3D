@@ -8,6 +8,10 @@ namespace RCT3D.Render.Rides.Definitions;
 
 internal sealed class BobsleighCoaster : RideDefinition
 {
+    private static readonly TrackRailSpecularData specularRails = new(120, 10);
+    private static readonly TrackRailSpecularData specularMeshing = new(200, 0);
+
+
     public BobsleighCoaster() : base(RCTRideType.BobsleighCoaster)
     {
         StationBuilder = new DefaultTrackStationBuilder();
@@ -21,66 +25,69 @@ internal sealed class BobsleighCoaster : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        return new TrackPart {
-            RailProfiles = (track.HasChainLift != 0 || track.Part.IsStationPlatform()
-                ? GetTrackedRailParts(track.Part) : GetBeddedRailParts()).ToList(),
-        };
+        return track.HasChainLift != 0 || track.Part.IsStationPlatform()
+            ? GetTrackedRailParts(track.Part) : GetBeddedRailParts();
     }
 
-    private IEnumerable<TrackRailProfileShape> GetTrackedRailParts(RCTTrackElementType part)
+    private TrackPart GetTrackedRailParts(RCTTrackElementType track)
     {
-        var specularRails = new TrackRailSpecularData(120, 10);
+        var part = new TrackPart();
 
         // lower
-        yield return new TrackRailProfileShape(CreateCircle(-0.32f, -0.50f, 0.05f, 4), true) {
-            Swatch = TrackRailSwatch.Main,
-            Specular = specularRails,
-        };
-        yield return new TrackRailProfileShape(CreateCircle( 0.32f, -0.50f, 0.05f, 4), true) {
-            Swatch = TrackRailSwatch.Main,
-            Specular = specularRails,
-        };
+        part.AppendRailPart.Circle(-0.32f, -0.50f, 0.05f, 4, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = specularRails;
+        });
 
-        if (!part.IsStationPlatform()) {
+        part.AppendRailPart.Circle( 0.32f, -0.50f, 0.05f, 4, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = specularRails;
+        });
+
+        if (!track.IsStationPlatform()) {
             // upper-left
-            yield return new TrackRailProfileShape(CreateCircle(-0.74f, -0.15f, 0.03f, 4), true) {
-                Swatch = TrackRailSwatch.Main,
-                Specular = specularRails,
-            };
+            part.AppendRailPart.Circle(-0.74f, -0.15f, 0.03f, 4, shape => {
+                shape.Swatch = TrackRailSwatch.Main;
+                shape.Specular = specularRails;
+            });
 
             // upper-right
-            yield return new TrackRailProfileShape(CreateCircle( 0.74f, -0.15f, 0.03f, 4), true) {
-                Swatch = TrackRailSwatch.Main,
-                Specular = specularRails,
-            };
+            part.AppendRailPart.Circle( 0.74f, -0.15f, 0.03f, 4, shape => {
+                shape.Swatch = TrackRailSwatch.Main;
+                shape.Specular = specularRails;
+            });
         }
+
+        return part;
     }
 
-    private IEnumerable<TrackRailProfileShape> GetBeddedRailParts()
+    private TrackPart GetBeddedRailParts()
     {
-        var specularRails = new TrackRailSpecularData(120, 10);
-        var specularMeshing = new TrackRailSpecularData(200, 0);
+        var part = new TrackPart();
 
         // supports
-        yield return new TrackRailProfileShape(CreateCircle(-0.88f, 0.40f, 0.05f, 4), true) {
-            Swatch = TrackRailSwatch.Alternate,
-            Specular = specularRails,
-        };
-        yield return new TrackRailProfileShape(CreateCircle(-0.32f, -0.50f, 0.05f, 4), true) {
-            Swatch = TrackRailSwatch.Alternate,
-            Specular = specularRails,
-        };
-        yield return new TrackRailProfileShape(CreateCircle(0.32f, -0.50f, 0.05f, 4), true) {
-            Swatch = TrackRailSwatch.Alternate,
-            Specular = specularRails,
-        };
-        yield return new TrackRailProfileShape(CreateCircle(0.88f, 0.40f, 0.05f, 4), true) {
-            Swatch = TrackRailSwatch.Alternate,
-            Specular = specularRails,
-        };
+        part.AppendRailPart.Circle(-0.88f, 0.40f, 0.05f, 4, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = specularRails;
+        });
+
+        part.AppendRailPart.Circle(-0.32f, -0.50f, 0.05f, 4, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = specularRails;
+        });
+
+        part.AppendRailPart.Circle(0.32f, -0.50f, 0.05f, 4, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = specularRails;
+        });
+
+        part.AppendRailPart.Circle(0.88f, 0.40f, 0.05f, 4, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = specularRails;
+        });
 
         // bed up
-        yield return new TrackRailProfileShape([
+        part.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(0.88f, 0.40f),
             new Vector2(0.70f, -0.14f),
             new Vector2(0.32f, -0.44f),
@@ -90,10 +97,10 @@ internal sealed class BobsleighCoaster : RideDefinition
         ], false) {
             Swatch = TrackRailSwatch.Main,
             Specular = specularMeshing,
-        };
+        });
 
         // bed down
-        yield return new TrackRailProfileShape([
+        part.RailProfiles.Add(new TrackRailProfileShape([
             new Vector2(-0.91f,  0.40f),
             new Vector2(-0.72f, -0.15f),
             new Vector2(-0.33f, -0.47f),
@@ -103,6 +110,8 @@ internal sealed class BobsleighCoaster : RideDefinition
         ], false) {
             Swatch = TrackRailSwatch.Main,
             Specular = specularMeshing,
-        };
+        });
+
+        return part;
     }
 }

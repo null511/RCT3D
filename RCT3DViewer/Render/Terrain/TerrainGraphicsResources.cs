@@ -571,7 +571,7 @@ internal sealed unsafe class TerrainGraphicsResources(
         UploadMesh(mesh.Vertices, mesh.Indices);
     }
 
-    public void UploadInstances(ModelInstance[] instances)
+    public void UploadInstances(ReadOnlySpan<ModelInstance> instances)
     {
         if (!useInstances)
             throw new InvalidOperationException("Instance data can only be uploaded to an instanced model pipeline.");
@@ -582,11 +582,12 @@ internal sealed unsafe class TerrainGraphicsResources(
         var device = context.LogicalDevice;
         var size = checked((ulong)Marshal.SizeOf<ModelInstance>() * (ulong)instances.Length);
         if (size > _instanceBufferCapacity) {
+            var capacity = Math.Max(size, _instanceBufferCapacity * 2);
             ClearInstanceBuffer();
-            AllocateBuffer(size, BufferUsageFlags.VertexBufferBit,
+            AllocateBuffer(capacity, BufferUsageFlags.VertexBufferBit,
                 MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
                 out _instanceBuffer, out _instanceBufferMemory);
-            _instanceBufferCapacity = size;
+            _instanceBufferCapacity = capacity;
         }
 
         try {
@@ -594,7 +595,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             if (context.Api.MapMemory(device, _instanceBufferMemory, 0, size, 0, &instanceData) != Result.Success)
                 throw new InvalidOperationException("Failed to map model instance buffer memory.");
 
-            instances.AsSpan().CopyTo(new Span<ModelInstance>(instanceData, instances.Length));
+            instances.CopyTo(new Span<ModelInstance>(instanceData, instances.Length));
             context.Api.UnmapMemory(device, _instanceBufferMemory);
         }
         catch {

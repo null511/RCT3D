@@ -22,7 +22,7 @@ internal sealed class RiverRapids : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackPart {
+        var part = new TrackPart {
             WaterPlane = [
                 new Vector2(-1.46f, 0.7f),
                 new Vector2( 1.46f, 0.7f),
@@ -38,23 +38,23 @@ internal sealed class RiverRapids : RideDefinition
         const float bottomCenterY = -0.75f + thickness * 0.5f;
 
         // left side
-        shape.RailProfiles.AddRange(CreateBox(-sideCenterX, sideCenterY, thickness, 0.75f, part => {
-            part.Swatch = TrackRailSwatch.Main;
-            part.Specular = specular;
-        }));
+        part.AppendRailPart.Box(-sideCenterX, sideCenterY, thickness, 0.75f, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = specular;
+        });
 
         // right side
-        shape.RailProfiles.AddRange(CreateBox(sideCenterX, sideCenterY, thickness, 0.75f, part => {
-            part.Swatch = TrackRailSwatch.Main;
-            part.Specular = specular;
-        }));
+        part.AppendRailPart.Box(sideCenterX, sideCenterY, thickness, 0.75f, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = specular;
+        });
 
         // bottom
-        shape.RailProfiles.AddRange(CreateBox(bottomCenterX, bottomCenterY, 1.46f, thickness, part => {
-            part.Swatch = TrackRailSwatch.Main;
-            part.Specular = specular;
-        }));
+        part.AppendRailPart.Box(bottomCenterX, bottomCenterY, 1.46f, thickness, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = specular;
+        });
 
-        return shape;
+        return part;
     }
 }

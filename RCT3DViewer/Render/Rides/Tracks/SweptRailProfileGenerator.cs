@@ -10,12 +10,7 @@ internal sealed class SweptRailProfileGenerator(Func<RCTTrackElementData, IEnume
 
     public void Add(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, ReadOnlySpan<RCTPaletteEntry> palette, float rollBegin, float rollEnd, Vector3? startTangent, Vector3? endTangent, Vector3? preferredSide, bool smoothRollTransition)
     {
-        var cacheKey = (TrackType: track.Part, track.HasChainLift);
-        var trackData = track;
-        var parts = partsByTrackType.GetOrAdd(
-            cacheKey,
-            static (_, state) => state.GetRailParts(state.Track).ToArray(),
-            (Track: trackData, GetRailParts: getRailParts));
+        var parts = GetParts(track);
         if (parts.Length == 0) return;
 
         TrackMeshPartGenerator.AddSweptProfile(
@@ -24,6 +19,7 @@ internal sealed class SweptRailProfileGenerator(Func<RCTTrackElementData, IEnume
             parts,
             track.MainPaletteIndex,
             track.AdditionalPaletteIndex,
+            track.SupportPaletteIndex,
             palette,
             rollBegin,
             rollEnd,
@@ -31,6 +27,29 @@ internal sealed class SweptRailProfileGenerator(Func<RCTTrackElementData, IEnume
             endTangent,
             preferredSide,
             smoothRollTransition);
+    }
+
+    public float GetMaximumProfileProjection(in RCTTrackElementData track, Vector3 direction, TrackCenterlineFrame frame)
+    {
+        var maximumProjection = float.NegativeInfinity;
+        foreach (var shape in GetParts(track)) {
+            foreach (var point in shape.Vertices) {
+                var offset = frame.Side * point.X + frame.Up * point.Y;
+                maximumProjection = MathF.Max(maximumProjection, Vector3.Dot(offset, direction));
+            }
+        }
+
+        return maximumProjection;
+    }
+
+    private TrackRailProfileShape[] GetParts(in RCTTrackElementData track)
+    {
+        var cacheKey = (TrackType: track.Part, track.HasChainLift);
+        var trackData = track;
+        return partsByTrackType.GetOrAdd(
+            cacheKey,
+            static (_, state) => state.GetRailParts(state.Track).ToArray(),
+            (Track: trackData, GetRailParts: getRailParts));
     }
 }
 
@@ -42,6 +61,7 @@ internal static class TrackMeshPartGenerator
         TrackRailProfileShape[] shapes,
         byte mainPaletteIndex,
         byte alternatePaletteIndex,
+        byte supportPaletteIndex,
         ReadOnlySpan<RCTPaletteEntry> palette,
         float rollBegin,
         float rollEnd,
@@ -58,6 +78,7 @@ internal static class TrackMeshPartGenerator
             var color = shape.Swatch switch {
                 TrackRailSwatch.Main => GetPaletteColor(mainPaletteIndex, palette),
                 TrackRailSwatch.Alternate => GetPaletteColor(alternatePaletteIndex, palette),
+                TrackRailSwatch.Support => GetPaletteColor(supportPaletteIndex, palette),
                 TrackRailSwatch.None => shape.Color,
                 _ => throw new InvalidDataException($"Unknown rail swatch {shape.Swatch}.")
             };

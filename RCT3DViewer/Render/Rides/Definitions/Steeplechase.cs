@@ -10,6 +10,7 @@ internal sealed class Steeplechase : RideDefinition
 {
     private static readonly TrackRailSpecularData paintSpecular = new(100, 20);
 
+
     public Steeplechase() : base(RCTRideType.Steeplechase)
     {
         SmoothMovement = true;
@@ -24,30 +25,30 @@ internal sealed class Steeplechase : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackPart {
+        var part = new TrackPart {
             BraceInterval = 0.6f,
-            RailProfiles = [
-                // upper
-                new TrackRailProfileShape(CreateCircle(0f, 0.2f, 0.08f, 5), true) {
-                    Swatch = TrackRailSwatch.Main,
-                    Specular = paintSpecular,
-                },
-                // lower
-                new TrackRailProfileShape(CreateCircle(0f, -0.2f, 0.06f, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = paintSpecular,
-                },
-            ],
         };
 
-        shape.AppendBracePart.Cylinder(
+        // upper
+        part.AppendRailPart.Circle(0f, 0.2f, 0.08f, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = paintSpecular;
+        });
+
+        // lower
+        part.AppendRailPart.Circle(0f, -0.2f, 0.06f, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = paintSpecular;
+        });
+
+        part.AppendBracePart.Cylinder(
             new Vector3(0f, -0.2f, 0f),
             new Vector3(0f,  0.2f, 0f),
-            0.06f, 4, p => {
-                p.Swatch = TrackRailSwatch.Alternate;
-                p.Specular = paintSpecular;
+            0.06f, 4, shape => {
+                shape.Swatch = TrackRailSwatch.Alternate;
+                shape.Specular = paintSpecular;
             });
 
-        return shape;
+        return part;
     }
 }

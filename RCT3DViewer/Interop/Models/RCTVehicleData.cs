@@ -27,4 +27,5 @@ public struct RCTVehicleData
     public ushort TrackTypeAndDirection;
     public byte TrackSubposition;
     public byte TrackReserved;
+    public short SwingPosition;
 }

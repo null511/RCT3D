@@ -11,11 +11,14 @@ internal sealed class TrackMeshGeometry
     private RenderRegionCoordinate? _region;
     private List<TrackCenterlinePath>? _centerlineCapture;
     private float _verticalOffset;
+    private Vector3 _profileOffset;
     private float _trackBankAngleDegrees = 22.5f;
     private int _firstVertex;
     private int _firstIndex;
 
     public void SetVerticalOffset(float offset) => _verticalOffset = offset;
+
+    public void SetProfileOffset(Vector3 offset) => _profileOffset = offset;
 
     public void SetTrackBankAngleDegrees(float angle) => _trackBankAngleDegrees = angle;
 
@@ -52,8 +55,10 @@ internal sealed class TrackMeshGeometry
         if (_centerlineCapture is null) return;
 
         var offsetCenterline = centerline.ToArray();
-        for (var i = 0; i < offsetCenterline.Length; i++)
+        for (var i = 0; i < offsetCenterline.Length; i++) {
             offsetCenterline[i].Y += _verticalOffset;
+            offsetCenterline[i] += _profileOffset;
+        }
 
         var frames = TrackMeshPartGenerator.CreateFrames(
             centerline, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
@@ -89,6 +94,7 @@ internal sealed class TrackMeshGeometry
     {
         var index = (uint)_vertices.Count;
         position.Y += _verticalOffset;
+        position += _profileOffset;
         _vertices.Add(new TrackVertex(position, Vector3.Normalize(normal), color, specular.Roughness, specular.Metalness));
         return index;
     }

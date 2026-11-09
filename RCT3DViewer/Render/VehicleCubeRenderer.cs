@@ -1,9 +1,10 @@
 using RCT3D.Render.Paths;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace RCT3D.Render;
 
-internal static class VehicleCubeRenderer
+internal sealed class VehicleCubeRenderer
 {
     //private const float TileSize = 3.0f;
     private const float CubeSize = 0.7f;
@@ -11,6 +12,16 @@ internal static class VehicleCubeRenderer
 
     private const float CubeBoundsHalfSize = CubeHalfSize * 1.7320508f;
 
+    private readonly Dictionary<RenderRegionCoordinate, RegionBuilder> regions = new();
+    private readonly List<RegionBuilder> activeRegions = new();
+    private ModelInstance[] instances = [];
+    private ModelRegionRange[] regionBatches = [];
+    private int instanceCount;
+    private int regionBatchCount;
+
+    public ReadOnlySpan<RegionBuilder> Regions => CollectionsMarshal.AsSpan(activeRegions);
+    public ReadOnlySpan<ModelInstance> Instances => instances.AsSpan(0, instanceCount);
+    public ReadOnlySpan<ModelRegionRange> RegionBatches => regionBatches.AsSpan(0, regionBatchCount);
 
     public static ImportedModelMesh CreateMesh() => CreateCubeMesh(Vector3.Zero, CubeSize);
 
@@ -56,15 +67,19 @@ internal static class VehicleCubeRenderer
         return new ImportedModelMesh("ride-vehicle-cube", vertices, indices, material);
     }
 
-    public static ModelRegionBatch[] BuildInstances(
-        IReadOnlyDictionary<ushort, VehiclePose> poses,
+    public void PrepareRegions(
+        Dictionary<ushort, VehiclePose> poses,
         int mapWidth,
         int mapHeight)
     {
-        if (poses.Count == 0 || mapWidth <= 0 || mapHeight <= 0)
-            return Array.Empty<ModelRegionBatch>();
+        foreach (var region in activeRegions)
+            region.Poses.Clear();
+        activeRegions.Clear();
+        instanceCount = 0;
+        regionBatchCount = 0;
 
-        var regions = new Dictionary<RenderRegionCoordinate, RegionBuilder>();
+        if (poses.Count == 0 || mapWidth <= 0 || mapHeight <= 0)
+            return;
 
         foreach (var pose in poses.Values) {
             var position = pose.Position;
@@ -74,43 +89,73 @@ internal static class VehicleCubeRenderer
             if ((uint)tileX >= (uint)mapWidth || (uint)tileY >= (uint)mapHeight)
                 continue;
 
-            var transform = pose.Rotation * Matrix4x4.CreateTranslation(position);
-            var boundsPosition = position;
-
             var bounds = new AxisAlignedBounds(
-                boundsPosition - new Vector3(CubeBoundsHalfSize),
-                boundsPosition + new Vector3(CubeBoundsHalfSize));
+                position - new Vector3(CubeBoundsHalfSize),
+                position + new Vector3(CubeBoundsHalfSize));
 
             var region = new RenderRegionCoordinate(
                 tileX / RenderRegionLayout.RegionSizeInTiles,
                 tileY / RenderRegionLayout.RegionSizeInTiles);
 
             if (!regions.TryGetValue(region, out var regionBuilder)) {
-                regionBuilder = new RegionBuilder();
+                regionBuilder = new RegionBuilder(region);
                 regions.Add(region, regionBuilder);
             }
 
-            regionBuilder.Add(new ModelInstance(transform), bounds);
+            if (regionBuilder.Poses.Count == 0)
+                activeRegions.Add(regionBuilder);
+            regionBuilder.Add(pose, bounds);
         }
-
-        return regions.OrderBy(pair => pair.Key.X).ThenBy(pair => pair.Key.Y)
-            .Select(pair => new ModelRegionBatch(pair.Key, pair.Value.Bounds, pair.Value.Instances.ToArray()))
-            .ToArray();
     }
 
-    private sealed class RegionBuilder
+    public void BuildInstances(Dictionary<RenderRegionCoordinate, ParkRenderRegion> renderRegions)
     {
-        private bool _hasBounds;
+        instanceCount = 0;
+        regionBatchCount = 0;
+        foreach (var region in activeRegions) {
+            if (!renderRegions[region.Coordinate].VehicleInstancesVisible) continue;
 
+            instanceCount = checked(instanceCount + region.Poses.Count);
+            regionBatchCount++;
+        }
+
+        if (instances.Length < instanceCount)
+            Array.Resize(ref instances, Math.Max(instanceCount, instances.Length * 2));
+        if (regionBatches.Length < regionBatchCount)
+            Array.Resize(ref regionBatches, Math.Max(regionBatchCount, regionBatches.Length * 2));
+
+        var firstInstance = 0;
+        var batchIndex = 0;
+        foreach (var region in activeRegions) {
+            if (!renderRegions[region.Coordinate].VehicleInstancesVisible) continue;
+
+            regionBatches[batchIndex++] = new ModelRegionRange(
+                region.Coordinate, region.Bounds, (uint)firstInstance, (uint)region.Poses.Count);
+            foreach (var pose in region.Poses) {
+                var transform = pose.Rotation * Matrix4x4.CreateTranslation(pose.Position);
+                instances[firstInstance++] = new ModelInstance(transform);
+            }
+        }
+    }
+
+    public void Clear()
+    {
+        regions.Clear();
+        activeRegions.Clear();
+        instanceCount = 0;
+        regionBatchCount = 0;
+    }
+
+    public sealed class RegionBuilder(RenderRegionCoordinate coordinate)
+    {
+        public RenderRegionCoordinate Coordinate { get; } = coordinate;
         public AxisAlignedBounds Bounds { get; private set; }
-        public List<ModelInstance> Instances { get; } = new();
+        public List<VehiclePose> Poses { get; } = new();
 
-        public void Add(ModelInstance instance, AxisAlignedBounds bounds)
+        public void Add(VehiclePose pose, AxisAlignedBounds bounds)
         {
-            Bounds = _hasBounds ? Bounds.Encapsulate(bounds) : bounds;
-            _hasBounds = true;
-
-            Instances.Add(instance);
+            Bounds = Poses.Count == 0 ? bounds : Bounds.Encapsulate(bounds);
+            Poses.Add(pose);
         }
     }
 }

@@ -23,51 +23,54 @@ internal class GigaCoaster : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var shape = new TrackPart {
+        var part = new TrackPart {
             BraceInterval = 0.5f,
-            RailProfiles = [
-                new TrackRailProfileShape(CreateCircle(-0.32f, -0.15f, 0.075f, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = railSpecular,
-                },
-                new TrackRailProfileShape(CreateCircle( 0.32f, -0.15f, 0.075f, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = railSpecular,
-                },
-                new TrackRailProfileShape(CreateCircle( 0.00f, -0.55f, 0.075f, 5), true) {
-                    Swatch = TrackRailSwatch.Alternate,
-                    Specular = railSpecular,
-                },
-            ],
         };
 
+        // left
+        part.AppendRailPart.Circle(-0.32f, -0.15f, 0.075f, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = railSpecular;
+        });
+
+        // right
+        part.AppendRailPart.Circle( 0.32f, -0.15f, 0.075f, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = railSpecular;
+        });
+
+        // center
+        part.AppendRailPart.Circle( 0.00f, -0.55f, 0.075f, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Alternate;
+            shape.Specular = railSpecular;
+        });
+
         // top
-        shape.AppendBracePart.Cylinder(
+        part.AppendBracePart.Cylinder(
             new Vector3(-0.32f, -0.15f, 0f),
             new Vector3( 0.32f, -0.15f, 0f),
-            0.045f, 5, part => {
-                part.Swatch = TrackRailSwatch.Main;
-                part.Specular = railSpecular;
+            0.045f, 5, shape => {
+                shape.Swatch = TrackRailSwatch.Main;
+                shape.Specular = railSpecular;
             });
 
         // left
-        shape.AppendBracePart.Cylinder(
+        part.AppendBracePart.Cylinder(
             new Vector3(-0.32f, -0.15f, 0f),
             new Vector3( 0.00f, -0.55f, 0f),
-            0.045f, 5, part => {
-                part.Swatch = TrackRailSwatch.Main;
-                part.Specular = railSpecular;
+            0.045f, 5, shape => {
+                shape.Swatch = TrackRailSwatch.Main;
+                shape.Specular = railSpecular;
             });
 
-        shape.AppendBracePart.Cylinder(
+        part.AppendBracePart.Cylinder(
             new Vector3( 0.32f, -0.15f, 0f),
             new Vector3( 0.00f, -0.55f, 0f),
-            0.045f, 5, part => {
-                part.Swatch = TrackRailSwatch.Main;
-                part.Specular = railSpecular;
+            0.045f, 5, shape => {
+                shape.Swatch = TrackRailSwatch.Main;
+                shape.Specular = railSpecular;
             });
 
-
-        return shape;
+        return part;
     }
 }

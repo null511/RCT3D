@@ -1,8 +1,8 @@
-using System.Numerics;
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Tracks.Builders;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
 
@@ -15,10 +15,6 @@ internal sealed class SideFrictionRollerCoaster : RideDefinition
     private const float BottomRailCenterY = -0.2f;
 
     private const float BeamHalfSize = 0.06f;
-
-    //private const float RailHalfWidth = 0.08f;
-    //private const float RailHalfHeight = 0.03f;
-    //private const float RailWoodInset = 0.2f;
 
     private static readonly TrackRgba8 RailColor = new(187, 193, 196, 255);
     private static readonly TrackRailSpecularData RailSpecular = new(80, 255);
@@ -41,29 +37,29 @@ internal sealed class SideFrictionRollerCoaster : RideDefinition
         };
 
         // bottom left rail
-        part.RailProfiles.AddRange(CreateBox(-BottomRailHalfSeparation, BottomRailCenterY, 0.08f, 0.03f, shape => {
+        part.AppendRailPart.Box(-BottomRailHalfSeparation, BottomRailCenterY, 0.08f, 0.03f, shape => {
             shape.Color = RailColor;
             shape.Specular = RailSpecular;
-        }));
+        });
 
         // bottom right rail
-        part.RailProfiles.AddRange(CreateBox( BottomRailHalfSeparation, BottomRailCenterY, 0.08f, 0.03f, shape => {
+        part.AppendRailPart.Box( BottomRailHalfSeparation, BottomRailCenterY, 0.08f, 0.03f, shape => {
             shape.Color = RailColor;
             shape.Specular = RailSpecular;
-        }));
+        });
 
         if (!track.Part.IsStationPlatform() && !track.Part.IsLoop()) {
             // side left rail
-            part.RailProfiles.AddRange(CreateBox(-SideRailHalfSeparation, SideRailCenterY, 0.02f, 0.12f, shape => {
+            part.AppendRailPart.Box(-SideRailHalfSeparation, SideRailCenterY, 0.02f, 0.12f, shape => {
                 shape.Color = RailColor;
                 shape.Specular = RailSpecular;
-            }));
+            });
 
             // side right rail
-            part.RailProfiles.AddRange(CreateBox( SideRailHalfSeparation, SideRailCenterY, 0.02f, 0.12f, shape => {
+            part.AppendRailPart.Box( SideRailHalfSeparation, SideRailCenterY, 0.02f, 0.12f, shape => {
                 shape.Color = RailColor;
                 shape.Specular = RailSpecular;
-            }));
+            });
 
             const float baseTop = -0.32f;
             var beamBottom = baseTop - BeamHalfSize * 2f;
@@ -151,12 +147,4 @@ internal sealed class SideFrictionRollerCoaster : RideDefinition
 
         return part;
     }
-
-    //private static IEnumerable<TrackRailProfileShape> CreateWoodProfile(float centerX, float centerY, float halfWidth, float halfHeight, TrackRailSwatch swatch)
-    //{
-    //    return CreateBox(centerX, centerY, halfWidth, halfHeight, shape => {
-    //        shape.Swatch = swatch;
-    //        shape.Specular = WoodSpecular;
-    //    });
-    //}
 }

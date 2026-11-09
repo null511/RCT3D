@@ -10,20 +10,33 @@ internal readonly record struct VehiclePlacementOffsets(float WorldHeight, float
 
 internal readonly record struct VehiclePose(ushort RideId, Vector3 Position, Matrix4x4 Rotation);
 
-internal static class VehiclePoseResolver
+internal sealed class VehiclePoseResolver
 {
-    public static Dictionary<ushort, VehiclePose> ResolveFrame(
+    private readonly Dictionary<ushort, VehiclePose> poses = new();
+    private readonly Dictionary<ushort, RCTVehicleData> previousVehicles = new();
+    private VehicleSnapshot? previousSnapshot;
+
+    public Dictionary<ushort, VehiclePose> ResolveFrame(
         VehicleSnapshotPair? snapshots,
         long timestamp,
         IReadOnlyDictionary<ushort, VehiclePlacementOffsets> offsetsByRide,
         Func<ushort, bool> usesSmoothMovement,
         TryGetCenterlinePoseDelegate tryGetCenterlinePose)
     {
-        var poses = new Dictionary<ushort, VehiclePose>();
-        if (snapshots is null) return poses;
+        poses.Clear();
+        if (snapshots is null) {
+            Clear();
+            return poses;
+        }
 
-        var previousVehicles = snapshots.Previous?.Vehicles.ToArray()
-            .ToDictionary(vehicle => vehicle.EntityId);
+        if (!ReferenceEquals(previousSnapshot, snapshots.Previous)) {
+            previousVehicles.Clear();
+            previousSnapshot = snapshots.Previous;
+            if (previousSnapshot is not null) {
+                foreach (var vehicle in previousSnapshot.Vehicles.Span)
+                    previousVehicles.Add(vehicle.EntityId, vehicle);
+            }
+        }
         var previousTimestamp = snapshots.Previous?.Timestamp ?? snapshots.Current.Timestamp;
         var interval = snapshots.Current.Timestamp - previousTimestamp;
         var targetTimestamp = timestamp - Stopwatch.Frequency / 40;
@@ -34,9 +47,9 @@ internal static class VehiclePoseResolver
         foreach (var current in snapshots.Current.Vehicles.Span) {
             var position = ToWorldPosition(current);
             var orientation = GetOrientation(current);
+            var swingPosition = (float)current.SwingPosition;
             var previous = default(RCTVehicleData);
             var canInterpolate = interval > 0
-                && previousVehicles is not null
                 && previousVehicles.TryGetValue(current.EntityId, out previous)
                 && previous.RideId == current.RideId
                 && previous.TrainHeadEntityId == current.TrainHeadEntityId
@@ -44,6 +57,7 @@ internal static class VehiclePoseResolver
             if (canInterpolate) {
                 position = Vector3.Lerp(ToWorldPosition(previous), position, amount);
                 orientation = Quaternion.Slerp(GetOrientation(previous), orientation, amount);
+                swingPosition = previous.SwingPosition + (current.SwingPosition - previous.SwingPosition) * amount;
             }
 
             var rotation = Matrix4x4.CreateFromQuaternion(orientation);
@@ -56,6 +70,7 @@ internal static class VehiclePoseResolver
                 centerlineResolved = true;
             }
 
+            rotation = Matrix4x4.CreateRotationZ(swingPosition * (MathF.Tau / 65536.0f)) * rotation;
             var offsets = offsetsByRide.GetValueOrDefault(current.RideId);
             if (!centerlineResolved)
                 position.Y += offsets.WorldHeight;
@@ -64,6 +79,13 @@ internal static class VehiclePoseResolver
         }
 
         return poses;
+    }
+
+    public void Clear()
+    {
+        poses.Clear();
+        previousVehicles.Clear();
+        previousSnapshot = null;
     }
 
     private static Vector3 ToWorldPosition(in RCTVehicleData vehicle) => new(

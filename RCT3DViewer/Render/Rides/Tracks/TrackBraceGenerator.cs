@@ -55,7 +55,7 @@ internal sealed class TrackBraceGenerator(Func<RCTTrackElementData, TrackPart> g
             var position = Vector3.Lerp(centerline[segment], centerline[segment + 1], amount);
             var frame = InterpolateFrame(frames[segment], frames[segment + 1], amount);
 
-            AddBraceParts(geometry, shape.BraceParts.ToArray(), position, frame, track.MainPaletteIndex, track.AdditionalPaletteIndex, palette);
+            AddBraceParts(geometry, shape.BraceParts.ToArray(), position, frame, track.MainPaletteIndex, track.AdditionalPaletteIndex, track.SupportPaletteIndex, palette);
         }
     }
 
@@ -66,6 +66,7 @@ internal sealed class TrackBraceGenerator(Func<RCTTrackElementData, TrackPart> g
         TrackCenterlineFrame frame,
         byte mainPaletteIndex,
         byte alternatePaletteIndex,
+        byte supportPaletteIndex,
         ReadOnlySpan<RCTPaletteEntry> palette)
     {
         foreach (var part in parts) {
@@ -75,6 +76,7 @@ internal sealed class TrackBraceGenerator(Func<RCTTrackElementData, TrackPart> g
             var color = part.Swatch switch {
                 TrackRailSwatch.Main => TrackMeshPartGenerator.GetPaletteColor(mainPaletteIndex, palette),
                 TrackRailSwatch.Alternate => TrackMeshPartGenerator.GetPaletteColor(alternatePaletteIndex, palette),
+                TrackRailSwatch.Support => TrackMeshPartGenerator.GetPaletteColor(supportPaletteIndex, palette),
                 TrackRailSwatch.None => part.Color,
                 _ => throw new InvalidDataException($"Unknown brace swatch {part.Swatch}.")
             };

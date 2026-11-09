@@ -46,7 +46,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         TrackMeshData? trackMesh,
         RideSupportMeshData? rideSupportMesh,
         RideEntranceExitMeshData? rideEntranceExitMesh,
-        ParkRenderRegion[] parkRegions)
+        ParkRenderRegion[] parkRegions,
+        Action<uint> updateVehicleInstances)
     {
         SectionMetrics = (0, 0);
 
@@ -93,6 +94,11 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
         var currentViewToPreviousClip = currentViewToPreviousView * previousProjection;
         var (shadowViewProjections, cascadeSplits) = CreateShadowViewProjections(camera, aspect, sunDirection, ui.ShadowRadius,
             ui.ShadowResolution);
+        Span<ViewFrustum> shadowFrusta = stackalloc ViewFrustum[(int)ShadowRenderTargets.CascadeCount];
+        if (ui.ShadowMappingEnabled) {
+            for (var cascade = 0; cascade < shadowFrusta.Length; cascade++)
+                shadowFrusta[cascade] = ViewFrustum.FromViewProjection(shadowViewProjections[cascade]);
+        }
         var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
         var ridesDistance = ui.RidesRenderDistance;
         var supportsDistance = ui.SupportsRenderDistance;
@@ -105,8 +111,18 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             region.RidesInRange = ridesDistance == 0.0f || distanceSquared <= ridesDistance * ridesDistance;
             region.SupportsInRange = supportsDistance == 0.0f || distanceSquared <= supportsDistance * supportsDistance;
             region.SceneryInRange = sceneryDistance == 0.0f || distanceSquared <= sceneryDistance * sceneryDistance;
+            region.VehicleInstancesVisible = region.HasDynamicBounds && region.RidesInRange && region.CameraVisible;
+            if (region.HasDynamicBounds && region.RidesInRange && !region.VehicleInstancesVisible && ui.ShadowMappingEnabled) {
+                foreach (var shadowFrustum in shadowFrusta) {
+                    if (!shadowFrustum.Intersects(region.Bounds)) continue;
+
+                    region.VehicleInstancesVisible = true;
+                    break;
+                }
+            }
         }
         EnsureRegionLookup(parkRegions);
+        updateVehicleInstances(currentFrame);
 
         var renderDimensions = new Vector2D<uint>(extent.Width, extent.Height);
         var uniformDescriptorSet = resources.UniformBufferResources!.GetDescriptorSet(currentFrame);
@@ -351,7 +367,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
         if (ui.ShadowMappingEnabled || !shadowMapInitialized)
             RecordShadowPass(commandBuffer, uniformDescriptorSet, currentFrame, terrainMesh, pathMesh, trackMesh,
-                rideSupportMesh, rideEntranceExitMesh, parkRegions, shadowViewProjections, ui.ShadowMappingEnabled);
+                rideSupportMesh, rideEntranceExitMesh, parkRegions, shadowFrusta, ui.ShadowMappingEnabled);
 
         RenderPassBeginInfo waterRenderPassInfo = new() {
             SType = StructureType.RenderPassBeginInfo,
@@ -561,7 +577,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
     private void RecordShadowPass(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, uint currentFrame,
         TerrainMeshData? terrainMesh, PathMeshData? pathMesh, TrackMeshData? trackMesh,
         RideSupportMeshData? rideSupportMesh, RideEntranceExitMeshData? rideEntranceExitMesh,
-        ParkRenderRegion[] parkRegions, Matrix4x4[] shadowViewProjections, bool renderGeometry)
+        ParkRenderRegion[] parkRegions, ReadOnlySpan<ViewFrustum> shadowFrusta, bool renderGeometry)
     {
         var targets = resources.DeferredTargets!.ShadowTargets!;
         var shadowResources = resources.ShadowGraphicsResources!;
@@ -577,7 +593,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
         for (var cascade = 0; cascade < ShadowRenderTargets.CascadeCount; cascade++) {
             if (renderGeometry) {
-                var shadowFrustum = ViewFrustum.FromViewProjection(shadowViewProjections[cascade]);
+                var shadowFrustum = shadowFrusta[cascade];
                 foreach (var region in parkRegions)
                     region.ShadowVisible = region.HasBounds && shadowFrustum.Intersects(region.Bounds);
             }

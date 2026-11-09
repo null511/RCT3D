@@ -70,10 +70,10 @@ internal class WoodenWildMouse : RideDefinition
         });
 
         // center rail
-        shape.RailProfiles.AddRange(CreateBox(centerX, centerY, halfWidth, halfHeight, part => {
+        shape.AppendRailPart.Box(centerX, centerY, halfWidth, halfHeight, part => {
             part.Color = railColor;
             part.Specular = railSpecular;
-        }));
+        });
 
         // right rail - top
         shape.RailProfiles.Add(new TrackRailProfileShape([

@@ -28,6 +28,10 @@ internal sealed class ParkSceneController(
     private readonly TrackMeshBuilder trackMeshBuilder = new();
     private readonly TunnelLayoutBuilder tunnelLayoutBuilder = new();
     private readonly RideEntranceExitMeshBuilder rideEntranceExitMeshBuilder = new();
+    private readonly VehiclePoseResolver vehiclePoseResolver = new();
+    private readonly VehicleCubeRenderer vehicleCubeRenderer = new();
+    private Func<ushort, bool>? usesSmoothMovement;
+    private TryGetCenterlinePoseDelegate? tryGetCenterlinePose;
 
     private Task<ParkLoadResult>? parkLoadTask;
     private ParkLoadResult? pendingParkLoadResult;
@@ -80,6 +84,7 @@ internal sealed class ParkSceneController(
     {
         if (ui.IsParkLoading || parkLoadTask is not null || pendingParkLoadResult is not null) return;
 
+        ResetVehicleState();
         treeSceneryMeshBuilder.ClearCaches();
         ui.BeginParkLoad(parkPath);
         Volatile.Write(ref parkLoadProgress, "Loading park file...");
@@ -124,7 +129,7 @@ internal sealed class ParkSceneController(
         }
     }
 
-    public void Update(uint currentFrame)
+    public void Update()
     {
         var loadCompletedThisFrame = false;
 
@@ -248,7 +253,7 @@ internal sealed class ParkSceneController(
         if (parkLoadTask is not null)
             ui.SetParkLoadStatus(Volatile.Read(ref parkLoadProgress));
 
-        UpdateVehicleCubeInstances(currentFrame);
+        PrepareVehiclePoses();
     }
 
     private void ClearParkState(string failure)
@@ -263,7 +268,7 @@ internal sealed class ParkSceneController(
         RideEntrances = [];
         trackElementsByTile.Clear();
         vehicleOffsetsByRide.Clear();
-        vehiclePoses.Clear();
+        ResetVehicleState();
         smoothMovementRideIds.Clear();
         rideCenterlines = [];
         vehiclePathMesh = null;
@@ -303,6 +308,7 @@ internal sealed class ParkSceneController(
 
     private void RebuildRenderRegions()
     {
+        ResetVehicleState();
         renderRegionsByCoordinate.Clear();
 
         if (TerrainMesh is { } terrain) {
@@ -406,45 +412,62 @@ internal sealed class ParkSceneController(
         return region;
     }
 
-    private void UpdateVehicleCubeInstances(uint currentFrame)
+    private void PrepareVehiclePoses()
     {
-        var vehicleResources = resources.VehicleCubeGraphicsResources;
-        foreach (var region in RenderRegions)
-            region.ClearDynamicContents();
+        foreach (var previousRegion in vehicleCubeRenderer.Regions) {
+            if (renderRegionsByCoordinate.TryGetValue(previousRegion.Coordinate, out var region))
+                region.ClearDynamicContents();
+        }
 
         var snapshots = parkLoadTask is null && pendingParkLoadResult is null
             ? simulation.VehicleSnapshots : null;
-        vehiclePoses = VehiclePoseResolver.ResolveFrame(
-            snapshots, Stopwatch.GetTimestamp(), vehicleOffsetsByRide, UsesSmoothMovement, TryGetCenterlinePose);
+        vehiclePoses = vehiclePoseResolver.ResolveFrame(
+            snapshots, Stopwatch.GetTimestamp(), vehicleOffsetsByRide,
+            usesSmoothMovement ??= UsesSmoothMovement, tryGetCenterlinePose ??= TryGetCenterlinePose);
 
-        if (vehicleResources.Length == 0) return;
-
-        var instances = VehicleCubeRenderer.BuildInstances(
-            vehiclePoses, loadedMapWidth, loadedMapHeight);
-        var currentVehicleResources = vehicleResources[(int)currentFrame];
-        currentVehicleResources.UploadInstances(instances);
-
-        var regionsChanged = false;
-        foreach (var batch in currentVehicleResources.RegionBatches) {
-            if (batch.InstanceCount == 0) continue;
-
-            if (!renderRegionsByCoordinate.TryGetValue(batch.Region, out var region)) {
-                region = GetOrCreateRenderRegion(batch.Region);
-                regionsChanged = true;
-            }
-
-            region.Vehicles = new RenderRegionModelBatch(currentVehicleResources, batch);
-            region.IncludeDynamicBounds(batch.Bounds);
+        vehicleCubeRenderer.PrepareRegions(vehiclePoses, loadedMapWidth, loadedMapHeight);
+        var previousRegionCount = renderRegionsByCoordinate.Count;
+        foreach (var vehicleRegion in vehicleCubeRenderer.Regions) {
+            var region = GetOrCreateRenderRegion(vehicleRegion.Coordinate);
+            region.IncludeDynamicBounds(vehicleRegion.Bounds);
         }
 
-        if (regionsChanged)
+        if (renderRegionsByCoordinate.Count != previousRegionCount)
             RenderRegions = renderRegionsByCoordinate.Values.ToArray();
+    }
+
+    public void UpdateVehicleCubeInstances(uint currentFrame)
+    {
+        var vehicleResources = resources.VehicleCubeGraphicsResources;
+        if (vehicleResources.Length == 0) return;
+
+        vehicleCubeRenderer.BuildInstances(renderRegionsByCoordinate);
+        var currentVehicleResources = vehicleResources[(int)currentFrame];
+        currentVehicleResources.UploadInstances(vehicleCubeRenderer.Instances, vehicleCubeRenderer.RegionBatches);
+
+        foreach (var batch in currentVehicleResources.RegionBatches) {
+            var region = renderRegionsByCoordinate[batch.Region];
+            region.Vehicles = new RenderRegionModelBatch(currentVehicleResources, batch);
+        }
+    }
+
+    private void ResetVehicleState()
+    {
+        foreach (var vehicleRegion in vehicleCubeRenderer.Regions) {
+            if (renderRegionsByCoordinate.TryGetValue(vehicleRegion.Coordinate, out var region))
+                region.ClearDynamicContents();
+        }
+
+        vehiclePoseResolver.Clear();
+        vehiclePoses.Clear();
+        vehicleCubeRenderer.Clear();
+        ClearVehicleCubeInstances();
     }
 
     private void ClearVehicleCubeInstances()
     {
         foreach (var resources1 in resources.VehicleCubeGraphicsResources)
-            resources1.UploadInstances(Array.Empty<ModelRegionBatch>());
+            resources1.ClearInstances();
     }
 
     private void DisposePathAccessoryResources()
@@ -477,6 +500,7 @@ internal sealed class ParkSceneController(
 
         parkLoadTask = null;
         pendingParkLoadResult = null;
+        ResetVehicleState();
 
         try {
             simulation.Dispose();

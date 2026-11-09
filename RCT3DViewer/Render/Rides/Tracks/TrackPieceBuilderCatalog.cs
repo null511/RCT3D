@@ -38,6 +38,7 @@ internal sealed class TrackPieceBuilderCatalog
         // Special pieces are registered in dedicated sections below.
 
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25, Pitch.Slope25, Pitch.Slope25));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.PoweredLift, Pitch.Slope25, Pitch.Slope25));
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60, Pitch.Slope60, Pitch.Slope60));
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToUp25, Pitch.None, Pitch.Slope25));
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25ToFlat, Pitch.Slope25, Pitch.None));
@@ -54,6 +55,18 @@ internal sealed class TrackPieceBuilderCatalog
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown60, Pitch.None, -Pitch.Slope60));
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60ToFlat, -Pitch.Slope60, Pitch.None));
         catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.BrakeForDrop, Pitch.None, -Pitch.Slope60));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25Covered, Pitch.Slope25, Pitch.Slope25));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60Covered, Pitch.Slope60, Pitch.Slope60));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToUp25Covered, Pitch.None, Pitch.Slope25));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25ToUp60Covered, Pitch.Slope25, Pitch.Slope60));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up60ToUp25Covered, Pitch.Slope60, Pitch.Slope25));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Up25ToFlatCovered, Pitch.Slope25, Pitch.None));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25Covered, -Pitch.Slope25, -Pitch.Slope25));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60Covered, -Pitch.Slope60, -Pitch.Slope60));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.FlatToDown25Covered, Pitch.None, -Pitch.Slope25));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25ToDown60Covered, -Pitch.Slope25, -Pitch.Slope60));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down60ToDown25Covered, -Pitch.Slope60, -Pitch.Slope25));
+        catalog.Register(new SlopeTrackPieceBuilder(RCTTrackElementType.Down25ToFlatCovered, -Pitch.Slope25, Pitch.None));
 
         catalog.RegisterMany(type => new VerticalTrackPieceBuilder(type),
             RCTTrackElementType.Up90,
@@ -61,7 +74,14 @@ internal sealed class TrackPieceBuilderCatalog
             RCTTrackElementType.Up60ToUp90,
             RCTTrackElementType.Down60ToDown90,
             RCTTrackElementType.Up90ToUp60,
-            RCTTrackElementType.Down90ToDown60);
+            RCTTrackElementType.Down90ToDown60,
+            RCTTrackElementType.ReverseFreefallVertical,
+            RCTTrackElementType.AirThrustVerticalDown);
+
+        catalog.RegisterMany(type => new VerticalSlopeTrackPieceBuilder(type),
+            RCTTrackElementType.ReverseFreefallSlope,
+            RCTTrackElementType.AirThrustVerticalDownToLevel);
+        catalog.Register(new AirThrustTopCapTrackPieceBuilder());
 
         catalog.RegisterMany(type => new LongBaseSlopeTrackPieceBuilder(type, Pitch.None, Pitch.Slope60),
             RCTTrackElementType.FlatToUp60LongBase);

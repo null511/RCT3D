@@ -1,9 +1,9 @@
 using RCT3D.Interop.Models;
-using RCT3D.Render.Rides.Definitions;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Tracks.Builders;
 using System.Numerics;
+using System.Reflection;
 
 namespace RCT3D.Render.Rides;
 
@@ -61,40 +61,42 @@ internal class TrackRideConfiguration(
 
 internal static class TrackRideConfigurations
 {
-    private static readonly TrackRideConfiguration[] configurations = [
-        new BoatHire().Build(),
-        new BobsleighCoaster().Build(),
-        new CarRide().Build(),
-        new ClassicMiniRollerCoaster().Build(),
-        new ClassicWoodenRollerCoaster().Build(),
-        new CompactInvertedCoaster().Build(),
-        new CorkscrewRollerCoaster().Build(),
-        new GhostTrain().Build(),
-        new GigaCoaster().Build(),
-        new GoKarts().Build(),
-        new Hypercoaster().Build(),
-        new InvertedRollerCoaster().Build(),
-        new JuniorRollerCoaster().Build(),
-        new LaunchedFreefall().Build(),
-        new LogFlume().Build(),
-        new LoopingRollerCoaster().Build(),
-        new MineRide().Build(),
-        new MineTrainCoaster().Build(),
-        new MiniatureRailway().Build(),
-        new MiniHelicopters().Build(),
-        new Monorail().Build(),
-        new MonsterTrucks().Build(),
-        new ObservationTower().Build(),
-        new RiverRapids().Build(),
-        new SideFrictionRollerCoaster().Build(),
-        new SingleRailRollerCoaster().Build(),
-        new SpiralRollerCoaster().Build(),
-        new Steeplechase().Build(),
-        new VerticalDropRollerCoaster().Build(),
-        new WaterCoaster().Build(),
-        new WoodenRollerCoaster().Build(),
-        new WoodenWildMouse().Build(),
-    ];
+    private static readonly TrackRideConfiguration[] configurations = CreateConfigurations();
 
     public static IReadOnlyList<TrackRideConfiguration> All => configurations;
+
+    private static TrackRideConfiguration[] CreateConfigurations()
+    {
+        var definitionTypes = typeof(RideDefinition).Assembly.GetTypes()
+            .Where(type => !type.IsAbstract && typeof(RideDefinition).IsAssignableFrom(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal);
+
+        var configurationList = definitionTypes.Select(CreateConfiguration).ToArray();
+
+        var duplicate = configurationList
+            .GroupBy(configuration => configuration.RideType)
+            .FirstOrDefault(group => group.Count() > 1);
+
+        if (duplicate is not null)
+            throw new InvalidOperationException($"Multiple ride definitions found for ride type '{duplicate.Key}'.");
+
+        return configurationList;
+    }
+
+    private static TrackRideConfiguration CreateConfiguration(Type definitionType)
+    {
+        var constructor = definitionType.GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            Type.EmptyTypes,
+            modifiers: null);
+
+        if (constructor is null)
+            throw new InvalidOperationException($"Ride definition '{definitionType.FullName}' must have a parameterless constructor.");
+
+        if (constructor.Invoke(null) is not RideDefinition definition)
+            throw new InvalidOperationException($"Could not create ride definition '{definitionType.FullName}'.");
+
+        return definition.Build();
+    }
 }

@@ -7,7 +7,8 @@ internal enum TrackRailSwatch : byte
 {
     Main,
     Alternate,
-    None
+    None,
+    Support
 }
 
 internal readonly record struct TrackRailSpecularData(byte Roughness, byte Metalness);

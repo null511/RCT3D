@@ -32,6 +32,7 @@ public sealed class Renderer : IDisposable
     private double currentDeltaTime;
     private readonly Action<double> prepareFrame;
     private readonly Action<Silk.NET.Vulkan.CommandBuffer, uint, uint> recordFrame;
+    private readonly Action<uint> updateVehicleInstances;
     private readonly Action frameSubmitted;
     private readonly Action<bool> swapchainRecreated;
     private readonly Action<string> loadPark;
@@ -46,6 +47,7 @@ public sealed class Renderer : IDisposable
     {
         prepareFrame = PrepareFrame;
         recordFrame = RecordFrame;
+        updateVehicleInstances = UpdateVehicleInstances;
         frameSubmitted = OnFrameSubmitted;
         swapchainRecreated = OnSwapchainRecreated;
         loadPark = LoadPark;
@@ -196,7 +198,7 @@ public sealed class Renderer : IDisposable
 
     private void PrepareFrame(double activeFrameTimeMilliseconds)
     {
-        parkScene!.Update(frameCoordinator!.CurrentFrame);
+        parkScene!.Update();
         peepMode!.UpdateRideCamera();
         var cameraTileX = (int)MathF.Floor(camera.Position.X / WorldUnits.TileSize);
         var cameraTileY = (int)MathF.Floor(camera.Position.Z / WorldUnits.TileSize);
@@ -211,7 +213,9 @@ public sealed class Renderer : IDisposable
     private void RecordFrame(Silk.NET.Vulkan.CommandBuffer commandBuffer, uint imageIndex, uint currentFrame) =>
         frameRenderer!.Record(commandBuffer, imageIndex, currentFrame,
             parkScene!.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh, parkScene.RideSupportMesh,
-            parkScene.RideEntranceExitMesh, parkScene.RenderRegions);
+            parkScene.RideEntranceExitMesh, parkScene.RenderRegions, updateVehicleInstances);
+
+    private void UpdateVehicleInstances(uint currentFrame) => parkScene!.UpdateVehicleCubeInstances(currentFrame);
 
     private void OnFrameSubmitted() => frameRenderer!.FrameSubmitted();
 

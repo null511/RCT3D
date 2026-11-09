@@ -3,7 +3,6 @@ using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Tracks.Builders;
 using System.Collections.Concurrent;
-using System.Numerics;
 
 namespace RCT3D.Render.Rides;
 
@@ -64,58 +63,6 @@ internal abstract class RideDefinition(RCTRideType rideType)
     {
         placements.Clear();
     }
-
-    #region Rail Profile Helpers
-
-    protected static IEnumerable<TrackRailProfileShape> CreateBox(float centerX, float centerY, float halfWidth, float halfHeight, Action<TrackRailProfileShape>? partAction)
-    {
-        // top
-        yield return BuildPart([
-            new Vector2(centerX + halfWidth, centerY + halfHeight),
-            new Vector2(centerX - halfWidth, centerY + halfHeight),
-        ]);
-
-        // left
-        yield return BuildPart([
-            new Vector2(centerX - halfWidth, centerY + halfHeight),
-            new Vector2(centerX - halfWidth, centerY - halfHeight),
-        ]);
-
-        // bottom
-        yield return BuildPart([
-            new Vector2(centerX - halfWidth, centerY - halfHeight),
-            new Vector2(centerX + halfWidth, centerY - halfHeight),
-        ]);
-
-        // right
-        yield return BuildPart([
-            new Vector2(centerX + halfWidth, centerY - halfHeight),
-            new Vector2(centerX + halfWidth, centerY + halfHeight),
-        ]);
-
-        yield break;
-
-        TrackRailProfileShape BuildPart(Vector2[] line) {
-            var shape = new TrackRailProfileShape(line, false);
-            partAction?.Invoke(shape);
-            return shape;
-        }
-    }
-
-    protected static Vector2[] CreateCircle(float centerX, float centerY, float radius, int vertexCount)
-    {
-        ArgumentOutOfRangeException.ThrowIfLessThan(vertexCount, 3);
-
-        var vertices = new Vector2[vertexCount];
-        for (var i = 0; i < vertexCount; i++) {
-            var angle = MathF.PI / 2 + 2 * MathF.PI * i / vertexCount;
-            vertices[i] = new Vector2(centerX + radius * MathF.Cos(angle), centerY + radius * MathF.Sin(angle));
-        }
-
-        return vertices;
-    }
-
-    #endregion
 }
 
 internal enum RidePlatformSurfaceType

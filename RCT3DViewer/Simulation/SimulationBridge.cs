@@ -295,12 +295,16 @@ public sealed class SimulationBridge : IDisposable
             openRCT2 = new LibOpenRCT2(libraryPath, openRCT2Path, rct2Path, rct1Path);
 
             started.TrySetResult();
+
             var updateInterval = Math.Max(1L, Stopwatch.Frequency / 40);
             long nextUpdate = 0;
+
             while (true) {
                 var timeoutMilliseconds = Timeout.Infinite;
+
                 if (Volatile.Read(ref parkLoaded)) {
                     var remaining = nextUpdate - Stopwatch.GetTimestamp();
+
                     timeoutMilliseconds = remaining <= 0
                         ? 0
                         : Math.Clamp((int)Math.Ceiling(remaining * 1000.0 / Stopwatch.Frequency), 1, 25);
@@ -323,10 +327,12 @@ public sealed class SimulationBridge : IDisposable
                 else if (now >= nextUpdate) {
                     try {
                         openRCT2.AdvanceSimulation();
+
                         Volatile.Write(ref gameTimeOfDayHours, openRCT2.GetTimeOfDayHours());
                         PublishVehicleSnapshot(openRCT2);
                         PublishPeepSnapshot(openRCT2);
                         nextUpdate += updateInterval;
+
                         if (now - nextUpdate > updateInterval * 4)
                             nextUpdate = now + updateInterval;
                     }

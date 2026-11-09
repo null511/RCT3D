@@ -1,18 +1,13 @@
-using System.Numerics;
 using RCT3D.Interop.Models;
 using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Tracks.Builders;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions;
 
 internal sealed class GhostTrain : RideDefinition
 {
-    private const float PlatformHalfWidth = 0.55f;
-    private const float PlatformHalfHeight = 0.08f;
-
-    private const float RailSeparation = 0.40f;
-
     private static readonly TrackRailSpecularData platformSpecular = new(100, 0);
     private static readonly TrackRailSpecularData railSpecular = new(180, 0);
 
@@ -28,18 +23,19 @@ internal sealed class GhostTrain : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        var part = new TrackPart {
-            RailProfiles = [
-                .. CreateBox(0f, -PlatformHalfHeight, PlatformHalfWidth, PlatformHalfHeight, p => {
-                    p.Swatch = TrackRailSwatch.Main;
-                    p.Specular = platformSpecular;
-                }),
-            ],
-        };
+        const float platformHalfHeight = 0.08f;
+        const float railSeparation = 0.40f;
+
+        var part = new TrackPart();
+
+        part.AppendRailPart.Box(0f, -platformHalfHeight, 0.55f, platformHalfHeight, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = platformSpecular;
+        });
 
         if (track.Part.HasIncline()) {
-            part.RailProfiles.Add(BuildRail(-RailSeparation));
-            part.RailProfiles.Add(BuildRail( RailSeparation));
+            part.RailProfiles.Add(BuildRail(-railSeparation));
+            part.RailProfiles.Add(BuildRail( railSeparation));
         }
 
         return part;

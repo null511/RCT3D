@@ -22,22 +22,23 @@ internal sealed class BoatHire : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
+        const float centerY = TerrainMeshBuilder.WaterPlaneVerticalOffset;
         const float separation = 0.75f;
+        const float radius = 0.09f;
 
-        var part = new TrackPart {
-            RailProfiles = [
-                // left
-                new TrackRailProfileShape(CreateCircle(-separation, TerrainMeshBuilder.WaterPlaneVerticalOffset, 0.09f, 5), true) {
-                    Swatch = TrackRailSwatch.Main,
-                    Specular = paintSpecular,
-                },
-                // right
-                new TrackRailProfileShape(CreateCircle( separation, TerrainMeshBuilder.WaterPlaneVerticalOffset, 0.09f, 5), true) {
-                    Swatch = TrackRailSwatch.Main,
-                    Specular = paintSpecular,
-                },
-            ],
-        };
+        var part = new TrackPart();
+
+        // left
+        part.AppendRailPart.Circle(-separation, centerY, radius, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = paintSpecular;
+        });
+
+        // right
+        part.AppendRailPart.Circle( separation, centerY, radius, 5, shape => {
+            shape.Swatch = TrackRailSwatch.Main;
+            shape.Specular = paintSpecular;
+        });
 
         return part;
     }
