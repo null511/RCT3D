@@ -1,6 +1,5 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Paths;
-using RCT3D.Render.Rides;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
@@ -65,7 +64,6 @@ internal sealed class VehicleCubeRenderer
 
     public void PrepareRegions(
         Dictionary<ushort, VehiclePose> poses,
-        IReadOnlyDictionary<ushort, Vector3> sizesByRide,
         int mapWidth,
         int mapHeight)
     {
@@ -79,6 +77,8 @@ internal sealed class VehicleCubeRenderer
             return;
 
         foreach (var pose in poses.Values) {
+            if (!pose.IsVisible) continue;
+
             var position = pose.Position;
             var tileX = (int)MathF.Floor(position.X / WorldUnits.TileSize);
             var tileY = (int)MathF.Floor(position.Z / WorldUnits.TileSize);
@@ -86,7 +86,7 @@ internal sealed class VehicleCubeRenderer
             if ((uint)tileX >= (uint)mapWidth || (uint)tileY >= (uint)mapHeight)
                 continue;
 
-            var size = sizesByRide.GetValueOrDefault(pose.RideId, RideVehicleDefinition.DefaultSize);
+            var size = pose.Definition.Size;
             var boundsHalfSize = new Vector3(size.Length() * 0.5f);
             var bounds = new AxisAlignedBounds(position - boundsHalfSize, position + boundsHalfSize);
 
@@ -107,7 +107,6 @@ internal sealed class VehicleCubeRenderer
 
     public void BuildInstances(
         Dictionary<RenderRegionCoordinate, ParkRenderRegion> renderRegions,
-        IReadOnlyDictionary<ushort, Vector3> sizesByRide,
         ReadOnlySpan<RCTPaletteEntry> palette)
     {
         instanceCount = 0;
@@ -133,7 +132,7 @@ internal sealed class VehicleCubeRenderer
                 region.Coordinate, region.Bounds, (uint)firstInstance, (uint)region.Poses.Count);
 
             foreach (var pose in region.Poses) {
-                var size = sizesByRide.GetValueOrDefault(pose.RideId, RideVehicleDefinition.DefaultSize);
+                var size = pose.Definition.Size;
                 var transform = Matrix4x4.CreateScale(size) * pose.Rotation * Matrix4x4.CreateTranslation(pose.Position);
                 var color = palette[pose.PrimaryPaletteIndex];
 

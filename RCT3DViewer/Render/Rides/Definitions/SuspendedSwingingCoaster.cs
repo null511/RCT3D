@@ -18,7 +18,7 @@ internal sealed class SuspendedSwingingCoaster : RideDefinition
 
         StationBuilder = new DefaultTrackStationBuilder();
 
-        Vehicles.LocalOffset = -0.5f;
+        //Vehicles.LocalOffset = -0.5f;
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)

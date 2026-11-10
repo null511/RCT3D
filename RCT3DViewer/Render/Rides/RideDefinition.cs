@@ -39,9 +39,6 @@ internal abstract class RideDefinition(RCTRideType rideType)
     /// </summary>
     protected bool SmoothMovement = false;
 
-    protected RideVehicleDefinition Vehicles = new();
-
-
     public TrackRideConfiguration Build()
     {
         var trackShapesByType = new ConcurrentDictionary<(RCTTrackElementType TrackType, byte HasChainLift), TrackPart>();
@@ -58,7 +55,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
             new TrackBraceGenerator(GetCachedTrackShape),
         };
 
-        return new TrackRideConfiguration(rideType, partGenerators, SupportStyle, CenterlineHeightOffset, CenterlineVerticalOffset, SupportTrackOffset, Vehicles, 
+        return new TrackRideConfiguration(rideType, partGenerators, SupportStyle, CenterlineHeightOffset, CenterlineVerticalOffset, SupportTrackOffset,
             HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder, TrackBankAngleDegrees,
             PlatformSurface, PlatformRailing, DirectMeshBuilder is null ? track => GetCachedTrackShape(track).WaterPlane : null, DirectMeshBuilder);
     }

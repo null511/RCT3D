@@ -11,7 +11,7 @@ internal class VerticalDropRollerCoaster : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.75f;
-        Vehicles.LocalOffset = 0.5f;
+        //Vehicles.LocalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.MetalBoxed;
         SupportTrackOffset = -0.5f;

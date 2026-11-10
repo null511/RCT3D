@@ -6,7 +6,6 @@ namespace RCT3D.Render.Scenery;
 
 internal sealed class VegetationBuilder
 {
-    private const float PixelToWorld = WorldUnits.TileSize / 32.0f;
     private const float SurfaceBias = -0.12f;
     private const bool UseUpNormals = true;
 
@@ -91,8 +90,8 @@ internal sealed class VegetationBuilder
             MetallicRoughnessTexture: textures.Specular,
             HasPackedPbrTextures: true);
 
-        var halfWidth = textures.BaseColor.Width * 0.25f * PixelToWorld;
-        var height = textures.BaseColor.Height * PixelToWorld;
+        var halfWidth = textures.BaseColor.Width * 0.25f * WorldUnits.NativeUnit;
+        var height = textures.BaseColor.Height * WorldUnits.NativeUnit;
         var uInset = 0.5f / textures.BaseColor.Width;
         var vInset = 0.5f / textures.BaseColor.Height;
         var northUMin = uInset;

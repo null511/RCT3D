@@ -14,18 +14,16 @@ internal sealed class LaunchedFreefall : RideDefinition
 
 internal sealed class LaunchedFreefallTowerMeshBuilder : IDirectTrackMeshBuilder
 {
-    private const float NativeUnit = WorldUnits.TileSize / 32f;
-
     private const int SectionBaseHeight = 4;
     private const int BaseSectionCount = 3;
     private const float SectionHeight = SectionBaseHeight * WorldUnits.HeightPerBaseUnit;
 
     // Visual estimates from sprites 14564-14566, not the painter's sorting bounds.
-    private const float FrameHalfWidth = 7f * NativeUnit;
-    private const float PostHalfWidth = 1.5f * NativeUnit;
-    private const float BraceHalfWidth = NativeUnit;
-    private const float ColumnRadius = 4f * NativeUnit;
-    private const float CapHeight = 8f * NativeUnit;
+    private const float FrameHalfWidth = 7f * WorldUnits.NativeUnit;
+    private const float PostHalfWidth = 1.5f * WorldUnits.NativeUnit;
+    private const float BraceHalfWidth = WorldUnits.NativeUnit;
+    private const float ColumnRadius = 4f * WorldUnits.NativeUnit;
+    private const float CapHeight = 8f * WorldUnits.NativeUnit;
     private const int ColumnSides = 12;
 
     private static readonly TrackRailSpecularData SteelSpecular = new(115, 150);
@@ -75,7 +73,7 @@ internal sealed class LaunchedFreefallTowerMeshBuilder : IDirectTrackMeshBuilder
             var capped = terminal && section == sectionCount - 1;
             var frameTop = capped ? top - CapHeight : top;
             var collarBottom = track.Part == RCTTrackElementType.TowerBase && section == 0
-                ? bottom + 3f * NativeUnit
+                ? bottom + 3f * WorldUnits.NativeUnit
                 : bottom;
 
             foreach (var corner in corners)
@@ -91,6 +89,7 @@ internal sealed class LaunchedFreefallTowerMeshBuilder : IDirectTrackMeshBuilder
                 var inset = Vector3.Normalize(right - left) * PostHalfWidth;
                 left += inset;
                 right -= inset;
+
                 AddCrossBraces(collarBottom + 2f * PostHalfWidth, middle - PostHalfWidth);
                 AddCrossBraces(middle + PostHalfWidth, frameTop - 2f * PostHalfWidth);
 
@@ -162,12 +161,14 @@ internal sealed class LaunchedFreefallTowerMeshBuilder : IDirectTrackMeshBuilder
             var side = MathF.Abs(tangent.Y) > 0.99f
                 ? Vector3.UnitX
                 : Vector3.Normalize(Vector3.Cross(Vector3.UnitY, tangent));
+
             var up = Vector3.Normalize(Vector3.Cross(tangent, side));
             var a = start - side * halfWidth - up * halfWidth;
             var b = start + side * halfWidth - up * halfWidth;
             var c = start + side * halfWidth + up * halfWidth;
             var d = start - side * halfWidth + up * halfWidth;
             var offset = end - start;
+
             AddQuad(a, b, b + offset, a + offset, -up, mainColor);
             AddQuad(b, c, c + offset, b + offset, side, mainColor);
             AddQuad(c, d, d + offset, c + offset, up, mainColor);
@@ -179,6 +180,7 @@ internal sealed class LaunchedFreefallTowerMeshBuilder : IDirectTrackMeshBuilder
             var second = AddVertex(b, normal, color);
             var third = AddVertex(c, normal, color);
             var fourth = AddVertex(d, normal, color);
+
             geometry.AddIndexedTriangle(first, third, second);
             geometry.AddIndexedTriangle(first, fourth, third);
         }

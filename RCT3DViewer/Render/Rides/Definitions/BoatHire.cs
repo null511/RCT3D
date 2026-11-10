@@ -13,7 +13,7 @@ internal sealed class BoatHire : RideDefinition
 
     public BoatHire() : base(RCTRideType.BoatHire)
     {
-        Vehicles.LocalOffset = 0.20f;
+        //Vehicles.LocalOffset = 0.20f;
 
         SupportStyle = RideSupportStyle.None;
 

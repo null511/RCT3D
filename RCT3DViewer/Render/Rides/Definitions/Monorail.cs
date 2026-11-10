@@ -12,7 +12,7 @@ internal class Monorail : RideDefinition
     {
         SmoothMovement = true;
 
-        Vehicles.LocalOffset = 1.0f;
+        //Vehicles.LocalOffset = 1.0f;
 
         SupportStyle = RideSupportStyle.MetalBoxed;
         SupportTrackOffset = 0.2f;

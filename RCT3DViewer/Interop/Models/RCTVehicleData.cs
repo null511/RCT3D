@@ -28,4 +28,8 @@ public struct RCTVehicleData
     public byte TrackSubposition;
     public byte TrackReserved;
     public short SwingPosition;
+    public uint ObjectIdHash;
+    public byte VehicleType;
+    public byte PaintStyle;
+    public ushort RotationFrameMask;
 }

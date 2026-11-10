@@ -39,8 +39,6 @@ internal sealed class ParkSceneController(
     private int loadedMapWidth;
     private int loadedMapHeight;
     private Dictionary<(int TileX, int TileY), RCTTrackElementData[]> trackElementsByTile = new();
-    private Dictionary<ushort, VehiclePlacementOffsets> vehicleOffsetsByRide = new();
-    private Dictionary<ushort, Vector3> vehicleSizesByRide = new();
     private RCTPaletteEntry[] vehiclePalette = [];
     private Dictionary<ushort, VehiclePose> vehiclePoses = new();
     private HashSet<ushort> smoothMovementRideIds = [];
@@ -87,7 +85,6 @@ internal sealed class ParkSceneController(
         if (ui.IsParkLoading || parkLoadTask is not null || pendingParkLoadResult is not null) return;
 
         ResetVehicleState();
-        vehicleSizesByRide.Clear();
         vehiclePalette = [];
         treeSceneryMeshBuilder.ClearCaches();
         ui.BeginParkLoad(parkPath);
@@ -221,23 +218,6 @@ internal sealed class ParkSceneController(
                     .GroupBy(track => (track.TileX, track.TileY))
                     .ToDictionary(group => group.Key, group => group.ToArray());
 
-                var offsetsByRideType = TrackRideConfigurations.All
-                    .ToDictionary(configuration => configuration.RideType, configuration => new VehiclePlacementOffsets(
-                        configuration.CarWorldOffset, configuration.CarLocalOffset));
-
-                vehicleOffsetsByRide = result.TrackElements
-                    .Where(track => offsetsByRideType.ContainsKey(track.RideType))
-                    .GroupBy(track => track.RideId)
-                    .ToDictionary(group => group.Key, group => offsetsByRideType[group.First().RideType]);
-
-                var sizesByRideType = TrackRideConfigurations.All
-                    .ToDictionary(configuration => configuration.RideType, configuration => configuration.VehicleSize);
-
-                vehicleSizesByRide = result.TrackElements
-                    .Where(track => sizesByRideType.ContainsKey(track.RideType))
-                    .GroupBy(track => track.RideId)
-                    .ToDictionary(group => group.Key, group => sizesByRideType[group.First().RideType]);
-
                 var smoothRideTypes = TrackRideConfigurations.All
                     .Where(configuration => configuration.SmoothMovement)
                     .Select(configuration => configuration.RideType)
@@ -280,8 +260,6 @@ internal sealed class ParkSceneController(
         Navigation = null;
         RideEntrances = [];
         trackElementsByTile.Clear();
-        vehicleOffsetsByRide.Clear();
-        vehicleSizesByRide.Clear();
         vehiclePalette = [];
         ResetVehicleState();
         smoothMovementRideIds.Clear();
@@ -438,10 +416,10 @@ internal sealed class ParkSceneController(
             ? simulation.VehicleSnapshots : null;
 
         vehiclePoses = vehiclePoseResolver.ResolveFrame(
-            snapshots, Stopwatch.GetTimestamp(), vehicleOffsetsByRide,
+            snapshots, Stopwatch.GetTimestamp(),
             usesSmoothMovement ??= UsesSmoothMovement, tryGetCenterlinePose ??= TryGetCenterlinePose);
 
-        vehicleCubeRenderer.PrepareRegions(vehiclePoses, vehicleSizesByRide, loadedMapWidth, loadedMapHeight);
+        vehicleCubeRenderer.PrepareRegions(vehiclePoses, loadedMapWidth, loadedMapHeight);
         var previousRegionCount = renderRegionsByCoordinate.Count;
         foreach (var vehicleRegion in vehicleCubeRenderer.Regions) {
             var region = GetOrCreateRenderRegion(vehicleRegion.Coordinate);
@@ -457,7 +435,7 @@ internal sealed class ParkSceneController(
         var vehicleResources = resources.VehicleCubeGraphicsResources;
         if (vehicleResources.Length == 0) return;
 
-        vehicleCubeRenderer.BuildInstances(renderRegionsByCoordinate, vehicleSizesByRide, vehiclePalette);
+        vehicleCubeRenderer.BuildInstances(renderRegionsByCoordinate, vehiclePalette);
         var currentVehicleResources = vehicleResources[(int)currentFrame];
         currentVehicleResources.UploadInstances(vehicleCubeRenderer.Instances, vehicleCubeRenderer.RegionBatches);
 

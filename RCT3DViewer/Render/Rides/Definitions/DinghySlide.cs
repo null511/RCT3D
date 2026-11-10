@@ -24,11 +24,11 @@ internal sealed class DinghySlide : RideDefinition
 
         StationBuilder = new DefaultTrackStationBuilder();
 
-        Vehicles = new RideVehicleDefinition {
-            Size = new Vector3(0.86f, 0.42f, 1.8f),
-            WorldOffset =  1.0f,
-            LocalOffset = -0.9f,
-        };
+        //Vehicles = new RideVehicleDefinition {
+        //    Size = new Vector3(0.86f, 0.42f, 1.8f),
+        //    WorldOffset =  1.0f,
+        //    LocalOffset = -0.9f,
+        //};
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)

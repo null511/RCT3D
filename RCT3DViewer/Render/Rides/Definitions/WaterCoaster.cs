@@ -21,7 +21,7 @@ internal class WaterCoaster : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.25f;
-        Vehicles.LocalOffset = 0.20f;
+        //Vehicles.LocalOffset = 0.20f;
 
         SupportStyle = RideSupportStyle.MetalFork;
 

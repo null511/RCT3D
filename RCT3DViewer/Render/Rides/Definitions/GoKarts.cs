@@ -9,7 +9,7 @@ internal sealed class GoKarts : RideDefinition
 {
     public GoKarts() : base(RCTRideType.GoKarts)
     {
-        Vehicles.LocalOffset = 0.25f;
+        //Vehicles.LocalOffset = 0.25f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
     }

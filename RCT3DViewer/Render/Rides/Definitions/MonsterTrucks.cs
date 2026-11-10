@@ -12,7 +12,7 @@ internal sealed class MonsterTrucks : RideDefinition
 
         CenterlineHeightOffset = 0.12f;
         SupportTrackOffset = -0.08f;
-        Vehicles.LocalOffset = 0.2f;
+        //Vehicles.LocalOffset = 0.2f;
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)

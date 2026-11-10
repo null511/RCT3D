@@ -7,29 +7,29 @@ namespace RCT3D.Render.Rides.Definitions;
 
 internal sealed class MineTrainCoaster : RideDefinition
 {
-    private static readonly TrackRailSpecularData WoodSpecular = new(250, 0);
+    private static readonly TrackRailSpecularData woodSpecular = new(250, 0);
 
 
     public MineTrainCoaster() : base(RCTRideType.MineTrainCoaster)
     {
         SmoothMovement = true;
-        CenterlineHeightOffset = 0.2f;
+        CenterlineHeightOffset = 0.25f;
 
-        Vehicles.LocalOffset = 0.5f;
+        //Vehicles.LocalOffset = 0.5f;
 
         StationBuilder = new DefaultTrackStationBuilder();
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        const float RailSeparation = 0.48f;
+        const float railSeparation = 0.60f;
 
         var shape = new TrackPart {
             BraceInterval = 0.36f,
         };
 
-        shape.RailProfiles.AddRange(CreateRail(-RailSeparation*0.5f));
-        shape.RailProfiles.AddRange(CreateRail( RailSeparation*0.5f));
+        shape.RailProfiles.AddRange(CreateRail(-railSeparation*0.5f));
+        shape.RailProfiles.AddRange(CreateRail( railSeparation*0.5f));
 
         if (!track.Part.IsStationPlatform()) {
             shape.AppendBracePart.Box(
@@ -37,7 +37,7 @@ internal sealed class MineTrainCoaster : RideDefinition
                 new Vector3(0.55f, 0.014f, 0.06f),
                 part => {
                     part.Swatch = TrackRailSwatch.Main;
-                    part.Specular = WoodSpecular;
+                    part.Specular = woodSpecular;
                 });
         }
 

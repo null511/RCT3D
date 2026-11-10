@@ -170,12 +170,14 @@ class Vegetation:
         for _, _, x, y, sprite in sorted(fragments, key=lambda fragment: (fragment[0], fragment[1])):
             composite.alpha_composite(sprite, (x - left, y - top))
 
-        content_bounds = composite.getchannel("A").getbbox()
-        if content_bounds is None:
-            print(f" [!] Composed image is fully transparent for {metadata.get('id')}")
-            return None
+        return composite
 
-        return composite.crop(content_bounds)
+        # content_bounds = composite.getchannel("A").getbbox()
+        # if content_bounds is None:
+        #     print(f" [!] Composed image is fully transparent for {metadata.get('id')}")
+        #     return None
+
+        # return composite.crop(content_bounds)
 
     @staticmethod
     def _compose_direction_atlas(north, west, background=(0, 0, 0, 0)):

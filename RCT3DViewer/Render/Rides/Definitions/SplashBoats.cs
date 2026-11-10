@@ -13,14 +13,15 @@ internal class SplashBoats : RideDefinition
 
     public SplashBoats() : base(RCTRideType.SplashBoats)
     {
+        SmoothMovement = true;
         CenterlineHeightOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
 
         StationBuilder = new DefaultTrackStationBuilder();
 
-        Vehicles.Size = new Vector3(2.2f, 0.25f, 3.2f);
-        Vehicles.LocalOffset = 0.15f;
+        //Vehicles.Size = new Vector3(2.2f, 0.25f, 3.2f);
+        //Vehicles.LocalOffset = 0.15f;
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)

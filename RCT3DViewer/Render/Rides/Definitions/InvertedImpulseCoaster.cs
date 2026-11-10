@@ -14,7 +14,7 @@ internal sealed class InvertedImpulseCoaster : RideDefinition
     public InvertedImpulseCoaster() : base(RCTRideType.InvertedImpulseCoaster)
     {
         CenterlineHeightOffset = 3.0f;
-        Vehicles.LocalOffset = -0.5f;
+        //Vehicles.LocalOffset = -0.5f;
 
         SupportStyle = RideSupportStyle.MetalTubesInverted;
 

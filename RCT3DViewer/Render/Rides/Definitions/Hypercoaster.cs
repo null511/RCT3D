@@ -15,7 +15,7 @@ internal class Hypercoaster : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.5f;
-        Vehicles.LocalOffset = 0.5f;
+        //Vehicles.LocalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.MetalTubes;
         SupportTrackOffset = -0.24f;

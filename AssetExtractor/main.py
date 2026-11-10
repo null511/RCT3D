@@ -17,7 +17,7 @@ def run():
 
     # extract_g1()
     # extract_paths()
-    Vegetation.extract()
+    # Vegetation.extract()
 
     print("\nExtraction complete.")
     print("\nProcessing sprites...")

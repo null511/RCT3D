@@ -15,7 +15,7 @@ internal sealed class LogFlume : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.5f;
-        Vehicles.LocalOffset = -0.25f;
+        //Vehicles.LocalOffset = -0.25f;
 
         SupportStyle = RideSupportStyle.MetalBoxed;
         SupportTrackOffset = -0.21f;

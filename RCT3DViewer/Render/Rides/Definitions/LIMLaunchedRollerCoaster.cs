@@ -17,8 +17,8 @@ internal sealed class LIMLaunchedRollerCoaster : RideDefinition
 
         StationBuilder = new DefaultTrackStationBuilder();
 
-        Vehicles.LocalOffset = 0.7f;
-        Vehicles.Size = new Vector3(1.0f, 0.6f, 1.6f);
+        //Vehicles.LocalOffset = 0.7f;
+        //Vehicles.Size = new Vector3(1.0f, 0.6f, 1.6f);
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
