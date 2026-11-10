@@ -14,7 +14,7 @@ internal sealed class InvertedRollerCoaster : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 2.0f;
-        CarVerticalOffset = -1.5f;
+        Vehicles.LocalOffset = -1.5f;
 
         SupportStyle = RideSupportStyle.MetalBoxed;
 

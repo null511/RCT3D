@@ -1,3 +1,4 @@
+using RCT3D.Render.Paths;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Terrain;
 using Silk.NET.Vulkan;
@@ -104,7 +105,7 @@ internal sealed unsafe class ShadowGraphicsResources : IDisposable
         var bindings = useInstances
             ? new[] {
                 new VertexInputBindingDescription { Binding = 0, Stride = vertexStride, InputRate = VertexInputRate.Vertex },
-                new VertexInputBindingDescription { Binding = 1, Stride = (uint)Marshal.SizeOf<Matrix4x4>(), InputRate = VertexInputRate.Instance }
+                new VertexInputBindingDescription { Binding = 1, Stride = (uint)Marshal.SizeOf<ModelInstance>(), InputRate = VertexInputRate.Instance }
             }
             : new[] {
                 new VertexInputBindingDescription { Binding = 0, Stride = vertexStride, InputRate = VertexInputRate.Vertex }

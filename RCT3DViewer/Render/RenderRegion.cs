@@ -65,6 +65,7 @@ internal sealed class ParkRenderRegion(RenderRegionCoordinate coordinate)
     public bool HasDynamicBounds => hasDynamicBounds;
     public bool CameraVisible { get; set; }
     public bool ShadowVisible { get; set; }
+    public uint ShadowVisibilityMask { get; set; }
     public bool VehicleInstancesVisible { get; set; }
     public bool RidesInRange { get; set; }
     public bool SupportsInRange { get; set; }

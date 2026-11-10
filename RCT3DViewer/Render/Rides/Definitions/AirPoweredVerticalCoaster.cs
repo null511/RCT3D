@@ -14,6 +14,7 @@ internal sealed class AirPoweredVerticalCoaster : RideDefinition
     public AirPoweredVerticalCoaster() : base(RCTRideType.AirPoweredVerticalCoaster)
     {
         CenterlineHeightOffset = 0.25f;
+        CenterlineVerticalOffset = -1.2f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
 

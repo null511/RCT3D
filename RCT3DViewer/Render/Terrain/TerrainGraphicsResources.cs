@@ -158,6 +158,13 @@ internal sealed unsafe class TerrainGraphicsResources(
                     Offset = matrixOffset + row * (uint)Marshal.SizeOf<Vector4>()
                 });
             }
+
+            attributeDescriptions.Add(new VertexInputAttributeDescription {
+                Binding = 1,
+                Location = 7,
+                Format = Format.R32G32B32A32Sfloat,
+                Offset = (uint)Marshal.OffsetOf<ModelInstance>(nameof(ModelInstance.Color))
+            });
         }
 
         var vertexInputInfo = new PipelineVertexInputStateCreateInfo {

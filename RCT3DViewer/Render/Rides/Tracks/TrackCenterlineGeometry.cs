@@ -352,7 +352,8 @@ internal static class TrackCenterlineGeometry
         ReadOnlySpan<Vector3> centerline,
         IReadOnlyList<ITrackPartGenerator> partGenerators,
         ReadOnlySpan<RCTPaletteEntry> paletteEntries,
-        bool verticalAnchorAtStart,
+        bool startVertical,
+        bool endVertical,
         float rollBegin = 0.0f,
         float rollEnd = 0.0f,
         Vector3? startTangent = null,
@@ -364,33 +365,35 @@ internal static class TrackCenterlineGeometry
             centerline, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
         if (frames.Length != centerline.Length) return;
 
-        geometry.SetProfileOffset(GetVerticalProfileOffset(
-            track, partGenerators, frames[verticalAnchorAtStart ? 0 : frames.Length - 1]));
+        var points = centerline.ToArray();
+        var startOffset = startVertical ? GetVerticalProfileOffset(geometry, frames[0]) : Vector3.Zero;
+        var endOffset = endVertical ? GetVerticalProfileOffset(geometry, frames[^1]) : Vector3.Zero;
+        var followsVerticalWall = startVertical && endVertical
+            && Vector3.Dot(frames[0].Tangent, frames[^1].Tangent) > 0.999f;
+        for (var i = 0; i < points.Length; i++) {
+            var amount = i / (float)(points.Length - 1);
+            amount = amount * amount * (3.0f - 2.0f * amount);
+            points[i] += followsVerticalWall
+                ? GetVerticalProfileOffset(geometry, frames[i])
+                : Vector3.Lerp(startOffset, endOffset, amount);
+        }
+
+        geometry.SetReferenceFrames(frames);
 
         try {
-            AddParts(track, geometry, centerline, partGenerators, paletteEntries,
+            AddParts(track, geometry, points, partGenerators, paletteEntries,
                 rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
         }
         finally {
-            geometry.SetProfileOffset(Vector3.Zero);
+            geometry.SetReferenceFrames(null);
         }
     }
 
     public static Vector3 GetVerticalProfileOffset(
-        in RCTTrackElementData track,
-        IReadOnlyList<ITrackPartGenerator> partGenerators,
+        TrackMeshGeometry geometry,
         TrackCenterlineFrame frame)
     {
-        var wallNormal = -frame.Up;
-        var maximumProfileProjection = float.NegativeInfinity;
-        foreach (var partGenerator in partGenerators)
-            maximumProfileProjection = MathF.Max(
-                maximumProfileProjection,
-                partGenerator.GetMaximumProfileProjection(track, wallNormal, frame));
-
-        return float.IsFinite(maximumProfileProjection)
-            ? wallNormal * (WorldUnits.TileSize * 0.5f - maximumProfileProjection)
-            : Vector3.Zero;
+        return frame.Up * geometry.CenterlineVerticalOffset;
     }
 
     public static void AddParts(in RCTTrackElementData track, TrackMeshGeometry geometry, ReadOnlySpan<Vector3> centerline, IReadOnlyList<ITrackPartGenerator> partGenerators, ReadOnlySpan<RCTPaletteEntry> paletteEntries, float rollBegin = 0.0f, float rollEnd = 0.0f, Vector3? startTangent = null, Vector3? endTangent = null, Vector3? preferredSide = null, bool smoothRollTransition = false)

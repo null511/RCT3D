@@ -1,4 +1,6 @@
+using RCT3D.Interop.Models;
 using RCT3D.Render.Paths;
+using RCT3D.Render.Rides;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
@@ -6,12 +8,6 @@ namespace RCT3D.Render;
 
 internal sealed class VehicleCubeRenderer
 {
-    //private const float TileSize = 3.0f;
-    private const float CubeSize = 0.7f;
-    private const float CubeHalfSize = CubeSize * 0.5f;
-
-    private const float CubeBoundsHalfSize = CubeHalfSize * 1.7320508f;
-
     private readonly Dictionary<RenderRegionCoordinate, RegionBuilder> regions = new();
     private readonly List<RegionBuilder> activeRegions = new();
     private ModelInstance[] instances = [];
@@ -23,7 +19,7 @@ internal sealed class VehicleCubeRenderer
     public ReadOnlySpan<ModelInstance> Instances => instances.AsSpan(0, instanceCount);
     public ReadOnlySpan<ModelRegionRange> RegionBatches => regionBatches.AsSpan(0, regionBatchCount);
 
-    public static ImportedModelMesh CreateMesh() => CreateCubeMesh(Vector3.Zero, CubeSize);
+    public static ImportedModelMesh CreateMesh() => CreateCubeMesh(Vector3.Zero, 1.0f);
 
     private static ImportedModelMesh CreateCubeMesh(Vector3 offset, float size)
     {
@@ -60,7 +56,7 @@ internal sealed class VehicleCubeRenderer
         var material = new ImportedModelMaterial(
             Vector4.One,
             Vector3.Zero,
-            new ImportedModelTexture(1, 1, [255, 0, 0, 255]),
+            new ImportedModelTexture(1, 1, [255, 255, 255, 255]),
             null,
             false);
 
@@ -69,6 +65,7 @@ internal sealed class VehicleCubeRenderer
 
     public void PrepareRegions(
         Dictionary<ushort, VehiclePose> poses,
+        IReadOnlyDictionary<ushort, Vector3> sizesByRide,
         int mapWidth,
         int mapHeight)
     {
@@ -89,9 +86,9 @@ internal sealed class VehicleCubeRenderer
             if ((uint)tileX >= (uint)mapWidth || (uint)tileY >= (uint)mapHeight)
                 continue;
 
-            var bounds = new AxisAlignedBounds(
-                position - new Vector3(CubeBoundsHalfSize),
-                position + new Vector3(CubeBoundsHalfSize));
+            var size = sizesByRide.GetValueOrDefault(pose.RideId, RideVehicleDefinition.DefaultSize);
+            var boundsHalfSize = new Vector3(size.Length() * 0.5f);
+            var bounds = new AxisAlignedBounds(position - boundsHalfSize, position + boundsHalfSize);
 
             var region = new RenderRegionCoordinate(
                 tileX / RenderRegionLayout.RegionSizeInTiles,
@@ -108,7 +105,10 @@ internal sealed class VehicleCubeRenderer
         }
     }
 
-    public void BuildInstances(Dictionary<RenderRegionCoordinate, ParkRenderRegion> renderRegions)
+    public void BuildInstances(
+        Dictionary<RenderRegionCoordinate, ParkRenderRegion> renderRegions,
+        IReadOnlyDictionary<ushort, Vector3> sizesByRide,
+        ReadOnlySpan<RCTPaletteEntry> palette)
     {
         instanceCount = 0;
         regionBatchCount = 0;
@@ -131,9 +131,15 @@ internal sealed class VehicleCubeRenderer
 
             regionBatches[batchIndex++] = new ModelRegionRange(
                 region.Coordinate, region.Bounds, (uint)firstInstance, (uint)region.Poses.Count);
+
             foreach (var pose in region.Poses) {
-                var transform = pose.Rotation * Matrix4x4.CreateTranslation(pose.Position);
-                instances[firstInstance++] = new ModelInstance(transform);
+                var size = sizesByRide.GetValueOrDefault(pose.RideId, RideVehicleDefinition.DefaultSize);
+                var transform = Matrix4x4.CreateScale(size) * pose.Rotation * Matrix4x4.CreateTranslation(pose.Position);
+                var color = palette[pose.PrimaryPaletteIndex];
+
+                instances[firstInstance++] = new ModelInstance(transform) {
+                    Color = new Vector4(color.Red / 255.0f, color.Green / 255.0f, color.Blue / 255.0f, 1.0f)
+                };
             }
         }
     }

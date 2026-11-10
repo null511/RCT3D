@@ -193,7 +193,12 @@ internal sealed class TrackMeshBuilder
             foreach (ref readonly var platformTile in CollectionsMarshal.AsSpan(platformTiles)) {
                 var track = platformTile.Track;
                 var surfaceIndex = checked(track.TileY * mapWidth + track.TileX);
-                ridePlatformBuilder.AddTile(platformTile, geometry, surfaces[surfaceIndex]);
+                ridePlatformBuilder.AddTile(platformTile, geometry);
+                ridePlatformBuilder.AddWoodenTrussSupport(
+                    platformTile,
+                    supportGeometry,
+                    surfaces[surfaceIndex],
+                    GetPaletteColor(track.SupportPaletteIndex, palette));
             }
 
             foreach (var (key, configuration, piece) in regionPieces) {
@@ -207,6 +212,7 @@ internal sealed class TrackMeshBuilder
                 pieceBuilders.TryResolve(track.Part, out var pieceBuilder);
                 var hasSupportPlacements = configuration.HasSupportPlacements;
                 geometry.SetVerticalOffset(configuration.CenterlineHeightOffset);
+                geometry.CenterlineVerticalOffset = configuration.CenterlineVerticalOffset;
                 geometry.SetTrackBankAngleDegrees(configuration.TrackBankAngleDegrees);
                 geometry.BeginCenterlineCapture();
 
@@ -215,6 +221,7 @@ internal sealed class TrackMeshBuilder
                 }
                 finally {
                     geometry.SetVerticalOffset(0.0f);
+                    geometry.CenterlineVerticalOffset = 0.0f;
                 }
 
                 foreach (ref readonly var stationTrack in pieceSpan) {

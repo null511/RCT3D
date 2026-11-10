@@ -36,7 +36,9 @@ internal sealed class VerticalQuarterTurnTrackPieceBuilder(RCTTrackElementType p
         for (var i = 0; i <= subdivisions; i++)
             points[i] = Vector3.Lerp(start, end, i / (float)subdivisions);
 
-        TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, palette,
-            rollEnd: rollEnd, startTangent: tangent, endTangent: tangent, preferredSide: startSide);
+        TrackCenterlineGeometry.AddVerticallyAlignedParts(first, geometry, points, partGenerators, palette,
+            startVertical: true, endVertical: true,
+            rollEnd: rollEnd, startTangent: tangent, endTangent: tangent, preferredSide: startSide,
+            smoothRollTransition: true);
     }
 }

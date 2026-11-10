@@ -59,6 +59,10 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Render\Rides\Vehicles\" />
+  </ItemGroup>
+
   <Target Name="CopyOpenRCT2RuntimeData" AfterTargets="Build">
     <ItemGroup>
       <OpenRCT2Language Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\language\**\*" />

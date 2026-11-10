@@ -12,6 +12,7 @@ internal sealed class TrackMeshGeometry
     private List<TrackCenterlinePath>? _centerlineCapture;
     private float _verticalOffset;
     private Vector3 _profileOffset;
+    private TrackCenterlineFrame[]? _referenceFrames;
     private float _trackBankAngleDegrees = 22.5f;
     private int _firstVertex;
     private int _firstIndex;
@@ -23,6 +24,18 @@ internal sealed class TrackMeshGeometry
     public void SetTrackBankAngleDegrees(float angle) => _trackBankAngleDegrees = angle;
 
     public float TrackBankAngleDegrees => _trackBankAngleDegrees;
+
+    public float VerticalOffset => _verticalOffset;
+
+    public float CenterlineVerticalOffset { get; set; }
+
+    public void SetReferenceFrames(TrackCenterlineFrame[]? frames) => _referenceFrames = frames;
+
+    public TrackCenterlineFrame[] GetFrames(
+        ReadOnlySpan<Vector3> centerline, float rollBegin, float rollEnd,
+        Vector3? startTangent, Vector3? endTangent, Vector3? preferredSide, bool smoothRollTransition) =>
+        _referenceFrames ?? TrackMeshPartGenerator.CreateFrames(
+            centerline, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
 
     public void BeginCenterlineCapture()
     {
@@ -60,7 +73,7 @@ internal sealed class TrackMeshGeometry
             offsetCenterline[i] += _profileOffset;
         }
 
-        var frames = TrackMeshPartGenerator.CreateFrames(
+        var frames = GetFrames(
             centerline, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
         _centerlineCapture.Add(new TrackCenterlinePath(track.Sequence, offsetCenterline, frames));
     }

@@ -11,7 +11,8 @@ internal class ClassicMiniRollerCoaster : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.5f;
-        CarVerticalOffset = 0.25f;
+
+        Vehicles.LocalOffset = 0.25f;
 
         SupportTrackOffset = 0.25f;
         SupportStyle = RideSupportStyle.MetalFork;

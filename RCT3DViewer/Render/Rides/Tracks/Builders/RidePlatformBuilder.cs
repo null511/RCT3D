@@ -1,4 +1,6 @@
 using RCT3D.Interop.Models;
+using RCT3D.Render.Rides.Supports;
+using RCT3D.Render.Rides.Supports.Builders;
 using System.Numerics;
 using Serilog;
 
@@ -27,6 +29,7 @@ internal sealed class RidePlatformBuilder
         bool HasSouthSide);
 
     private const float SurfaceHalfHeight = 0.16f;
+    private const float SurfaceThickness = 0.32f;
     private static readonly TrackRgba8 WoodSurfaceColor = new(99, 75, 45, 255);
     private static readonly TrackRailSpecularData WoodSurfaceSpecular = new(225, 0);
     private static readonly TrackRgba8 MetalSurfaceColor = new(90, 90, 90, 255);
@@ -45,6 +48,8 @@ internal sealed class RidePlatformBuilder
 
     private static readonly TrackRgba8 FencedRailingColor = new(110, 82, 45, 255);
     private static readonly TrackRailSpecularData FencedRailingSpecular = new(220, 0);
+
+    private readonly WoodenTrussSupportMeshBuilder woodenTrussSupportBuilder = new();
 
 
     private readonly record struct PlatformPieceKey(
@@ -142,7 +147,7 @@ internal sealed class RidePlatformBuilder
         return tilesByRegion;
     }
 
-    public void AddTile(in PlatformTile platformTile, TrackMeshGeometry geometry, RCTTileSurfaceData surface)
+    public void AddTile(in PlatformTile platformTile, TrackMeshGeometry geometry)
     {
         var track = platformTile.Track;
         var (surfaceColor, surfaceSpecular) = platformTile.SurfaceType switch {
@@ -158,25 +163,21 @@ internal sealed class RidePlatformBuilder
         var maxZ = minZ + WorldUnits.TileSize;
 
         var topY = track.BaseHeight * WorldUnits.HeightPerBaseUnit + SurfaceHalfHeight;
-        var terrainBaseY = surface.BaseZ * WorldUnits.HeightPerBaseUnit;
-
-        var southWestBottomY = MathF.Min(topY, terrainBaseY + surface.SouthCornerHeight * WorldUnits.TerrainCornerHeightScale);
-        var northWestBottomY = MathF.Min(topY, terrainBaseY + surface.WestCornerHeight * WorldUnits.TerrainCornerHeightScale);
-        var northEastBottomY = MathF.Min(topY, terrainBaseY + surface.NorthCornerHeight * WorldUnits.TerrainCornerHeightScale);
-        var southEastBottomY = MathF.Min(topY, terrainBaseY + surface.EastCornerHeight * WorldUnits.TerrainCornerHeightScale);
+        var bottomY = topY - SurfaceThickness;
 
         var southWest = new Vector3(minX, topY, minZ);
         var northWest = new Vector3(minX, topY, maxZ);
         var northEast = new Vector3(maxX, topY, maxZ);
         var southEast = new Vector3(maxX, topY, minZ);
 
-        var southWestBottom = new Vector3(minX, southWestBottomY, minZ);
-        var northWestBottom = new Vector3(minX, northWestBottomY, maxZ);
-        var northEastBottom = new Vector3(maxX, northEastBottomY, maxZ);
-        var southEastBottom = new Vector3(maxX, southEastBottomY, minZ);
+        var southWestBottom = new Vector3(minX, bottomY, minZ);
+        var northWestBottom = new Vector3(minX, bottomY, maxZ);
+        var northEastBottom = new Vector3(maxX, bottomY, maxZ);
+        var southEastBottom = new Vector3(maxX, bottomY, minZ);
 
         // top
         AddQuad(geometry, southWest, northWest, northEast, southEast, Vector3.UnitY, surfaceColor, surfaceSpecular);
+        AddQuad(geometry, southWestBottom, southEastBottom, northEastBottom, northWestBottom, -Vector3.UnitY, surfaceColor, surfaceSpecular);
 
         if (platformTile.HasWestSide) {
             AddQuad(geometry, southWest, southWestBottom, northWestBottom, northWest, -Vector3.UnitX, surfaceColor, surfaceSpecular);
@@ -204,6 +205,38 @@ internal sealed class RidePlatformBuilder
 
             if ((platformTile.Openings & PlatformSideOpenings.South) == 0)
                 AddRailing(geometry, new Vector3(maxX, topY, minZ), new Vector3(minX, topY, minZ), Vector3.UnitZ, platformTile.RailingType);
+        }
+    }
+
+    public void AddWoodenTrussSupport(
+        in PlatformTile platformTile,
+        RideSupportMeshGeometry geometry,
+        RCTTileSurfaceData surface,
+        TrackRgba8 supportColor)
+    {
+        var track = platformTile.Track;
+        var placements = new List<TrackSupportPlacement>(1);
+        woodenTrussSupportBuilder.GetDefaultSupportPlacements(track, placements);
+
+        var anchorPosition = new Vector3(
+            (track.TileX + 0.5f) * WorldUnits.TileSize,
+            track.BaseHeight * WorldUnits.HeightPerBaseUnit,
+            (track.TileY + 0.5f) * WorldUnits.TileSize);
+        var anchor = new TrackSupportAnchor(
+            anchorPosition,
+            TrackCenterlineGeometry.GetDirection(track.Direction),
+            track.TileX,
+            track.TileY);
+
+        foreach (var placement in placements) {
+            woodenTrussSupportBuilder.AddSupport(
+                track,
+                placement,
+                anchor,
+                geometry,
+                surface,
+                supportColor,
+                trackHeightOffset: 0.0f);
         }
     }
 

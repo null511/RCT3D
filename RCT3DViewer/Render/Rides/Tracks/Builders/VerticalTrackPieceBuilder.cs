@@ -29,17 +29,12 @@ internal sealed class VerticalTrackPieceBuilder(RCTTrackElementType pieceType) :
         var direction = TrackCenterlineGeometry.GetTrackDirection(
             TrackCenterlineGeometry.CombineDirection(first.Direction, first.RotationBegin));
         var centerTrack = first;
-        var endTrack = first;
-        if (PieceType is RCTTrackElementType.ReverseFreefallVertical
-            or RCTTrackElementType.Up60ToUp90
-            or RCTTrackElementType.Down60ToDown90) {
+        if (PieceType == RCTTrackElementType.ReverseFreefallVertical) {
             var hasTrackTile = false;
             foreach (ref readonly var candidate in tracks) {
                 if (candidate.Sequence != 1) continue;
 
-                endTrack = candidate;
-                if (PieceType == RCTTrackElementType.ReverseFreefallVertical)
-                    centerTrack = candidate;
+                centerTrack = candidate;
                 hasTrackTile = true;
                 break;
             }
@@ -48,10 +43,9 @@ internal sealed class VerticalTrackPieceBuilder(RCTTrackElementType pieceType) :
         }
 
         var center = TrackCenterlineGeometry.GetTileCenter(centerTrack);
-        var endCenter = TrackCenterlineGeometry.GetTileCenter(endTrack);
         var halfTile = WorldUnits.TileSize * 0.5f;
         var start = startVertical ? center : center - direction * halfTile;
-        var end = endVertical ? endCenter : center + direction * halfTile;
+        var end = endVertical ? center : center + direction * halfTile;
         var originHeight = first.BaseHeight - first.SequenceOffsetZ;
         start.Y = (originHeight + first.SplineZBegin) * WorldUnits.HeightPerBaseUnit;
         end.Y = (originHeight + first.SplineZEnd) * WorldUnits.HeightPerBaseUnit;
@@ -68,12 +62,6 @@ internal sealed class VerticalTrackPieceBuilder(RCTTrackElementType pieceType) :
         var rollBegin = TrackCenterlineGeometry.GetRollRadians(first.RollBegin, geometry.TrackBankAngleDegrees);
         var rollEnd = TrackCenterlineGeometry.GetRollRadians(first.RollEnd, geometry.TrackBankAngleDegrees);
         var preferredSide = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, direction));
-        var endpointFrames = TrackMeshPartGenerator.CreateFrames(
-            new[] { start, end }, rollBegin, rollEnd, startTangent, endTangent, preferredSide, false);
-        if (startVertical)
-            start += TrackCenterlineGeometry.GetVerticalProfileOffset(first, partGenerators, endpointFrames[0]);
-        if (endVertical)
-            end += TrackCenterlineGeometry.GetVerticalProfileOffset(first, partGenerators, endpointFrames[1]);
 
         var points = startVertical && endVertical
             ? new[] { start, end }
@@ -81,7 +69,8 @@ internal sealed class VerticalTrackPieceBuilder(RCTTrackElementType pieceType) :
                 start, end, startTangent, endTangent, controlLength,
                 TrackCenterlineGeometry.CurveSubdivisionsPerTile);
 
-        TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, palette,
+        TrackCenterlineGeometry.AddVerticallyAlignedParts(first, geometry, points, partGenerators, palette,
+            startVertical, endVertical,
             rollBegin,
             rollEnd,
             startTangent,

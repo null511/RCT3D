@@ -1,4 +1,5 @@
 import lib.uniforms;
+import lib.colors;
 import lib.octohedral;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
@@ -23,12 +24,14 @@ struct VertexInput {
 	[[vk::location(4)]] float4 transformRow1;
 	[[vk::location(5)]] float4 transformRow2;
 	[[vk::location(6)]] float4 transformRow3;
+	[[vk::location(7)]] float4 color;
 };
 
 struct VertexStageOutput {
 	float4 position : SV_Position;
 	float3 normal : NORMAL;
 	float2 texCoord : TEXCOORD0;
+	nointerpolation float3 color : COLOR0;
 };
 
 struct GBufferOutput {
@@ -52,6 +55,7 @@ VertexStageOutput vertexMain(VertexInput input) {
 	output.position = mul(worldPosition, cameraUniforms.viewProjection);
     output.normal = normalize(worldNormal);
 	output.texCoord = input.texCoord;
+	output.color = srgbToLinear(input.color.rgb);
 
     output.position.xy += (sceneUniforms.taa_jitter / sceneUniforms.renderDimensions) * (2.0 * output.position.w);
 
@@ -69,7 +73,7 @@ GBufferOutput fragmentMain(VertexStageOutput input) {
     float3 texNormal = geoNormal;
 
     GBufferOutput output;
-	output.albedo = float4(albedo.rgb, normalMap.b);
+	output.albedo = float4(albedo.rgb * input.color, normalMap.b);
 	output.normals.xy = octohedral::encode(geoNormal);
 	output.normals.zw = octohedral::encode(texNormal);
     output.specular = specularMap;

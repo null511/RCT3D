@@ -15,7 +15,7 @@ internal sealed class Steeplechase : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.3f;
-        CarVerticalOffset = 0.25f;
+        Vehicles.LocalOffset = 0.25f;
 
         SupportStyle = RideSupportStyle.MetalStick;
         SupportTrackOffset = -0.2f;

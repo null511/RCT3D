@@ -165,14 +165,16 @@ internal sealed class TunnelLayoutBuilder
         var surfaceOpenings = new List<TunnelSurfaceOpening>();
         foreach (var route in routes.Where(route => route.IsTrack))
         foreach (var crossing in occupancy.GetTrackSurfaceCrossings(route)) {
-            var existing = surfaceOpenings.FindIndex(opening => MathF.Abs(opening.X - crossing.X) < 0.001f
-                && MathF.Abs(opening.Z - crossing.Z) < 0.001f
+            var centerX = (route.TileX + 0.5f) * WorldUnits.TileSize;
+            var centerZ = (route.TileY + 0.5f) * WorldUnits.TileSize;
+            var existing = surfaceOpenings.FindIndex(opening => opening.X == centerX
+                && opening.Z == centerZ
                 && MathF.Abs(opening.SurfaceHeight - crossing.Y) < 0.001f);
             if (existing >= 0)
                 surfaceOpenings[existing] = surfaceOpenings[existing] with {
                     BottomHeight = MathF.Min(surfaceOpenings[existing].BottomHeight, route.FloorHeight) };
             else
-                surfaceOpenings.Add(new TunnelSurfaceOpening(crossing.X, crossing.Z, crossing.Y, route.FloorHeight));
+                surfaceOpenings.Add(new TunnelSurfaceOpening(centerX, centerZ, crossing.Y, route.FloorHeight));
             if (!undergroundRouteIds.Contains(route.RouteId) && crossing.Y > route.FloorHeight
                 && !spans.Any(span => span.TileX == route.TileX && span.TileY == route.TileY
                     && span.FloorHeight == route.FloorHeight && span.RoofHeight == crossing.Y))

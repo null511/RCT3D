@@ -31,9 +31,12 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
     private readonly WaterRegionDepthComparer waterRegionDepthComparer = new();
     private readonly Dictionary<RenderRegionCoordinate, ParkRenderRegion> regionsByCoordinate = new();
     private ParkRenderRegion[]? cachedParkRegions;
+    private readonly RegionQuadtree regionQuadtree = new();
 
     private Vk Vk => resources.Vk!;
     public (int Visible, int Total) SectionMetrics { get; private set; }
+    public VisibilityQueryMetrics CameraVisibilityMetrics { get; private set; }
+    public VisibilityQueryMetrics[] ShadowVisibilityMetrics { get; } = new VisibilityQueryMetrics[(int)ShadowRenderTargets.CascadeCount];
 
 
     public void Record(
@@ -100,26 +103,31 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
                 shadowFrusta[cascade] = ViewFrustum.FromViewProjection(shadowViewProjections[cascade]);
         }
         var viewFrustum = ViewFrustum.FromViewProjection(viewProjection);
+        regionQuadtree.EnsureTopology(parkRegions);
+        regionQuadtree.Refit();
+        foreach (var region in parkRegions) {
+            region.CameraVisible = false;
+            region.ShadowVisible = false;
+            region.ShadowVisibilityMask = 0;
+        }
+        CameraVisibilityMetrics = regionQuadtree.Query(in viewFrustum);
+        Array.Clear(ShadowVisibilityMetrics);
+        if (ui.ShadowMappingEnabled) {
+            for (var cascade = 0; cascade < shadowFrusta.Length; cascade++)
+                ShadowVisibilityMetrics[cascade] = regionQuadtree.Query(in shadowFrusta[cascade], cascade);
+        }
         var ridesDistance = ui.RidesRenderDistance;
         var supportsDistance = ui.SupportsRenderDistance;
         var sceneryDistance = ui.SceneryRenderDistance;
         foreach (var region in parkRegions) {
-            region.CameraVisible = region.HasBounds && viewFrustum.Intersects(region.Bounds);
             var distanceSquared = region.HasBounds
                 ? Vector3.DistanceSquared(cameraPosition, region.Bounds.Center)
                 : float.PositiveInfinity;
             region.RidesInRange = ridesDistance == 0.0f || distanceSquared <= ridesDistance * ridesDistance;
             region.SupportsInRange = supportsDistance == 0.0f || distanceSquared <= supportsDistance * supportsDistance;
             region.SceneryInRange = sceneryDistance == 0.0f || distanceSquared <= sceneryDistance * sceneryDistance;
-            region.VehicleInstancesVisible = region.HasDynamicBounds && region.RidesInRange && region.CameraVisible;
-            if (region.HasDynamicBounds && region.RidesInRange && !region.VehicleInstancesVisible && ui.ShadowMappingEnabled) {
-                foreach (var shadowFrustum in shadowFrusta) {
-                    if (!shadowFrustum.Intersects(region.Bounds)) continue;
-
-                    region.VehicleInstancesVisible = true;
-                    break;
-                }
-            }
+            region.VehicleInstancesVisible = region.HasDynamicBounds && region.RidesInRange
+                && (region.CameraVisible || region.ShadowVisibilityMask != 0);
         }
         EnsureRegionLookup(parkRegions);
         updateVehicleInstances(currentFrame);
@@ -367,7 +375,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
         if (ui.ShadowMappingEnabled || !shadowMapInitialized)
             RecordShadowPass(commandBuffer, uniformDescriptorSet, currentFrame, terrainMesh, pathMesh, trackMesh,
-                rideSupportMesh, rideEntranceExitMesh, parkRegions, shadowFrusta, ui.ShadowMappingEnabled);
+                rideSupportMesh, rideEntranceExitMesh, parkRegions, ui.ShadowMappingEnabled);
 
         RenderPassBeginInfo waterRenderPassInfo = new() {
             SType = StructureType.RenderPassBeginInfo,
@@ -577,7 +585,7 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
     private void RecordShadowPass(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, uint currentFrame,
         TerrainMeshData? terrainMesh, PathMeshData? pathMesh, TrackMeshData? trackMesh,
         RideSupportMeshData? rideSupportMesh, RideEntranceExitMeshData? rideEntranceExitMesh,
-        ParkRenderRegion[] parkRegions, ReadOnlySpan<ViewFrustum> shadowFrusta, bool renderGeometry)
+        ParkRenderRegion[] parkRegions, bool renderGeometry)
     {
         var targets = resources.DeferredTargets!.ShadowTargets!;
         var shadowResources = resources.ShadowGraphicsResources!;
@@ -593,9 +601,8 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
 
         for (var cascade = 0; cascade < ShadowRenderTargets.CascadeCount; cascade++) {
             if (renderGeometry) {
-                var shadowFrustum = shadowFrusta[cascade];
                 foreach (var region in parkRegions)
-                    region.ShadowVisible = region.HasBounds && shadowFrustum.Intersects(region.Bounds);
+                    region.ShadowVisible = (region.ShadowVisibilityMask & (1u << cascade)) != 0;
             }
 
             DrawShadowCascade(commandBuffer, uniformDescriptorSet, currentFrame, terrainMesh, pathMesh, trackMesh,

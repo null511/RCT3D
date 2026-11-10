@@ -42,18 +42,13 @@ internal sealed class VerticalSlopeTrackPieceBuilder(RCTTrackElementType pieceTy
             end.Y += TrackCenterlineGeometry.VerticalInvertedAnchorOffset;
 
         var preferredSide = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, startDirection));
-        var endpointFrames = TrackMeshPartGenerator.CreateFrames(
-            new[] { start, end }, 0.0f, 0.0f, startTangent, endTangent, preferredSide, false);
-        if (startVertical)
-            start += TrackCenterlineGeometry.GetVerticalProfileOffset(first, partGenerators, endpointFrames[0]);
-        if (endVertical)
-            end += TrackCenterlineGeometry.GetVerticalProfileOffset(first, partGenerators, endpointFrames[1]);
 
         var points = TrackCenterlineGeometry.CreateCubicCurvePoints(
             start, end, startTangent, endTangent, Vector3.Distance(start, end) * 0.4f,
             tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile);
 
-        TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, palette,
+        TrackCenterlineGeometry.AddVerticallyAlignedParts(first, geometry, points, partGenerators, palette,
+            startVertical, endVertical,
             startTangent: startTangent,
             endTangent: endTangent,
             preferredSide: preferredSide);
@@ -106,17 +101,14 @@ internal sealed class AirThrustTopCapTrackPieceBuilder() : TrackPieceMeshBuilder
         var direction = TrackCenterlineGeometry.GetTrackDirection(
             TrackCenterlineGeometry.CombineDirection(first.Direction, first.RotationBegin));
         var preferredSide = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, direction));
-        var endpointFrames = TrackMeshPartGenerator.CreateFrames(
-            new[] { start, end }, 0.0f, 0.0f, startTangent, endTangent, preferredSide, false);
-        start += TrackCenterlineGeometry.GetVerticalProfileOffset(first, partGenerators, endpointFrames[0]);
-        end += TrackCenterlineGeometry.GetVerticalProfileOffset(first, partGenerators, endpointFrames[1]);
         var controlLength = (MovementSamplePeakHeight - MovementSampleEndpointHeight)
             * (WorldUnits.TileSize / NativeTileSize) * (4f / 3f);
         var points = TrackCenterlineGeometry.CreateCubicCurvePoints(
             start, end, startTangent, endTangent, controlLength,
             Math.Max(tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile, 32));
 
-        TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, palette,
+        TrackCenterlineGeometry.AddVerticallyAlignedParts(first, geometry, points, partGenerators, palette,
+            startVertical: true, endVertical: true,
             startTangent: startTangent,
             endTangent: endTangent,
             preferredSide: preferredSide);

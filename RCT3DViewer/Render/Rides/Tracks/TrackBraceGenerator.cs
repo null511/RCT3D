@@ -32,7 +32,7 @@ internal sealed class TrackBraceGenerator(Func<RCTTrackElementData, TrackPart> g
 
         if (shape.BraceParts.Count == 0 || !shape.BraceInterval.HasValue) return;
 
-        var frames = TrackMeshPartGenerator.CreateFrames(
+        var frames = geometry.GetFrames(
             centerline, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
 
         if (frames.Length != centerline.Length) return;

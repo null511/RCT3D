@@ -3,6 +3,7 @@ using RCT3D.Render.Rides.Supports;
 using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Rides.Tracks.Builders;
 using System.Collections.Concurrent;
+using System.Numerics;
 
 namespace RCT3D.Render.Rides;
 
@@ -18,6 +19,11 @@ internal abstract class RideDefinition(RCTRideType rideType)
     /// </summary>
     protected float CenterlineHeightOffset = 0.0f;
 
+    /// <summary>
+    /// The local profile-up displacement from the tile-centered vertical track reference.
+    /// </summary>
+    protected float CenterlineVerticalOffset = 0.0f;
+
     protected float TrackBankAngleDegrees = 45f;
 
     /// <summary>
@@ -25,7 +31,6 @@ internal abstract class RideDefinition(RCTRideType rideType)
     /// </summary>
     protected float SupportTrackOffset = 0.0f;
 
-    protected float CarVerticalOffset = 0.0f;
     protected bool HasSupportPlacement = false;
     protected IDirectTrackMeshBuilder? DirectMeshBuilder;
 
@@ -33,6 +38,8 @@ internal abstract class RideDefinition(RCTRideType rideType)
     /// Enables smoothing of vehicle movement by using the track centerline instead of the game-provided location/rotation.
     /// </summary>
     protected bool SmoothMovement = false;
+
+    protected RideVehicleDefinition Vehicles = new();
 
 
     public TrackRideConfiguration Build()
@@ -51,7 +58,7 @@ internal abstract class RideDefinition(RCTRideType rideType)
             new TrackBraceGenerator(GetCachedTrackShape),
         };
 
-        return new TrackRideConfiguration(rideType, partGenerators, SupportStyle, CenterlineHeightOffset, SupportTrackOffset, CarVerticalOffset,
+        return new TrackRideConfiguration(rideType, partGenerators, SupportStyle, CenterlineHeightOffset, CenterlineVerticalOffset, SupportTrackOffset, Vehicles, 
             HasSupportPlacement ? GetSupportPlacements : null, SmoothMovement, StationBuilder, TrackBankAngleDegrees,
             PlatformSurface, PlatformRailing, DirectMeshBuilder is null ? track => GetCachedTrackShape(track).WaterPlane : null, DirectMeshBuilder);
     }

@@ -10,7 +10,7 @@ internal class LoopingRollerCoaster : RideDefinition
     public LoopingRollerCoaster() : base(RCTRideType.LoopingRollerCoaster)
     {
         SmoothMovement = true;
-        CarVerticalOffset = 0.85f;
+        Vehicles.LocalOffset = 0.85f;
 
         SupportStyle = RideSupportStyle.MetalTubes;
         SupportTrackOffset = 0.20f;

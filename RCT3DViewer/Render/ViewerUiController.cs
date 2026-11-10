@@ -193,6 +193,7 @@ internal sealed class ViewerUiController
 
     public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, bool? isPaused, int cameraTileX, int cameraTileY,
         int visibleSections, int totalSections,
+        VisibilityQueryMetrics cameraVisibility, ReadOnlySpan<VisibilityQueryMetrics> shadowVisibility,
         IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit,
         bool peepModeEnabled, string? peepModeStatus, Action togglePeepMode, Action<uint, float> applyShadowSettings,
         Action<float> applyFieldOfView, Action<GraphicsOptionsSettings> saveGraphicsOptions, bool wireframeAvailable = true)
@@ -273,7 +274,8 @@ internal sealed class ViewerUiController
         }
 
         if (_showDebug)
-            DrawDebugOverlay(cameraTileX, cameraTileY, visibleSections, totalSections, cameraTileTrackElements);
+            DrawDebugOverlay(cameraTileX, cameraTileY, visibleSections, totalSections, cameraVisibility, shadowVisibility,
+                cameraTileTrackElements);
 
         if (peepModeEnabled || peepModeStatus is not null)
             DrawPeepModeOverlay(peepModeEnabled, peepModeStatus);
@@ -358,6 +360,7 @@ internal sealed class ViewerUiController
     }
 
     private static void DrawDebugOverlay(int tileX, int tileY, int visibleSections, int totalSections,
+        VisibilityQueryMetrics cameraVisibility, ReadOnlySpan<VisibilityQueryMetrics> shadowVisibility,
         IReadOnlyList<RCTTrackElementData> trackElements)
     {
         var viewport = ImGui.GetMainViewport();
@@ -369,6 +372,10 @@ internal sealed class ViewerUiController
         if (ImGui.Begin("Debug overlay", flags)) {
             ImGui.TextUnformatted($"Tile: {tileX}, {tileY}");
             ImGui.TextUnformatted($"Sections: {visibleSections} / {totalSections}");
+            ImGui.TextUnformatted("Quadtree: parent / leaf AABB tests | planes | accepted / rejected subtrees");
+            DrawVisibilityMetrics("Camera", cameraVisibility);
+            for (var cascade = 0; cascade < shadowVisibility.Length; cascade++)
+                DrawVisibilityMetrics($"Shadow {cascade + 1}", shadowVisibility[cascade]);
             if (trackElements.Count == 0) {
                 ImGui.TextUnformatted("No ride track at this tile");
             }
@@ -380,6 +387,9 @@ internal sealed class ViewerUiController
         }
         ImGui.End();
     }
+
+    private static void DrawVisibilityMetrics(string label, VisibilityQueryMetrics metrics) =>
+        ImGui.TextUnformatted($"{label}: {metrics.NodeTests} / {metrics.LeafTests} | {metrics.PlaneTests} | {metrics.AcceptedSubtrees} / {metrics.RejectedSubtrees}");
 
     private void DrawParkLoadingPanel()
     {

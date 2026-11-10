@@ -14,7 +14,8 @@ internal sealed class MineTrainCoaster : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.2f;
-        CarVerticalOffset = 0.5f;
+
+        Vehicles.LocalOffset = 0.5f;
 
         StationBuilder = new DefaultTrackStationBuilder();
     }

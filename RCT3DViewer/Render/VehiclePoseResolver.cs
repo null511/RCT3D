@@ -8,7 +8,7 @@ namespace RCT3D.Render;
 
 internal readonly record struct VehiclePlacementOffsets(float WorldHeight, float LocalHeight);
 
-internal readonly record struct VehiclePose(ushort RideId, Vector3 Position, Matrix4x4 Rotation);
+internal readonly record struct VehiclePose(ushort RideId, Vector3 Position, Matrix4x4 Rotation, byte PrimaryPaletteIndex);
 
 internal sealed class VehiclePoseResolver
 {
@@ -37,6 +37,7 @@ internal sealed class VehiclePoseResolver
                     previousVehicles.Add(vehicle.EntityId, vehicle);
             }
         }
+
         var previousTimestamp = snapshots.Previous?.Timestamp ?? snapshots.Current.Timestamp;
         var interval = snapshots.Current.Timestamp - previousTimestamp;
         var targetTimestamp = timestamp - Stopwatch.Frequency / 40;
@@ -54,6 +55,7 @@ internal sealed class VehiclePoseResolver
                 && previous.RideId == current.RideId
                 && previous.TrainHeadEntityId == current.TrainHeadEntityId
                 && previous.TrackSubposition == current.TrackSubposition;
+
             if (canInterpolate) {
                 position = Vector3.Lerp(ToWorldPosition(previous), position, amount);
                 orientation = Quaternion.Slerp(GetOrientation(previous), orientation, amount);
@@ -62,6 +64,7 @@ internal sealed class VehiclePoseResolver
 
             var rotation = Matrix4x4.CreateFromQuaternion(orientation);
             var centerlineResolved = false;
+
             if (canInterpolate
                 && usesSmoothMovement(current.RideId)
                 && tryGetCenterlinePose(previous, current, amount, out var centerlinePosition, out var centerlineFrame)) {
@@ -72,10 +75,12 @@ internal sealed class VehiclePoseResolver
 
             rotation = Matrix4x4.CreateRotationZ(swingPosition * (MathF.Tau / 65536.0f)) * rotation;
             var offsets = offsetsByRide.GetValueOrDefault(current.RideId);
+
             if (!centerlineResolved)
                 position.Y += offsets.WorldHeight;
+
             position += Vector3.TransformNormal(new Vector3(0.0f, offsets.LocalHeight, 0.0f), rotation);
-            poses[current.EntityId] = new VehiclePose(current.RideId, position, rotation);
+            poses[current.EntityId] = new VehiclePose(current.RideId, position, rotation, current.PrimaryPaletteIndex);
         }
 
         return poses;

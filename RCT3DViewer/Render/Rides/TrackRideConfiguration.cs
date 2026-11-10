@@ -12,8 +12,9 @@ internal class TrackRideConfiguration(
     IReadOnlyList<ITrackPartGenerator> partGenerators,
     RideSupportStyle supportStyle,
     float centerlineHeightOffset,
+    float centerlineVerticalOffset,
     float supportTrackOffset,
-    float carVerticalOffset,
+    RideVehicleDefinition vehicles,
     Action<RCTTrackElementData, List<TrackSupportPlacement>>? getSupportPlacements,
     bool smoothMovement,
     ITrackStationBuilder? stationBuilder,
@@ -28,8 +29,11 @@ internal class TrackRideConfiguration(
     public IReadOnlyList<ITrackPartGenerator> PartGenerators { get; } = partGenerators;
     public RideSupportStyle SupportStyle { get; } = supportStyle;
     public float CenterlineHeightOffset { get; } = centerlineHeightOffset;
+    public float CenterlineVerticalOffset { get; } = centerlineVerticalOffset;
     public float SupportTrackOffset { get; } = supportTrackOffset;
-    public float CarVerticalOffset { get; } = carVerticalOffset;
+    public float CarLocalOffset { get; } = vehicles.LocalOffset;
+    public float CarWorldOffset { get; } = vehicles.WorldOffset;
+    public Vector3 VehicleSize { get; } = vehicles.Size;
     public bool SmoothMovement { get; } = smoothMovement;
     public float TrackBankAngleDegrees { get; } = trackBankAngleDegrees;
     public ITrackStationBuilder? StationBuilder { get; } = stationBuilder;

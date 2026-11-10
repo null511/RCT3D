@@ -11,7 +11,7 @@ internal sealed class WoodenRollerCoaster : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 1f;
-        //CarVerticalOffset = -0.5f;
+        Vehicles.LocalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
         //SupportTrackOffset = CenterlineHeightOffset - RailHalfHeight - SupportTopClearance;

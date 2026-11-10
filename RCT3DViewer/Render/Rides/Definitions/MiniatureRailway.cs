@@ -16,7 +16,7 @@ internal class MiniatureRailway : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.25f;
-        CarVerticalOffset = 0.5f;
+        Vehicles.LocalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.WoodenTruss;
 

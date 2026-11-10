@@ -12,7 +12,7 @@ public struct RCTVehicleData
     public byte Orientation;
     public byte Pitch;
     public byte Roll;
-    public byte Reserved;
+    public byte PrimaryPaletteIndex;
     public float PitchRadians;
     public float RollRadians;
     public ushort RideId;

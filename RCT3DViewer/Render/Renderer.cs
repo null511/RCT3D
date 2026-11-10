@@ -205,6 +205,7 @@ public sealed class Renderer : IDisposable
         var sectionMetrics = frameRenderer!.SectionMetrics;
         ui.BuildFrameUi(currentDeltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours, parkScene.IsPaused,
             cameraTileX, cameraTileY, sectionMetrics.Visible, sectionMetrics.Total,
+            frameRenderer.CameraVisibilityMetrics, frameRenderer.ShadowVisibilityMetrics,
             parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
             loadPark, togglePause, requestExit, peepMode!.IsEnabled, peepMode.StatusMessage, togglePeepMode,
             applyShadowSettings, applyFieldOfView, saveGraphicsOptions, deviceContext!.SupportsWireframe);

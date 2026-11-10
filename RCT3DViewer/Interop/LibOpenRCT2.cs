@@ -7,7 +7,7 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 39;
+    private const uint ExpectedAbiVersion = 40;
     private const int ExpectedTrackElementDataSize = 36;
     private const int ExpectedPeepDataSize = 26;
 

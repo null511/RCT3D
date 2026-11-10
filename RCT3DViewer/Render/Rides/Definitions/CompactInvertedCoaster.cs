@@ -15,7 +15,7 @@ internal sealed class CompactInvertedCoaster : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 3.0f;
-        CarVerticalOffset = -0.5f;
+        Vehicles.LocalOffset = -0.5f;
 
         SupportStyle = RideSupportStyle.MetalTubesInverted;
 

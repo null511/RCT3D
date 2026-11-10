@@ -53,6 +53,30 @@ internal readonly struct ViewFrustum
         _near.Intersects(bounds) &&
         _far.Intersects(bounds);
 
+    public const int AllPlanes = (1 << 6) - 1;
+
+    // Returns -1 outside, otherwise the planes still intersecting the bounds.
+    public int Classify(AxisAlignedBounds bounds, int activePlanes, ref int planeTests)
+    {
+        for (var i = 0; i < 6; i++) {
+            var bit = 1 << i;
+            if ((activePlanes & bit) == 0) continue;
+
+            var plane = i switch {
+                0 => _left,
+                1 => _right,
+                2 => _bottom,
+                3 => _top,
+                4 => _near,
+                _ => _far,
+            };
+            planeTests++;
+            if (!plane.Intersects(bounds)) return -1;
+            if (plane.Contains(bounds)) activePlanes &= ~bit;
+        }
+        return activePlanes;
+    }
+
     private static FrustumPlane CreatePlane(Vector4 coefficients)
     {
         var normal = new Vector3(coefficients.X, coefficients.Y, coefficients.Z);
@@ -72,6 +96,15 @@ internal readonly struct ViewFrustum
                 Normal.Y >= 0.0f ? bounds.Max.Y : bounds.Min.Y,
                 Normal.Z >= 0.0f ? bounds.Max.Z : bounds.Min.Z);
             return Vector3.Dot(Normal, positiveVertex) + Distance >= 0.0f;
+        }
+
+        public bool Contains(AxisAlignedBounds bounds)
+        {
+            var negativeVertex = new Vector3(
+                Normal.X >= 0.0f ? bounds.Min.X : bounds.Max.X,
+                Normal.Y >= 0.0f ? bounds.Min.Y : bounds.Max.Y,
+                Normal.Z >= 0.0f ? bounds.Min.Z : bounds.Max.Z);
+            return Vector3.Dot(Normal, negativeVertex) + Distance >= 0.0f;
         }
     }
 }

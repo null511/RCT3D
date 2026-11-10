@@ -49,7 +49,8 @@ internal sealed class QuarterLoopTrackPieceBuilder(RCTTrackElementType pieceType
             start, end, startTangent, endTangent, Vector3.Distance(start, end) * 0.4f,
             Math.Max(tracks.Length * TrackCenterlineGeometry.CurveSubdivisionsPerTile, 32));
 
-        TrackCenterlineGeometry.AddParts(first, geometry, points, partGenerators, palette,
+        TrackCenterlineGeometry.AddVerticallyAlignedParts(first, geometry, points, partGenerators, palette,
+            startVertical: isUp, endVertical: !isUp,
             startTangent: startTangent, endTangent: endTangent, preferredSide: preferredSide);
     }
 }

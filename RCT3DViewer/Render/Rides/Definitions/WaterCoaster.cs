@@ -21,7 +21,7 @@ internal class WaterCoaster : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.25f;
-        CarVerticalOffset = 0.20f;
+        Vehicles.LocalOffset = 0.20f;
 
         SupportStyle = RideSupportStyle.MetalFork;
 
@@ -62,7 +62,7 @@ internal class WaterCoaster : RideDefinition
         else if (track.Part.IsCovered()) {
             part.WaterPlane = [
                 new Vector2(-1.0f, 0.1f),
-                new Vector2(1.0f, 0.1f),
+                new Vector2( 1.0f, 0.1f),
             ];
 
             // top
@@ -72,7 +72,7 @@ internal class WaterCoaster : RideDefinition
                 new Vector2(-0.90f, -0.20f),
                 new Vector2(-1.00f,  0.25f),
             ], false) {
-                Swatch = TrackRailSwatch.Main,
+                Swatch = TrackRailSwatch.Alternate,
                 Specular = railSpecular,
             });
 

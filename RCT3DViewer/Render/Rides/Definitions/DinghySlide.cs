@@ -8,7 +8,7 @@ namespace RCT3D.Render.Rides.Definitions;
 
 internal sealed class DinghySlide : RideDefinition
 {
-    private const float TubeRadius = 1.2f;
+    private const float TubeRadius = 1.25f;
     private const float TubeThickness = 0.06f;
 
     private static readonly TrackRailSpecularData paintSpecular = new(160, 0);
@@ -16,13 +16,19 @@ internal sealed class DinghySlide : RideDefinition
 
     public DinghySlide() : base(RCTRideType.DinghySlide)
     {
-        CenterlineHeightOffset = 1.25f;
-        CarVerticalOffset = -1.0f;
+        SmoothMovement = true;
+        CenterlineHeightOffset = 1.35f;
 
         SupportStyle = RideSupportStyle.MetalTubes;
-        SupportTrackOffset = -1.2f;
+        SupportTrackOffset = -1.25f;
 
         StationBuilder = new DefaultTrackStationBuilder();
+
+        Vehicles = new RideVehicleDefinition {
+            Size = new Vector3(0.86f, 0.42f, 1.8f),
+            WorldOffset =  1.0f,
+            LocalOffset = -0.9f,
+        };
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
@@ -50,7 +56,7 @@ internal sealed class DinghySlide : RideDefinition
 
     private static void FullTube(TrackPart part)
     {
-        const int faceCount = 12;
+        const int faceCount = 16;
 
         part.RailProfiles.Add(new TrackRailProfileShape(Circle(0f, 0f, TubeRadius, faceCount), true) {
             Swatch = TrackRailSwatch.Main,
@@ -65,13 +71,35 @@ internal sealed class DinghySlide : RideDefinition
 
     private static void HalfTube(TrackPart part)
     {
-        part.RailProfiles.Add(new TrackRailProfileShape(HalfCircle(0f, 0f, TubeRadius, 6), false) {
+        const int faceCount = 8;
+
+        part.RailProfiles.Add(new TrackRailProfileShape(HalfCircle(0f, 0f, TubeRadius, faceCount), false) {
             Swatch = TrackRailSwatch.Main,
             Specular = paintSpecular,
         });
 
-        part.RailProfiles.Add(new TrackRailProfileShape(HalfCircle(0f, 0f, TubeRadius - TubeThickness, 6).Reverse().ToArray(), false) {
+        var innerRadius = TubeRadius - TubeThickness;
+
+        part.RailProfiles.Add(new TrackRailProfileShape(HalfCircle(0f, 0f, innerRadius, faceCount).Reverse().ToArray(), false) {
             Swatch = TrackRailSwatch.Alternate,
+            Specular = paintSpecular,
+        });
+
+        // left
+        part.RailProfiles.Add(new TrackRailProfileShape([
+            new Vector2(-innerRadius, 0f),
+            new Vector2(-TubeRadius,  0f),
+        ], false) {
+            Swatch = TrackRailSwatch.Main,
+            Specular = paintSpecular,
+        });
+
+        // right
+        part.RailProfiles.Add(new TrackRailProfileShape([
+            new Vector2( TubeRadius,  0f),
+            new Vector2( innerRadius, 0f),
+        ], false) {
+            Swatch = TrackRailSwatch.Main,
             Specular = paintSpecular,
         });
     }

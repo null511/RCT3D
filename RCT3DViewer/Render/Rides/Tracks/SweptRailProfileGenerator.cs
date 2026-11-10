@@ -85,7 +85,7 @@ internal static class TrackMeshPartGenerator
 
             var edgeCount = shape.Closed ? shape.Vertices.Length : shape.Vertices.Length - 1;
             var stationVertices = new uint[centerline.Length, shape.Vertices.Length];
-            var frames = CreateFrames(centerline, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
+            var frames = geometry.GetFrames(centerline, rollBegin, rollEnd, startTangent, endTangent, preferredSide, smoothRollTransition);
             if (frames.Length != centerline.Length) return;
 
             for (var station = 0; station < centerline.Length; station++) {
