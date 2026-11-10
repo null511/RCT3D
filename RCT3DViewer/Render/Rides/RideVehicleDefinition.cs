@@ -3,7 +3,7 @@ using System.Numerics;
 
 namespace RCT3D.Render.Rides;
 
-internal class RideVehicleDefinition
+internal abstract class RideVehicleDefinition
 {
     public RideVehicleCarDefinition[] Cars = [];
 }
@@ -12,8 +12,8 @@ internal class RideVehicleCarDefinition
 {
     public static readonly Vector3 DefaultSize = new(0.7f);
 
-    public float LocalOffset { get; init; }
-    public float WorldOffset { get; init; }
+    public float LocalOffset {get; init;} = 0.30f;
+    public float WorldOffset {get; init;} = 0.0f;
 
     /// <summary>
     /// Full car dimensions in world units along local X (width), Y (height), and Z (length).

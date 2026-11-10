@@ -31,6 +31,7 @@ internal sealed class ViewerUiController
     private bool _taaEnabled = false;
     private int _debugView;
     private float _fieldOfView = 45.0f;
+    private float _lookAheadDistance;
     private float _sharpening = 0.5f;
     private float _mipBias = -1.0f;
     private float _ridesRenderDistance;
@@ -55,6 +56,7 @@ internal sealed class ViewerUiController
         _taaEnabled = settings.TaaEnabled;
         _debugView = settings.DebugView;
         _fieldOfView = settings.FieldOfView;
+        _lookAheadDistance = settings.LookAheadDistance;
         _sharpening = settings.Sharpening;
         _mipBias = settings.MipBias;
         _ridesRenderDistance = settings.RidesRenderDistance;
@@ -77,6 +79,7 @@ internal sealed class ViewerUiController
     public bool TaaEnabled => _taaEnabled;
     public uint DebugView => (uint)_debugView;
     public bool DebugTrackPaths => _debugTrackPaths;
+    public float LookAheadDistance => _lookAheadDistance;
     public float Sharpening => _sharpening;
     public float MipBias => _mipBias;
     public float RidesRenderDistance => _ridesRenderDistance;
@@ -105,6 +108,7 @@ internal sealed class ViewerUiController
         _debugView = _appliedGraphicsOptions.DebugView;
         _fieldOfView = _appliedGraphicsOptions.FieldOfView;
         applyFieldOfView(_fieldOfView);
+        _lookAheadDistance = _appliedGraphicsOptions.LookAheadDistance;
         _sharpening = _appliedGraphicsOptions.Sharpening;
         _mipBias = _appliedGraphicsOptions.MipBias;
         _ridesRenderDistance = _appliedGraphicsOptions.RidesRenderDistance;
@@ -139,6 +143,7 @@ internal sealed class ViewerUiController
         TaaEnabled = _taaEnabled,
         DebugView = _debugView,
         FieldOfView = _fieldOfView,
+        LookAheadDistance = _lookAheadDistance,
         Sharpening = _sharpening,
         MipBias = _mipBias,
         RidesRenderDistance = _ridesRenderDistance,
@@ -300,6 +305,7 @@ internal sealed class ViewerUiController
                 ImGui.Combo("Debug View", ref _debugView, DebugViewOptions, DebugViewOptions.Length);
                 if (ImGui.SliderFloat("FOV", ref _fieldOfView, 30.0f, 120.0f, "%.0f°"))
                     applyFieldOfView(_fieldOfView);
+                ImGui.SliderFloat("Look-Ahead Distance", ref _lookAheadDistance, 0.0f, 12.0f, "%.1f", ImGuiSliderFlags.AlwaysClamp);
                 ImGui.SliderFloat("Sharpening", ref _sharpening, 0.0f, 1.0f, "%.2f");
                 ImGui.SliderFloat("Mip Bias", ref _mipBias, -2.0f, 0.0f, "%.2f");
                 ImGui.SeparatorText("Render Distance");

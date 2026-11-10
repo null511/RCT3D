@@ -5,6 +5,7 @@ internal sealed record GraphicsOptionsSettings
     public bool TaaEnabled { get; init; } = false;
     public int DebugView { get; init; } = 0;
     public float FieldOfView { get; init; } = 45.0f;
+    public float LookAheadDistance { get; init; } = 4.0f;
     public float Sharpening { get; init; } = 0.5f;
     public float MipBias { get; init; } = -1.0f;
     public float RidesRenderDistance { get; init; } = 100.0f;

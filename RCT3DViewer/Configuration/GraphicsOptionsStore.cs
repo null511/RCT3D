@@ -68,6 +68,7 @@ internal sealed class GraphicsOptionsStore
     private static bool IsValid(GraphicsOptionsSettings settings) =>
         settings.DebugView is >= 0 and <= 3
         && float.IsFinite(settings.FieldOfView) && settings.FieldOfView is >= 30.0f and <= 120.0f
+        && float.IsFinite(settings.LookAheadDistance) && settings.LookAheadDistance is >= 0.0f and <= 12.0f
         && float.IsFinite(settings.Sharpening) && settings.Sharpening is >= 0.0f and <= 1.0f
         && float.IsFinite(settings.MipBias) && settings.MipBias is >= -2.0f and <= 0.0f
         && float.IsFinite(settings.RidesRenderDistance) && settings.RidesRenderDistance is >= 0.0f and <= 400.0f

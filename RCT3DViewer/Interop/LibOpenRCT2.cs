@@ -7,7 +7,7 @@ namespace RCT3D.Interop;
 public sealed unsafe class LibOpenRCT2 : IDisposable
 {
     private const string LibName = "libopenrct2";
-    private const uint ExpectedAbiVersion = 41;
+    private const uint ExpectedAbiVersion = 42;
     private const int ExpectedTrackElementDataSize = 36;
     private const int ExpectedPeepDataSize = 26;
 
@@ -78,6 +78,10 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private delegate int CopyVehiclePathSamplesDelegate(IntPtr context, RCTVehiclePathSample* output, ulong capacity);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int GetVehicleLookAheadDelegate(IntPtr context, ushort entityId, float distance,
+        out RCTVehiclePathSample start, out RCTVehiclePathSample end, out float amount, out int available);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int CreatePeepDelegate(IntPtr context, int x, int y, int z, out ushort entityId);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -127,6 +131,7 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private readonly CopyVehicleDataDelegate _copyVehicleData;
     private readonly GetVehicleCountDelegate _getVehiclePathSampleCount;
     private readonly CopyVehiclePathSamplesDelegate _copyVehiclePathSamples;
+    private readonly GetVehicleLookAheadDelegate _getVehicleLookAhead;
     private readonly CreatePeepDelegate _createPeep;
     private readonly MovePeepDelegate _movePeep;
     private readonly TakeControlPeepDelegate _takeControlPeep;
@@ -213,6 +218,7 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
             _copyVehicleData = Bind<CopyVehicleDataDelegate>("rct3d_openrct2_copy_vehicle_data");
             _getVehiclePathSampleCount = Bind<GetVehicleCountDelegate>("rct3d_openrct2_get_vehicle_path_sample_count");
             _copyVehiclePathSamples = Bind<CopyVehiclePathSamplesDelegate>("rct3d_openrct2_copy_vehicle_path_samples");
+            _getVehicleLookAhead = Bind<GetVehicleLookAheadDelegate>("rct3d_openrct2_get_vehicle_look_ahead");
             _createPeep = Bind<CreatePeepDelegate>("rct3d_openrct2_create_peep");
             _movePeep = Bind<MovePeepDelegate>("rct3d_openrct2_move_peep");
             _takeControlPeep = Bind<TakeControlPeepDelegate>("rct3d_openrct2_take_control_peep");
@@ -340,6 +346,13 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
         fixed (RCTVehiclePathSample* pointer = samples)
             ThrowIfFailed(_copyVehiclePathSamples(_context, pointer, count));
         return samples;
+    }
+
+    public bool TryGetVehicleLookAhead(ushort entityId, float nativeDistance,
+        out RCTVehiclePathSample start, out RCTVehiclePathSample end, out float amount)
+    {
+        ThrowIfFailed(_getVehicleLookAhead(_context, entityId, nativeDistance, out start, out end, out amount, out var available));
+        return available != 0;
     }
 
     public bool GetPauseState()

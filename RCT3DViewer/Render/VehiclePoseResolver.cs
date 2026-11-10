@@ -9,7 +9,11 @@ namespace RCT3D.Render;
 
 internal readonly record struct VehiclePose(
     ushort RideId, Vector3 Position, Matrix4x4 Rotation, byte PrimaryPaletteIndex,
-    RideVehicleCarDefinition Definition, bool IsVisible);
+    RideVehicleCarDefinition Definition, bool IsVisible)
+{
+    public Vector3? LookAheadOffset { get; init; }
+    public float LookAheadDistanceNative { get; init; }
+}
 
 internal sealed class VehiclePoseResolver
 {
@@ -82,8 +86,19 @@ internal sealed class VehiclePoseResolver
                 position.Y += definition.WorldOffset;
 
             position += Vector3.TransformNormal(new Vector3(0.0f, definition.LocalOffset, 0.0f), rotation);
+            var lookAhead = snapshots.Current.LookAhead;
+            var lookAheadOffset = GetLookAheadOffset(current, definition, lookAhead);
+            if (canInterpolate && lookAheadOffset.HasValue
+                && snapshots.Previous?.LookAhead is { } previousLookAhead
+                && previousLookAhead.NativeDistance == lookAhead!.NativeDistance
+                && GetLookAheadOffset(previous, definition, previousLookAhead) is { } previousOffset) {
+                lookAheadOffset = Vector3.Lerp(previousOffset, lookAheadOffset.Value, amount);
+            }
             poses[current.EntityId] = new VehiclePose(
-                current.RideId, position, rotation, current.PrimaryPaletteIndex, definition, definition.ShouldRender(current));
+                current.RideId, position, rotation, current.PrimaryPaletteIndex, definition, definition.ShouldRender(current)) {
+                LookAheadOffset = lookAheadOffset,
+                LookAheadDistanceNative = lookAhead?.NativeDistance ?? 0.0f
+            };
         }
 
         return poses;
@@ -94,6 +109,29 @@ internal sealed class VehiclePoseResolver
         poses.Clear();
         previousVehicles.Clear();
         previousSnapshot = null;
+    }
+
+    private static Vector3? GetLookAheadOffset(
+        in RCTVehicleData vehicle, RideVehicleCarDefinition definition, VehicleLookAheadSnapshot? lookAhead)
+    {
+        if (lookAhead is null || lookAhead.EntityId != vehicle.EntityId
+            || lookAhead.Start.RideId != vehicle.RideId || lookAhead.End.RideId != vehicle.RideId)
+            return null;
+
+        var start = lookAhead.Start;
+        var end = lookAhead.End;
+        var target = Vector3.Lerp(new Vector3(start.X, start.Z, start.Y), new Vector3(end.X, end.Z, end.Y), lookAhead.Amount)
+            * WorldUnits.NativeUnit;
+        var orientation = Quaternion.Slerp(
+            GetOrientation(start.Orientation, start.PitchRadians, start.RollRadians),
+            GetOrientation(end.Orientation, end.PitchRadians, end.RollRadians), lookAhead.Amount);
+        var swing = Matrix4x4.CreateRotationZ(vehicle.SwingPosition * (MathF.Tau / 65536.0f));
+        var targetRotation = swing * Matrix4x4.CreateFromQuaternion(orientation);
+        var sourceRotation = swing * Matrix4x4.CreateFromQuaternion(GetOrientation(vehicle));
+        var localOffset = new Vector3(0.0f, definition.LocalOffset, 0.0f);
+        // The fixed world-height offset cancels; only the rotated attachment offset changes along the path.
+        return target - ToWorldPosition(vehicle)
+            + Vector3.TransformNormal(localOffset, targetRotation) - Vector3.TransformNormal(localOffset, sourceRotation);
     }
 
     private static Vector3 ToWorldPosition(in RCTVehicleData vehicle) => new(

@@ -36,8 +36,10 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
     public bool IsEntering => createPeepTask is not null;
     public string? StatusMessage => statusMessage;
 
-    public void UpdateRideCamera()
+    public void UpdateRideCamera(float lookAheadDistance)
     {
+        var nativeDistance = lookAheadDistance / WorldUnits.NativeUnit;
+        scene.Simulation.RideCameraLookAheadDistanceNative = nativeDistance;
         var peep = scene.Simulation.Peep;
         if (!rideInteractionActive || peepEntityId != peep?.EntityId
             || peep is null || (NativePeepState)peep.State != NativePeepState.OnRide) {
@@ -50,7 +52,28 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
             return;
         }
 
-        camera.SetBaseRotation(pose.Rotation);
+        var rotation = pose.Rotation;
+        if (lookAheadDistance > 0.0f && pose.LookAheadDistanceNative == nativeDistance
+            && pose.LookAheadOffset is { } offset
+            && float.IsFinite(offset.LengthSquared()) && offset.LengthSquared() > 0.000001f) {
+            var forward = Vector3.Normalize(offset);
+            var up = Vector3.TransformNormal(Vector3.UnitY, rotation);
+            var side = Vector3.Cross(up, forward);
+            if (side.LengthSquared() < 0.000001f) {
+                side = Vector3.TransformNormal(Vector3.UnitX, rotation);
+                side -= forward * Vector3.Dot(side, forward);
+            }
+            if (float.IsFinite(side.LengthSquared()) && side.LengthSquared() > 0.000001f) {
+                side = Vector3.Normalize(side);
+                up = Vector3.Normalize(Vector3.Cross(forward, side));
+                rotation = new Matrix4x4(
+                    side.X, side.Y, side.Z, 0.0f,
+                    up.X, up.Y, up.Z, 0.0f,
+                    forward.X, forward.Y, forward.Z, 0.0f,
+                    0.0f, 0.0f, 0.0f, 1.0f);
+            }
+        }
+        camera.SetBaseRotation(rotation);
         rideCameraAttached = true;
         camera.Position = pose.Position;
     }
@@ -325,13 +348,4 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
         return (byte)((direction + 4) & 3);
     }
 
-    private enum NativePeepState : byte
-    {
-        QueuingFront = 2,
-        OnRide = 3,
-        LeavingRide = 4,
-        Walking = 5,
-        Queuing = 6,
-        EnteringRide = 7,
-    }
 }

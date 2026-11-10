@@ -22,6 +22,7 @@ public sealed class SimulationBridge : IDisposable
     private RCTVehiclePathSample[] vehiclePathSamples = [];
     private PeepSnapshot? peepSnapshot;
     private int activePeepEntityId = -1;
+    private float rideCameraLookAheadDistanceNative;
 
     public VehicleSnapshotPair? VehicleSnapshots => Volatile.Read(ref vehicleSnapshots);
     public ReadOnlyMemory<RCTVehiclePathSample> VehiclePathSamples => Volatile.Read(ref vehiclePathSamples);
@@ -29,6 +30,11 @@ public sealed class SimulationBridge : IDisposable
     public float? GameTimeOfDayHours => Volatile.Read(ref parkLoaded) ? Volatile.Read(ref gameTimeOfDayHours) : null;
     public bool? IsPaused => Volatile.Read(ref parkLoaded) ? Volatile.Read(ref isPaused) : null;
     public Exception? SimulationFailure => Volatile.Read(ref simulationFailure);
+
+    public float RideCameraLookAheadDistanceNative {
+        get => Volatile.Read(ref rideCameraLookAheadDistanceNative);
+        set => Volatile.Write(ref rideCameraLookAheadDistanceNative, value);
+    }
 
 
     public SimulationBridge(string libraryPath, string openRCT2Path, string rct2Path, string rct1Path)
@@ -384,7 +390,7 @@ public sealed class SimulationBridge : IDisposable
         data.EntityId, data.X, data.Y, data.Z, data.State, data.RideId,
         data.StationIndex, data.TrainIndex, data.CarIndex, data.SeatIndex, data.TrainHeadEntityId, data.VehicleEntityId);
 
-    private static VehicleSnapshot ReadVehicleSnapshot(LibOpenRCT2 openRCT2)
+    private VehicleSnapshot ReadVehicleSnapshot(LibOpenRCT2 openRCT2)
     {
         var count = openRCT2.GetVehicleCount();
         if (count > int.MaxValue)
@@ -392,7 +398,16 @@ public sealed class SimulationBridge : IDisposable
 
         var vehicles = new RCTVehicleData[(int)count];
         openRCT2.CopyVehicleData(vehicles);
-        return new VehicleSnapshot(Stopwatch.GetTimestamp(), vehicles);
+        VehicleLookAheadSnapshot? lookAhead = null;
+        var distance = RideCameraLookAheadDistanceNative;
+        var peep = Peep;
+        if (float.IsFinite(distance) && distance is > 0.0f and <= 128.0f
+            && peep is not null && peep.EntityId == Volatile.Read(ref activePeepEntityId)
+            && (NativePeepState)peep.State == NativePeepState.OnRide
+            && openRCT2.TryGetVehicleLookAhead(peep.VehicleEntityId, distance, out var start, out var end, out var amount)) {
+            lookAhead = new VehicleLookAheadSnapshot(peep.VehicleEntityId, distance, start, end, amount);
+        }
+        return new VehicleSnapshot(Stopwatch.GetTimestamp(), vehicles, lookAhead);
     }
 
     public void Dispose()
@@ -422,9 +437,23 @@ public sealed record ParkSnapshot(
     RCTPaletteEntry[] PaletteData,
     RCTTileObstacleData[] ObstacleData);
 
-public sealed record VehicleSnapshot(long Timestamp, ReadOnlyMemory<RCTVehicleData> Vehicles);
+public sealed record VehicleLookAheadSnapshot(
+    ushort EntityId, float NativeDistance, RCTVehiclePathSample Start, RCTVehiclePathSample End, float Amount);
+
+public sealed record VehicleSnapshot(
+    long Timestamp, ReadOnlyMemory<RCTVehicleData> Vehicles, VehicleLookAheadSnapshot? LookAhead = null);
 
 public sealed record VehicleSnapshotPair(VehicleSnapshot? Previous, VehicleSnapshot Current);
+
+internal enum NativePeepState : byte
+{
+    QueuingFront = 2,
+    OnRide = 3,
+    LeavingRide = 4,
+    Walking = 5,
+    Queuing = 6,
+    EnteringRide = 7,
+}
 
 public sealed record PeepSnapshot(
     ushort EntityId,

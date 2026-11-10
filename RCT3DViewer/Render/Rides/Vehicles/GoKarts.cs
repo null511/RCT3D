@@ -2,6 +2,8 @@
 
 namespace RCT3D.Render.Rides.Vehicles;
 
+[RideVehicleMapping("rct2.ride.kart1", "0A188B80|KART1   |56DFF5D7")]
+[RideVehicleMapping("rct1.ride.go_karts")]
 internal class GoKarts : RideVehicleDefinition
 {
     public GoKarts()
