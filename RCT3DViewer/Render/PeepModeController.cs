@@ -71,11 +71,13 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
                     up.X, up.Y, up.Z, 0.0f,
                     forward.X, forward.Y, forward.Z, 0.0f,
                     0.0f, 0.0f, 0.0f, 1.0f);
+                rotation = Matrix4x4.CreateRotationY(pose.BodyYawRadians) * rotation;
             }
         }
         camera.SetBaseRotation(rotation);
         rideCameraAttached = true;
-        camera.Position = pose.Position;
+        camera.Position = pose.Position + Vector3.TransformNormal(
+            new Vector3(0.0f, pose.Definition.CameraOffset, 0.0f), pose.Rotation);
     }
 
 

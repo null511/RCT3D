@@ -4,7 +4,7 @@ using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions.Shared;
 
-internal static class LargeSteelTrack
+internal static class BoxSpineTrack
 {
     private static readonly TrackRailSpecularData railSpecular = new(100, 0);
 

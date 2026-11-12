@@ -13,6 +13,7 @@ internal readonly record struct VehiclePose(
 {
     public Vector3? LookAheadOffset { get; init; }
     public float LookAheadDistanceNative { get; init; }
+    public float BodyYawRadians { get; init; }
 }
 
 internal sealed class VehiclePoseResolver
@@ -54,6 +55,7 @@ internal sealed class VehiclePoseResolver
             var position = ToWorldPosition(current);
             var orientation = GetOrientation(current);
             var swingPosition = (float)current.SwingPosition;
+            var spinPosition = (float)current.SpinPosition;
             var previous = default(RCTVehicleData);
             var canInterpolate = interval > 0
                 && previousVehicles.TryGetValue(current.EntityId, out previous)
@@ -61,12 +63,15 @@ internal sealed class VehiclePoseResolver
                 && previous.TrainHeadEntityId == current.TrainHeadEntityId
                 && previous.ObjectIdHash == current.ObjectIdHash
                 && previous.VehicleType == current.VehicleType
-                && previous.TrackSubposition == current.TrackSubposition;
+                && previous.TrackSubposition == current.TrackSubposition
+                && previous.HasIndependentSpin == current.HasIndependentSpin;
 
             if (canInterpolate) {
                 position = Vector3.Lerp(ToWorldPosition(previous), position, amount);
                 orientation = Quaternion.Slerp(GetOrientation(previous), orientation, amount);
                 swingPosition = previous.SwingPosition + (current.SwingPosition - previous.SwingPosition) * amount;
+                var spinDelta = ((current.SpinPosition - previous.SpinPosition + 128) & 255) - 128;
+                spinPosition = previous.SpinPosition + spinDelta * amount;
             }
 
             var rotation = Matrix4x4.CreateFromQuaternion(orientation);
@@ -81,6 +86,14 @@ internal sealed class VehiclePoseResolver
             }
 
             rotation = Matrix4x4.CreateRotationZ(swingPosition * (MathF.Tau / 65536.0f)) * rotation;
+
+            var bodyYaw = 0.0f;
+            if (current.HasIndependentSpin != 0) {
+                // Native spin is an absolute heading; retain the movement frame's slope and banking.
+                var movementYaw = MathF.Atan2(rotation.M31, rotation.M33);
+                bodyYaw = spinPosition * (MathF.Tau / 256.0f) - MathF.PI / 2.0f - movementYaw;
+                rotation = Matrix4x4.CreateRotationY(bodyYaw) * rotation;
+            }
 
             if (!centerlineResolved)
                 position.Y += definition.WorldOffset;
@@ -97,7 +110,8 @@ internal sealed class VehiclePoseResolver
             poses[current.EntityId] = new VehiclePose(
                 current.RideId, position, rotation, current.PrimaryPaletteIndex, definition, definition.ShouldRender(current)) {
                 LookAheadOffset = lookAheadOffset,
-                LookAheadDistanceNative = lookAhead?.NativeDistance ?? 0.0f
+                LookAheadDistanceNative = lookAhead?.NativeDistance ?? 0.0f,
+                BodyYawRadians = bodyYaw
             };
         }
 
@@ -114,7 +128,8 @@ internal sealed class VehiclePoseResolver
     private static Vector3? GetLookAheadOffset(
         in RCTVehicleData vehicle, RideVehicleCarDefinition definition, VehicleLookAheadSnapshot? lookAhead)
     {
-        if (lookAhead is null || lookAhead.EntityId != vehicle.EntityId
+        if (vehicle.HasIndependentSpin != 0
+            || lookAhead is null || lookAhead.EntityId != vehicle.EntityId
             || lookAhead.Start.RideId != vehicle.RideId || lookAhead.End.RideId != vehicle.RideId)
             return null;
 

@@ -4,11 +4,11 @@ using System.Numerics;
 
 namespace RCT3D.Render.Rides.Definitions.Shared;
 
-internal class StandardSteelTrack
+internal class SchwarzkopfTrack
 {
     private const float RailRadius = 0.07f;
-    private const float RailSeparation = 0.42f;
-    private const float RailCenterY = 0.28f;
+    private const float RailSeparation = 0.60f;
+    private const float RailCenterY = 0.0f;
 
     private const float BraceTopY = RailCenterY + 0.04f;
     private const float BraceBottomY = RailCenterY - 0.04f;
@@ -38,7 +38,7 @@ internal class StandardSteelTrack
         });
 
         // center
-        part.AppendRailPart.Circle(0.00f, 0.20f, 0.14f, 6, shape => {
+        part.AppendRailPart.Circle(0.00f, -0.07f, 0.14f, 6, shape => {
             shape.Swatch = TrackRailSwatch.Main;
             shape.Specular = railSpecular;
         });
@@ -55,7 +55,8 @@ internal class StandardSteelTrack
         }));
 
         if (track.HasChainLift != 0) {
-            part.AppendRailPart.Box(0f, RailCenterY, RailSeparation - 0.08f, RailRadius, shape => {
+            // lift
+            part.AppendRailPart.Box(0f, RailCenterY, RailSeparation - 0.12f, RailRadius, shape => {
                 shape.Swatch = TrackRailSwatch.Main;
                 shape.Specular = railSpecular;
             });

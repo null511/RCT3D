@@ -14,9 +14,8 @@ internal class SpiralRollerCoaster : RideDefinition
     public SpiralRollerCoaster() : base(RCTRideType.SpiralRollerCoaster)
     {
         SmoothMovement = true;
-        //Vehicles.LocalOffset = 0.5f;
+        CenterlineHeightOffset = 0.5f;
 
-        CenterlineHeightOffset = 0.28f;
         SupportStyle = RideSupportStyle.MetalFork;
 
         StationBuilder = new DefaultTrackStationBuilder();

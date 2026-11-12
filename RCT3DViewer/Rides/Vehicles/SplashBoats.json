@@ -1,0 +1,11 @@
+{
+  "cars": [
+    {
+      "size": [ 2.2, 0.25, 3.2 ],
+      "localOffset": 0.15
+    },
+    {
+      "paintStyle": 8
+    }
+  ]
+}

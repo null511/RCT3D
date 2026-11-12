@@ -42,7 +42,7 @@ internal sealed class SuspendedSwingingCoaster : RideDefinition
         });
 
         // center
-        part.AppendRailPart.Circle(0f, 0f, railCenterY + 0.50f, 6, shape => {
+        part.AppendRailPart.Circle(0f, railCenterY + 0.50f, 0.18f, 6, shape => {
             shape.Swatch = TrackRailSwatch.Main;
             shape.Specular = railSpecular;
         });

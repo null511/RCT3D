@@ -21,6 +21,6 @@ internal sealed class TwisterRollerCoaster : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        return LargeSteelTrack.Build(track);
+        return BoxSpineTrack.Build(track);
     }
 }

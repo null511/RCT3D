@@ -16,6 +16,6 @@ internal sealed class StandUpRollerCoaster : RideDefinition
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
     {
-        return StandardSteelTrack.Build(track);
+        return SchwarzkopfTrack.Build(track);
     }
 }

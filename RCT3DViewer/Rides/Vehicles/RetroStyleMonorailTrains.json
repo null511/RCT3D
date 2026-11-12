@@ -1,0 +1,19 @@
+{
+  "cars": [
+    {
+      "size": [ 1.0, 0.60, 1.4 ],
+      "localOffset": 1.0,
+      "cameraOffset":  1.0
+    },
+    {
+      "size": [ 1.0, 0.60, 1.8 ],
+      "localOffset": 1.0,
+      "cameraOffset": 1.0
+    },
+    {
+      "size": [ 1.0, 0.60, 1.8 ],
+      "localOffset": 1.0,
+      "cameraOffset": 1.0
+    }
+  ]
+}

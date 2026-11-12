@@ -1,5 +1,6 @@
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
+using RCT3D.Render.Rides;
 using RCT3D.Render.Terrain;
 using RCT3D.Render.Scenery;
 using RCT3D.Simulation;
@@ -121,6 +122,7 @@ public sealed class Renderer : IDisposable
             if (!Path.IsPathRooted(OpenRCT2Path))
                 OpenRCT2Path = Path.Combine(AppContext.BaseDirectory, OpenRCT2Path);
 
+            RideVehicleDefinitions.Initialize(OpenRCT2Path);
             simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path, Rct1Path);
 
             var textureRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Textures");

@@ -1,80 +1,106 @@
 using RCT3D.Interop.Models;
-using System.Reflection;
+using System.Numerics;
+using System.Text.Json;
 
 namespace RCT3D.Render.Rides;
 
 internal static class RideVehicleDefinitions
 {
     private static readonly RideVehicleCarDefinition defaultDefinition = new();
-    private static readonly Dictionary<(uint ObjectIdHash, byte VehicleType), RideVehicleCarDefinition> definitions = CreateDefinitions();
+    private static Dictionary<(uint ObjectIdHash, byte VehicleType), RideVehicleCarDefinition> definitions = new();
+
+    public static void Initialize(string openRCT2Path) =>
+        definitions = CreateDefinitions(Path.Combine(openRCT2Path, "object"));
 
     public static RideVehicleCarDefinition Resolve(in RCTVehicleData vehicle) =>
         definitions.GetValueOrDefault((vehicle.ObjectIdHash, vehicle.VehicleType), defaultDefinition);
 
 
-    private static Dictionary<(uint ObjectIdHash, byte VehicleType), RideVehicleCarDefinition> CreateDefinitions()
+    private static Dictionary<(uint ObjectIdHash, byte VehicleType), RideVehicleCarDefinition> CreateDefinitions(string objectDirectory)
     {
         var result = new Dictionary<(uint ObjectIdHash, byte VehicleType), RideVehicleCarDefinition>();
+        var objectIndex = RideVehicleObjectIndex.Load(objectDirectory);
+        var definitionNames = new HashSet<string>(StringComparer.Ordinal);
 
-        var definitionTypes = typeof(RideVehicleDefinition).Assembly.GetTypes()
-            .Where(type => !type.IsAbstract && typeof(RideVehicleDefinition).IsAssignableFrom(type))
-            .OrderBy(type => type.FullName, StringComparer.Ordinal);
+        var directory = Path.Combine(AppContext.BaseDirectory, "Rides", "Vehicles");
+        var files = Directory.GetFiles(directory, "*.json", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal).ToArray();
 
-        foreach (var definitionType in definitionTypes) {
-            var mappings = definitionType.GetCustomAttributes<RideVehicleMappingAttribute>(inherit: false)
-                .OrderBy(mapping => mapping.Identifier, StringComparer.Ordinal)
-                .ThenBy(mapping => mapping.LegacyIdentifier, StringComparer.Ordinal)
-                .ToArray();
+        if (files.Length == 0)
+            throw new InvalidDataException($"No vehicle definitions found in '{directory}'.");
 
-            if (mappings.Length == 0) continue;
+        foreach (var file in files) {
+            try {
+                using var document = JsonDocument.Parse(File.ReadAllText(file));
+                var carsElement = document.RootElement.GetProperty("cars");
 
-            var constructor = definitionType.GetConstructor(
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                binder: null,
-                Type.EmptyTypes,
-                modifiers: null);
+                if (carsElement.ValueKind != JsonValueKind.Array || carsElement.GetArrayLength() is 0 or > 256)
+                    throw new InvalidDataException("'cars' must contain between 1 and 256 car definitions.");
 
-            if (constructor is null)
-                throw new InvalidOperationException($"Vehicle definition '{definitionType.FullName}' must have a parameterless constructor.");
+                var name = Path.GetFileNameWithoutExtension(file);
+                var key = RideVehicleObjectIndex.NormalizeName(name);
+                if (!definitionNames.Add(key))
+                    throw new InvalidDataException($"Duplicate normalized vehicle filename '{name}'.");
 
-            foreach (var mapping in mappings) {
-                if (constructor.Invoke(null) is not RideVehicleDefinition train)
-                    throw new InvalidOperationException($"Could not create vehicle definition '{definitionType.FullName}'.");
+                if (!objectIndex.TryGetValue(key, out var identifiers) || identifiers.Count == 0)
+                    throw new InvalidDataException($"No ride object matches '{name}' in '{objectDirectory}'. "
+                        + "Name this JSON after the object's English name (en-GB, or en-US if absent), ignoring spaces and punctuation.");
 
-                if (train.Cars is null || train.Cars.Length is 0 or > 256)
-                    throw new InvalidOperationException($"Vehicle definition '{definitionType.FullName}' must define between 1 and 256 cars.");
-
-                Add(mapping.Identifier, train, definitionType);
-
-                if (mapping.LegacyIdentifier is not null)
-                    Add(mapping.LegacyIdentifier, train, definitionType);
+                var cars = carsElement.EnumerateArray().Select(ReadCar).ToArray();
+                foreach (var identifier in identifiers)
+                    Add(identifier, cars);
+            }
+            catch (Exception exception) when (exception is JsonException or InvalidDataException
+                or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException) {
+                throw new InvalidDataException($"Invalid vehicle definition '{file}': {exception.Message}", exception);
             }
         }
 
-        //Add("rct2.ride.ctcar", "0A188A80|CTCAR   |2082E6E1", new() { LocalOffset = 0.2f }, new() { HelperPaintStyle = 1 });
-        //Add("rct2.ride.rcr", "0A188B80|RCR     |14407591", new() { LocalOffset = 0.2f }, new() { HelperPaintStyle = 1 });
-        //Add("rct2.ride.spcar", "0A188B80|SPCAR   |69F23BC4", new() { LocalOffset = 0.2f }, new() { HelperPaintStyle = 1 });
-        //Add("rct2.ride.truck1", "0A188B80|TRUCK1  |58B728C5", new() { LocalOffset = 0.2f }, new() { HelperPaintStyle = 1 });
-        //// Legacy descriptors format the checksum with space padding, not leading zeroes.
-        //Add("rct2.ride.vcr", "0A188C80|VCR     | 4C462E7", new() { LocalOffset = 0.2f }, new() { HelperPaintStyle = 1 });
-        //Add("rct1.ride.racing_cars", null, new() { LocalOffset = 0.2f }, new() { HelperPaintStyle = 1 });
-        //Add("rct1.ride.sports_cars", null, new() { LocalOffset = 0.2f }, new() { HelperPaintStyle = 1 });
-        //Add("rct1aa.ride.vintage_cars", null, new() { LocalOffset = 0.2f }, new() { HelperPaintStyle = 1 });
-
         return result;
 
-        void Add(string identifier, RideVehicleDefinition train, Type definitionType) {
+        void Add(string? identifier, RideVehicleCarDefinition[] cars) {
+            if (string.IsNullOrWhiteSpace(identifier))
+                throw new InvalidDataException("Object identifiers must not be empty.");
+
             var objectHash = MaterialLibraryBuilder.HashObjectId(identifier);
 
-            for (var index = 0; index < train.Cars.Length; index++) {
-                var car = train.Cars[index];
-
-                if (car is null)
-                    throw new InvalidOperationException($"Vehicle definition '{definitionType.FullName}' has no car definition at index {index}.");
-
-                if (!result.TryAdd((objectHash, checked((byte)index)), car))
-                    throw new InvalidOperationException($"Duplicate vehicle mapping for '{identifier}' (hash {objectHash:X8}), car type {index}, in '{definitionType.FullName}'.");
+            for (var index = 0; index < cars.Length; index++) {
+                if (!result.TryAdd((objectHash, checked((byte)index)), cars[index]))
+                    throw new InvalidDataException($"Duplicate vehicle mapping for '{identifier}' (hash {objectHash:X8}), car type {index}.");
             }
+        }
+    }
+
+    private static RideVehicleCarDefinition ReadCar(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException("Each car definition must be an object.");
+
+        var size = RideVehicleCarDefinition.DefaultSize;
+
+        if (element.TryGetProperty("size", out var sizeElement)) {
+            if (sizeElement.ValueKind != JsonValueKind.Array || sizeElement.GetArrayLength() != 3)
+                throw new InvalidDataException("Car size must contain three numbers.");
+
+            size = new Vector3(sizeElement[0].GetSingle(), sizeElement[1].GetSingle(), sizeElement[2].GetSingle());
+            if (!float.IsFinite(size.X) || !float.IsFinite(size.Y) || !float.IsFinite(size.Z)
+                || size.X <= 0 || size.Y <= 0 || size.Z <= 0)
+                throw new InvalidDataException("Car size must be finite and greater than zero.");
+        }
+
+        return new RideVehicleCarDefinition {
+            Size = size,
+            LocalOffset = ReadOffset("localOffset", defaultDefinition.LocalOffset),
+            WorldOffset = ReadOffset("worldOffset", defaultDefinition.WorldOffset),
+            CameraOffset = ReadOffset("cameraOffset", defaultDefinition.CameraOffset),
+            PaintStyle = element.TryGetProperty("paintStyle", out var paintStyle) ? paintStyle.GetByte() : null,
+        };
+
+        float ReadOffset(string name, float fallback) {
+            var value = element.TryGetProperty(name, out var property) ? property.GetSingle() : fallback;
+            if (float.IsFinite(value)) return value;
+
+            throw new InvalidDataException($"Car '{name}' must be finite.");
         }
     }
 }

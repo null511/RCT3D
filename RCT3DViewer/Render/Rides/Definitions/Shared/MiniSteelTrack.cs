@@ -6,6 +6,8 @@ namespace RCT3D.Render.Rides.Definitions.Shared;
 
 internal class MiniSteelTrack
 {
+    public const float CenterlineHeight = 0.5f;
+
     private const float RailHalfSeparation = 0.42f;
     private const float RailRadius = 0.075f;
     private const float RailCenterY = 0.0f;

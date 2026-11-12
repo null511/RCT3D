@@ -32,4 +32,6 @@ public struct RCTVehicleData
     public byte VehicleType;
     public byte PaintStyle;
     public ushort RotationFrameMask;
+    public byte SpinPosition;
+    public byte HasIndependentSpin;
 }

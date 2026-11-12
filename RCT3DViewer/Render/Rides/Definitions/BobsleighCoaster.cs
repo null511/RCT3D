@@ -14,13 +14,13 @@ internal sealed class BobsleighCoaster : RideDefinition
 
     public BobsleighCoaster() : base(RCTRideType.BobsleighCoaster)
     {
-        StationBuilder = new DefaultTrackStationBuilder();
         //SmoothMovement = true;
         CenterlineHeightOffset = 0.65f;
-        //CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.MetalTubes;
         SupportTrackOffset = -0.45f;
+
+        StationBuilder = new DefaultTrackStationBuilder();
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
