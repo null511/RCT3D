@@ -1,13 +1,13 @@
+using RCT3D.Configuration;
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Rides;
-using RCT3D.Render.Terrain;
 using RCT3D.Render.Scenery;
+using RCT3D.Render.Terrain;
 using RCT3D.Simulation;
-using RCT3D.Configuration;
+using Serilog;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
-using Serilog;
 
 namespace RCT3D.Render;
 
@@ -21,8 +21,8 @@ public sealed class Renderer : IDisposable
     private readonly FlightCamera camera = new();
 
     private VulkanDeviceContext? deviceContext => renderResources?.DeviceContext;
-    private ViewerInputController? inputController;
     private ImGuiVulkanRenderer? imguiRenderer => renderResources?.ImGuiRenderer;
+    private ViewerInputController? inputController;
     private FrameRenderer? frameRenderer;
     private FrameCoordinator? frameCoordinator;
     private ParkSceneController? parkScene;
@@ -31,6 +31,7 @@ public sealed class Renderer : IDisposable
     private bool framebufferResized;
     private bool exitRequested;
     private double currentDeltaTime;
+
     private readonly Action<double> prepareFrame;
     private readonly Action<Silk.NET.Vulkan.CommandBuffer, uint, uint> recordFrame;
     private readonly Action<uint> updateVehicleInstances;
@@ -64,7 +65,7 @@ public sealed class Renderer : IDisposable
     public string? OpenRCT2Path { get; set; }
     public string? Rct2Path { get; set; }
     public string? Rct1Path { get; set; }
-    public string? StartupParkPath { get; set; }
+    public string? StartupPark { get; set; }
     public float TerrainSkirtFloor { get; set; } = -24.0f;
 
 
@@ -159,7 +160,7 @@ public sealed class Renderer : IDisposable
         Log.Information("Vulkan engine pipeline is operational");
         Log.Information("Hold down RIGHT-MOUSE BUTTON to look around. Use W,A,S,D to fly. Press F9 to toggle simulation pause.");
 
-        var startupParkPath = StartupParkPath;
+        var startupParkPath = StartupPark;
         if (!string.IsNullOrWhiteSpace(startupParkPath))
             parkScene.LoadPark(startupParkPath, TerrainSkirtFloor);
     }
@@ -175,6 +176,7 @@ public sealed class Renderer : IDisposable
     {
         var currentResolution = renderResources!.DeferredTargets!.ShadowTargets!.Resolution;
         renderResources.ApplyShadowSettings(resolution, radius);
+
         if (currentResolution != resolution)
             frameRenderer!.InvalidateShadowMap();
     }
@@ -202,9 +204,11 @@ public sealed class Renderer : IDisposable
     {
         parkScene!.Update();
         peepMode!.UpdateRideCamera(ui.LookAheadDistance);
+
         var cameraTileX = (int)MathF.Floor(camera.Position.X / WorldUnits.TileSize);
         var cameraTileY = (int)MathF.Floor(camera.Position.Z / WorldUnits.TileSize);
         var sectionMetrics = frameRenderer!.SectionMetrics;
+
         ui.BuildFrameUi(currentDeltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours, parkScene.IsPaused,
             cameraTileX, cameraTileY, sectionMetrics.Visible, sectionMetrics.Total,
             frameRenderer.CameraVisibilityMetrics, frameRenderer.ShadowVisibilityMetrics,
