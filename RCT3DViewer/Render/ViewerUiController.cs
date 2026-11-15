@@ -10,6 +10,7 @@ namespace RCT3D.Render;
 internal sealed class ViewerUiController
 {
     private readonly ILogger logger;
+    private readonly ViewerCommandQueue commands;
 
     private string? _loadedParkPath;
     private string? _parkLoadError;
@@ -85,9 +86,11 @@ internal sealed class ViewerUiController
 
     public ViewerUiController(
         ILogger<ViewerUiController> logger,
-        GraphicsOptionsStore graphicsOptionsStore)
+        GraphicsOptionsStore graphicsOptionsStore,
+        ViewerCommandQueue commands)
     {
         this.logger = logger;
+        this.commands = commands;
 
         var settings = graphicsOptionsStore.Load();
 
@@ -230,7 +233,7 @@ internal sealed class ViewerUiController
     public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, bool? isPaused, int cameraTileX, int cameraTileY,
         int visibleSections, int totalSections,
         VisibilityQueryMetrics cameraVisibility, ReadOnlySpan<VisibilityQueryMetrics> shadowVisibility,
-        IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit, Action returnToMenu,
+        IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action togglePause,
         bool peepModeEnabled, string? peepModeStatus, Action togglePeepMode, Action<uint, float> applyShadowSettings,
         Action<float> applyFieldOfView, Action<GraphicsOptionsSettings> saveGraphicsOptions, bool wireframeAvailable = true)
     {
@@ -252,13 +255,13 @@ internal sealed class ViewerUiController
         if (ImGui.BeginMainMenuBar()) {
             if (ImGui.BeginMenu("Park")) {
                 if (ImGui.MenuItem("Load", string.Empty, false, !_isParkLoading))
-                    OpenParkPicker(loadPark);
+                    OpenParkPicker(commands.LoadPark);
                 if (ImGui.MenuItem("Pause", string.Empty, isPaused == true, isPaused.HasValue))
                     togglePause();
                 if (ImGui.MenuItem("Return to Menu", string.Empty, false, !_isParkLoading))
-                    returnToMenu();
+                    commands.ReturnToMenu();
                 if (ImGui.MenuItem("Exit"))
-                    requestExit();
+                    commands.Exit();
                 ImGui.EndMenu();
             }
 
@@ -321,7 +324,7 @@ internal sealed class ViewerUiController
         DrawCommonWindows(applyShadowSettings, applyFieldOfView, saveGraphicsOptions);
     }
 
-    public void BuildMenuUi(Action<string> loadPark, Action showConfiguration, Action requestExit,
+    public void BuildMenuUi(Action showConfiguration,
         Action<uint, float> applyShadowSettings, Action<float> applyFieldOfView,
         Action<GraphicsOptionsSettings> saveGraphicsOptions)
     {
@@ -330,7 +333,7 @@ internal sealed class ViewerUiController
         if (ImGui.Begin("RCT3DViewer", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse)) {
             ImGui.BeginDisabled(_isParkLoading);
             if (ImGui.Button("Load Park", new Vector2(240.0f, 0.0f)))
-                OpenParkPicker(loadPark);
+                OpenParkPicker(commands.LoadPark);
             if (ImGui.Button("Graphics Options", new Vector2(240.0f, 0.0f))) {
                 if (!_showGraphicsOptions)
                     BeginGraphicsOptionsEdit();
@@ -340,7 +343,7 @@ internal sealed class ViewerUiController
                 showConfiguration();
             ImGui.EndDisabled();
             if (ImGui.Button("Exit", new Vector2(240.0f, 0.0f)))
-                requestExit();
+                commands.Exit();
         }
         ImGui.End();
         DrawCommonWindows(applyShadowSettings, applyFieldOfView, saveGraphicsOptions);

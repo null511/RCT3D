@@ -12,7 +12,7 @@ using Serilog;
 using System.Diagnostics;
 using System.Numerics;
 
-namespace RCT3D.Render;
+namespace RCT3D.Render.Park;
 
 internal sealed class ParkSceneController(
     SimulationBridge simulation,
@@ -30,6 +30,7 @@ internal sealed class ParkSceneController(
     private readonly RideEntranceExitMeshBuilder rideEntranceExitMeshBuilder = new();
     private readonly VehiclePoseResolver vehiclePoseResolver = new();
     private readonly VehicleCubeRenderer vehicleCubeRenderer = new();
+
     private Func<ushort, bool>? usesSmoothMovement;
     private TryGetCenterlinePoseDelegate? tryGetCenterlinePose;
 

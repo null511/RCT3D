@@ -145,7 +145,8 @@ public sealed unsafe class LibOpenRCT2 : IDisposable
     private IntPtr _context;
     private bool _disposed;
 
-    public static string DefaultLibraryPath => Path.Combine(AppContext.BaseDirectory, LibName + ".dll");
+    public static string DefaultLibraryPath => Path.Combine(AppContext.BaseDirectory,
+        LibName + (OperatingSystem.IsWindows() ? ".dll" : OperatingSystem.IsLinux() ? ".so" : ".dylib"));
     //public bool IsAvailable => !_disposed && _context != IntPtr.Zero;
 
 

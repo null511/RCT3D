@@ -1,0 +1,25 @@
+RCT3DViewer release dependency information
+========================================
+
+OpenRCT2 and its viewer adapter are GPL-3.0 licensed. The matching parent
+repository and OpenRCT2 source archives accompany each release, including build
+and packaging instructions. OpenRCT2-GPL-3.0.txt contains its license.
+
+Managed dependency package metadata and supplied license/notice files are in
+the sibling package directories. Their original NuGet packages provide the
+referenced license expressions, repository URLs and any further source notices.
+Windows native dependency notices are included under native and native-extra.
+The bundled .NET runtime includes its own license and third-party notices.
+On Linux, system libraries are provided by Ubuntu packages under their own
+licenses; their notices are installed by the package manager.
+
+OpenRCT2 object/title-sequence provenance and pinned checksums are recorded in
+openrct2-data/asset-sources.json. Sprite data is generated from the matching
+OpenRCT2 source manifests using the hash-pinned upstream v0.5.6 sprite compiler.
+No proprietary RollerCoaster Tycoon game data is included.
+
+The viewer repository does not currently declare a top-level license. These
+notices do not grant rights to the viewer or its artwork, or change any
+third-party license. Before making a draft public, the maintainer must resolve
+viewer/asset redistribution rights and verify all applicable notices and
+corresponding-source obligations, including statically linked dependencies.

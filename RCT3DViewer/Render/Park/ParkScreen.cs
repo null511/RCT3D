@@ -1,14 +1,8 @@
 using RCT3D.Configuration;
-using RCT3D.Render.Paths;
-using RCT3D.Render.Paths.Meshing;
-using RCT3D.Render.Rides;
-using RCT3D.Render.Scenery;
-using RCT3D.Render.Terrain;
-using RCT3D.Simulation;
 using Silk.NET.Input;
 using Silk.NET.Vulkan;
 
-namespace RCT3D.Render;
+namespace RCT3D.Render.Park;
 
 internal sealed class ParkScreen : IViewerScreen
 {
@@ -20,10 +14,6 @@ internal sealed class ParkScreen : IViewerScreen
     private readonly FrameRenderer frameRenderer;
     private readonly ParkSceneController scene;
     private readonly PeepModeController peepMode;
-    private readonly Action<string> loadPark;
-    private readonly Action requestExit;
-    private readonly Action returnToMenu;
-    //private readonly Action<GraphicsOptionsSettings> saveGraphicsOptions;
 
     private ParkInputController? input;
     private (uint Resolution, float Radius)? pendingShadows;
@@ -35,26 +25,16 @@ internal sealed class ParkScreen : IViewerScreen
 
     public ParkScreen(
         GraphicsOptionsStore graphicsOptionsStore,
-        ViewerUiController ui,
-
         VulkanRenderResources shared,
-        ParkStartupData startup,
-        Action<string> loadPark,
-        Action requestExit,
-        Action returnToMenu)
-        //Action<GraphicsOptionsSettings> saveGraphicsOptions)
+        ViewerUiController ui,
+        ParkStartupData startup)
     {
         this.graphicsOptionsStore = graphicsOptionsStore;
         this.ui = ui;
 
-        this.loadPark = loadPark;
-        this.requestExit = requestExit;
-        this.returnToMenu = returnToMenu;
-        //this.saveGraphicsOptions = saveGraphicsOptions;
-
-        camera = new FlightCamera { FieldOfViewDegrees = ui.AppliedGraphicsOptions.FieldOfView };
+        camera = new FlightCamera { FieldOfViewDegrees = startup.GraphicsOptions.FieldOfView };
         resources = new ParkRenderResources(shared, startup.TerrainMaterials, startup.PathMaterials,
-            startup.PathAccessoryAssets, startup.TreeSceneryAssets, ui.AppliedGraphicsOptions);
+            startup.PathAccessoryAssets, startup.TreeSceneryAssets, startup.GraphicsOptions);
 
         try {
             frameRenderer = new FrameRenderer(resources, ui, camera);
@@ -65,39 +45,6 @@ internal sealed class ParkScreen : IViewerScreen
             resources.Dispose();
             throw;
         }
-    }
-
-    public static Task<ParkStartupData> StartAsync(GamePathSettings paths, string libraryPath) => Task.Run(() => {
-        var openRCT2 = ResolveDirectory(paths.OpenRCT2Path, "OPENRCT2_DATA");
-        var rct2 = ResolveDirectory(paths.Rct2Path, "RCT2_PATH");
-        var rct1 = ResolveDirectory(paths.Rct1Path, "RCT1_PATH");
-
-        if (string.IsNullOrWhiteSpace(libraryPath) || !File.Exists(Path.GetFullPath(libraryPath)))
-            throw new InvalidOperationException($"OpenRCT2 adapter DLL does not exist: '{libraryPath}'.");
-
-        RideVehicleDefinitions.Initialize(openRCT2);
-        var textureRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Textures");
-        var missingTexturePath = Path.Combine(textureRoot, "missing.png");
-        var terrainMaterials = TerrainMaterialLibrary.Load(textureRoot, null, missingTexturePath);
-        var pathMaterials = PathMaterialLibrary.Load(textureRoot, missingTexturePath);
-        var modelRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
-        var accessories = PathAccessoryAssetLibrary.Load(modelRoot);
-        var trees = TreeSceneryAssetLibrary.Load(modelRoot, Path.Combine(textureRoot, "tree"));
-        var simulation = new SimulationBridge(libraryPath, openRCT2, rct2, rct1);
-        return new ParkStartupData(simulation, terrainMaterials, pathMaterials, accessories, trees);
-    });
-
-    private static string ResolveDirectory(string? value, string name)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new InvalidOperationException($"{name} is required. Set it in Menu > Configuration.");
-
-        var path = GamePathSettingsStore.ResolveDirectoryPath(value);
-
-        if (!Directory.Exists(path))
-            throw new DirectoryNotFoundException($"{name} directory does not exist: '{path}'.");
-
-        return path;
     }
 
     public void Load(string parkPath, float terrainSkirtFloor) => scene.LoadPark(parkPath, terrainSkirtFloor);
@@ -136,7 +83,7 @@ internal sealed class ParkScreen : IViewerScreen
         ui.BuildFrameUi(deltaTime, activeFrameTimeMilliseconds, scene.GameTimeOfDayHours, scene.IsPaused,
             tileX, tileY, sections.Visible, sections.Total, frameRenderer.CameraVisibilityMetrics,
             frameRenderer.ShadowVisibilityMetrics, scene.GetTrackElementsAtTile(tileX, tileY),
-            loadPark, scene.TogglePause, requestExit, returnToMenu, peepMode.IsEnabled, peepMode.StatusMessage,
+            scene.TogglePause, peepMode.IsEnabled, peepMode.StatusMessage,
             peepMode.Toggle, QueueShadowSettings, ApplyFieldOfView, graphicsOptionsStore.Save, resources.DeviceContext!.SupportsWireframe);
     }
 
@@ -182,14 +129,4 @@ internal sealed class ParkScreen : IViewerScreen
             }
         }
     }
-}
-
-internal sealed record ParkStartupData(
-    SimulationBridge Simulation,
-    TerrainMaterialLibrary TerrainMaterials,
-    PathMaterialLibrary PathMaterials,
-    PathAccessoryAssetLibrary PathAccessoryAssets,
-    TreeSceneryAssetLibrary TreeSceneryAssets) : IDisposable
-{
-    public void Dispose() => Simulation.Dispose();
 }

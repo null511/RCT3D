@@ -19,7 +19,7 @@ namespace RCT3D.Interop
                 return true;
             }
 
-            error = $"Unable to load native library at {path}; a dependent DLL may be missing or have the wrong architecture.";
+            error = $"Unable to load native library at {path}; a dependent native library may be missing or have the wrong architecture.";
             return false;
         }
     }

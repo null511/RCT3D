@@ -1,8 +1,6 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RCT3D.Configuration;
-using RCT3D.Interop;
+using RCT3D.Render.Park;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
@@ -12,119 +10,90 @@ namespace RCT3D.Render;
 internal sealed class Renderer : IDisposable
 {
     private readonly ILogger<Renderer> logger;
-    private readonly IServiceProvider provider;
-    private readonly GraphicsOptionsStore graphicsOptionsStore;
+    private readonly IWindow window;
+    private readonly VulkanRenderResources renderResources;
+    private readonly ViewerUiController ui;
+    private readonly ViewerInputController inputController;
+    private readonly FrameCoordinator frameCoordinator;
+    private readonly MenuScreen menuScreen;
+    private readonly GamePathConfiguration paths;
+    private readonly ParkScreenFactory parkFactory;
+    private readonly ViewerCommandQueue commands;
+    private readonly ViewerStartupOptions options;
 
-    private IWindow? window;
-    private VulkanRenderResources? renderResources;
-    private ViewerUiController ui = null!;
-    private ViewerInputController? inputController;
-    private FrameCoordinator? frameCoordinator;
-    private MenuScreen? menuScreen;
     private IViewerScreen? activeScreen;
     private ParkScreen? pendingPark;
     private Task<ParkStartupData>? startupTask;
     private string? loadingParkPath;
-    private string? requestedParkPath;
-    private bool menuRequested;
-    private bool framebufferResized;
     private bool exitRequested;
     private bool initialFrameSubmitted;
     private bool startupParkHandled;
     private bool isDisposed;
+    private bool hasRun;
     private double currentDeltaTime;
-
-    public string? ConfigurationError { get; set; }
-    public string? LibraryPath { get; set; }
-    public string? OpenRCT2Path { get; set; }
-    public string? Rct2Path { get; set; }
-    public string? Rct1Path { get; set; }
-    public string? StartupPark { get; set; }
-    public float TerrainSkirtFloor { get; set; } = -24.0f;
-
 
     public Renderer(
         ILogger<Renderer> logger,
-        IServiceProvider provider,
-        IConfiguration configuration,
-        GraphicsOptionsStore graphicsOptionsStore)
+        IWindow window,
+        VulkanRenderResources renderResources,
+        ViewerInputController inputController,
+        FrameCoordinator frameCoordinator,
+        MenuScreen menuScreen,
+        ViewerUiController ui,
+        GamePathConfiguration paths,
+        ParkScreenFactory parkFactory,
+        ViewerCommandQueue commands,
+        ViewerStartupOptions options)
     {
         this.logger = logger;
-        this.provider = provider;
-        this.graphicsOptionsStore = graphicsOptionsStore;
-
-        //ConfigurationError = configurationError;
-        LibraryPath = configuration["OPENRCT2_DLL"] ?? LibOpenRCT2.DefaultLibraryPath;
-        StartupPark = configuration["PARK"];
-
-        OpenRCT2Path = configuration["OPENRCT2_DATA"];
-        Rct2Path = configuration["RCT2_PATH"];
-        Rct1Path = configuration["RCT1_PATH"];
+        this.window = window;
+        this.renderResources = renderResources;
+        this.inputController = inputController;
+        this.frameCoordinator = frameCoordinator;
+        this.menuScreen = menuScreen;
+        this.ui = ui;
+        this.paths = paths;
+        this.parkFactory = parkFactory;
+        this.commands = commands;
+        this.options = options;
     }
 
     public void Run()
     {
-        var options = WindowOptions.DefaultVulkan;
-        options.Size = new Vector2D<int>(1280, 720);
-        options.Title = "RCT3D Viewer";
-
-        window = Window.Create(options);
-        window.FramebufferResize += _ => {
-            if (frameCoordinator is { } _frameCoordinator)
-                _frameCoordinator.MarkFramebufferResized();
-            else
-                framebufferResized = true;
-        };
-
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        if (hasRun)
+            throw new InvalidOperationException("The viewer window can only run once.");
+        hasRun = true;
+        window.FramebufferResize += OnFramebufferResize;
         window.Load += Initialize;
         window.Render += OnRenderFrame;
         window.Update += OnUpdateFrame;
         window.Closing += OnEngineShutdown;
 
-        try {
-            window.Run();
-        }
-        finally {
-            Dispose();
-        }
+        window.Run();
     }
 
     public void Initialize()
     {
-        ui = provider.GetRequiredService<ViewerUiController>();
+        ObjectDisposedException.ThrowIf(isDisposed, this);
 
         logger.LogInformation("Initializing graphics subsystems via Silk.NET Vulkan");
 
-        renderResources = new VulkanRenderResources(window!);
-        frameCoordinator = new FrameCoordinator(window!, renderResources);
-        inputController = new ViewerInputController(window!);
-
-        //var configuration = Configuration ?? new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
-        //    ["RCT1_PATH"] = Rct1Path,
-        //    ["RCT2_PATH"] = Rct2Path,
-        //    ["OPENRCT2_DATA"] = OpenRCT2Path
-        //}).Build();
-
-        menuScreen = provider.GetRequiredService<MenuScreen>();
-        menuScreen.LoadPark = LoadPark;
-        menuScreen.RequestExit = RequestExit;
-
+        renderResources.Initialize();
+        inputController.Initialize();
         activeScreen = menuScreen;
 
-        if (ConfigurationError is not null)
-            ui.ShowParkLoadError(ConfigurationError);
-
-        if (framebufferResized) {
-            frameCoordinator.MarkFramebufferResized();
-            framebufferResized = false;
-        }
+        if (paths.LoadError is { } error)
+            ui.ShowParkLoadError(error);
 
         logger.LogInformation("Vulkan engine pipeline is operational; Menu is active");
     }
 
     private void OnUpdateFrame(double deltaTime)
     {
-        inputController?.Update();
+        if (isDisposed || !inputController.IsInitialized) return;
+
+        inputController.Update();
         activeScreen?.Update(deltaTime);
     }
 
@@ -132,12 +101,13 @@ internal sealed class Renderer : IDisposable
     {
         if (activeScreen is null || isDisposed) return;
 
+        ProcessTransitions();
+
         if (exitRequested) {
-            window?.Close();
+            window.Close();
             return;
         }
 
-        ProcessTransitions();
         ProcessLoading();
 
         try {
@@ -148,7 +118,7 @@ internal sealed class Renderer : IDisposable
         }
 
         currentDeltaTime = deltaTime;
-        frameCoordinator!.RenderFrame(deltaTime, PrepareFrame, RecordFrame, OnFrameSubmitted, OnSwapchainRecreated, DrawPresentation);
+        frameCoordinator.RenderFrame(deltaTime, PrepareFrame, RecordFrame, OnFrameSubmitted, OnSwapchainRecreated, DrawPresentation);
     }
 
     private void ProcessTransitions()
@@ -156,32 +126,53 @@ internal sealed class Renderer : IDisposable
         if (!startupParkHandled && initialFrameSubmitted) {
             startupParkHandled = true;
 
-            if (requestedParkPath is null && !string.IsNullOrWhiteSpace(StartupPark))
-                requestedParkPath = StartupPark;
+            if (!string.IsNullOrWhiteSpace(options.StartupPark))
+                commands.LoadPark(options.StartupPark);
         }
 
-        if (menuRequested) {
-            menuRequested = false;
+        string? requestedParkPath = null;
+        var menuRequested = false;
 
+        while (commands.TryDequeue(out var command)) {
+            switch (command) {
+                case ViewerCommand.Exit:
+                    exitRequested = true;
+                    break;
+                case ViewerCommand.ReturnToMenu:
+                    menuRequested = true;
+                    break;
+                case ViewerCommand.LoadPark load:
+                    if (ui.IsParkLoading || requestedParkPath is not null)
+                        logger.LogWarning("Ignoring duplicate park load request for {ParkPath}", load.Path);
+                    else
+                        requestedParkPath = load.Path;
+                    break;
+            }
+        }
+
+        if (exitRequested) return;
+
+        if (menuRequested) {
             try {
                 UnloadPark();
             }
             catch (Exception ex) {
                 FailParkLoad(ex);
             }
+
+            return;
         }
 
         if (requestedParkPath is not { } parkPath) return;
-        requestedParkPath = null;
 
         try {
             UnloadPark();
 
-            menuScreen!.CloseWindows();
+            menuScreen.CloseWindows();
             loadingParkPath = parkPath;
             ui.BeginParkLoad(parkPath);
             ui.SetParkLoadStatus("Initializing OpenRCT2 and park rendering assets...");
-            startupTask = ParkScreen.StartAsync(menuScreen.EffectivePaths, LibraryPath ?? LibOpenRCT2.DefaultLibraryPath);
+            startupTask = parkFactory.StartAsync(paths.Effective, options.LibraryPath, ui.AppliedGraphicsOptions);
         }
         catch (Exception ex) {
             FailParkLoad(ex);
@@ -195,17 +186,8 @@ internal sealed class Renderer : IDisposable
                 startupTask = null;
                 var startup = completed.GetAwaiter().GetResult();
 
-                try {
-                    pendingPark = new ParkScreen(
-                        graphicsOptionsStore, ui,
-                        renderResources!, startup, LoadPark, RequestExit, ReturnToMenu);
-                }
-                catch {
-                    startup.Dispose();
-                    throw;
-                }
-
-                pendingPark.Load(loadingParkPath!, TerrainSkirtFloor);
+                pendingPark = parkFactory.Create(startup);
+                pendingPark.Load(loadingParkPath!, options.TerrainSkirtFloor);
             }
 
             if (pendingPark is not { } park) return;
@@ -215,7 +197,7 @@ internal sealed class Renderer : IDisposable
                 throw new InvalidOperationException(error);
 
             if (!park.IsReady) return;
-            park.Activate(inputController!.Input, renderResources!.ImGuiRenderer!);
+            park.Activate(inputController.Input, renderResources.ImGuiRenderer!);
 
             activeScreen = park;
             pendingPark = null;
@@ -289,20 +271,19 @@ internal sealed class Renderer : IDisposable
         pendingPark?.Resize(extentChanged);
     }
 
-    private void LoadPark(string parkPath)
-    {
-        if (ui.IsParkLoading || requestedParkPath is not null) return;
-        requestedParkPath = parkPath;
-    }
-
-    private void RequestExit() => exitRequested = true;
-    private void ReturnToMenu() => menuRequested = true;
+    private void OnFramebufferResize(Vector2D<int> size) => frameCoordinator.MarkFramebufferResized();
     private void OnEngineShutdown() => exitRequested = true;
 
     public void Dispose()
     {
         if (isDisposed) return;
         isDisposed = true;
+
+        window.FramebufferResize -= OnFramebufferResize;
+        window.Load -= Initialize;
+        window.Render -= OnRenderFrame;
+        window.Update -= OnUpdateFrame;
+        window.Closing -= OnEngineShutdown;
 
         try {
             UnloadPark();
@@ -311,19 +292,7 @@ internal sealed class Renderer : IDisposable
             logger.LogError(ex, "Failed to shut down the park session");
         }
         finally {
-            try {
-                inputController?.Dispose();
-                inputController = null;
-                menuScreen?.Dispose();
-                menuScreen = null;
-                activeScreen = null;
-            }
-            finally {
-                renderResources?.Dispose();
-                renderResources = null;
-                window?.Dispose();
-                window = null;
-            }
+            activeScreen = null;
         }
     }
 }

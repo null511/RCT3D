@@ -1,5 +1,4 @@
 using ImGuiNET;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NativeFileDialogSharp;
 using RCT3D.Configuration;
@@ -10,46 +9,33 @@ namespace RCT3D.Render;
 internal sealed class MenuScreen : IViewerScreen
 {
     private readonly ILogger logger;
-    private readonly IConfiguration? configuration;
+    private readonly GamePathConfiguration paths;
     private readonly GraphicsOptionsStore graphicsOptionsStore;
-    private readonly GamePathSettingsStore pathStore = new();
     private readonly ViewerUiController ui;
 
-    private GamePathSettings savedPaths;
     private string rct1Path = string.Empty;
     private string rct2Path = string.Empty;
     private string openRCT2Path = string.Empty;
     private string? configurationError;
     private bool showConfiguration;
 
-    public Action<string>? LoadPark;
-    public Action? RequestExit;
-
-
     public MenuScreen(
         ILogger<MenuScreen> logger,
-        IConfiguration? configuration,
+        GamePathConfiguration paths,
         GraphicsOptionsStore graphicsOptionsStore,
         ViewerUiController ui)
     {
         this.logger = logger;
-        this.configuration = configuration;
+        this.paths = paths;
         this.graphicsOptionsStore = graphicsOptionsStore;
         this.ui = ui;
-
-        savedPaths = pathStore.Load(out var error);
-
-        if (error is not null)
-            ui.ShowParkLoadError(error);
     }
-
-    public GamePathSettings EffectivePaths => GamePathSettingsStore.Resolve(configuration, savedPaths);
 
     private void OpenConfiguration()
     {
         if (showConfiguration) return;
 
-        var editable = GamePathSettingsStore.GetEditableSettings(configuration, savedPaths);
+        var editable = paths.Saved;
 
         rct1Path = editable.Rct1Path ?? string.Empty;
         rct2Path = editable.Rct2Path ?? string.Empty;
@@ -66,13 +52,13 @@ internal sealed class MenuScreen : IViewerScreen
 
     public void PrepareFrame(double deltaTime, double activeFrameTimeMilliseconds)
     {
-        ui.BuildMenuUi(LoadPark, OpenConfiguration, RequestExit, ApplyShadowSettings, ApplyFieldOfView, graphicsOptionsStore.Save);
+        ui.BuildMenuUi(OpenConfiguration, ApplyShadowSettings, ApplyFieldOfView, graphicsOptionsStore.Save);
         if (!showConfiguration) return;
 
         if (ImGui.Begin("Configuration", ref showConfiguration, ImGuiWindowFlags.AlwaysAutoResize)) {
             ImGui.TextWrapped("Installation paths apply to the next park load. Relative paths use the application directory.");
             ImGui.BeginDisabled(ui.IsParkLoading);
-            var effective = EffectivePaths;
+            var effective = paths.Effective;
             DrawPath("RCT1_PATH", ref rct1Path, effective.Rct1Path);
             DrawPath("RCT2_PATH", ref rct2Path, effective.Rct2Path);
             DrawPath("OPENRCT2_DATA", ref openRCT2Path, effective.OpenRCT2Path);
@@ -111,7 +97,7 @@ internal sealed class MenuScreen : IViewerScreen
                 configurationError = ex.Message;
             }
         }
-        var source = GamePathSettingsStore.GetSource(configuration, savedPaths, key);
+        var source = paths.GetSource(key);
         ImGui.TextWrapped($"Effective ({source}): {effective ?? "not configured"}");
         if (source == "Environment")
             ImGui.TextWrapped($"RCT3D_{key} overrides the saved value. Remove that environment override to use edits here.");
@@ -127,9 +113,7 @@ internal sealed class MenuScreen : IViewerScreen
         };
 
         try {
-            pathStore.Save(settings);
-
-            savedPaths = settings;
+            paths.Save(settings);
             configurationError = null;
             showConfiguration = false;
         }

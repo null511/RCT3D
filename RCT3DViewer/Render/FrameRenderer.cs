@@ -1,4 +1,5 @@
 using RCT3D.Render.Buffers;
+using RCT3D.Render.Park;
 using RCT3D.Render.Paths.Meshing;
 using RCT3D.Render.Rides.Entrances;
 using RCT3D.Render.Rides.Supports;

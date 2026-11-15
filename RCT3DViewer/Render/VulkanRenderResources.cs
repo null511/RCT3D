@@ -4,12 +4,13 @@ using Semaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace RCT3D.Render;
 
-internal sealed unsafe class VulkanRenderResources : IDisposable
+internal sealed unsafe class VulkanRenderResources(IWindow window) : IDisposable
 {
     public const int MaxFramesInFlight = 2;
 
     private bool isDisposed;
 
+    public bool IsInitialized { get; private set; }
     public VulkanDeviceContext? DeviceContext { get; private set; }
     public SwapchainResources? SwapchainResources { get; private set; }
     public CommandPool CommandPool { get; private set; }
@@ -30,10 +31,16 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
     public Extent2D SwapchainExtent => SwapchainResources?.Extent ?? default;
     public RenderPass RenderPass => SwapchainResources?.RenderPass ?? default;
 
-    public VulkanRenderResources(IWindow window)
+    public void Initialize()
     {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+
+        if (IsInitialized)
+            throw new InvalidOperationException("Shared Vulkan resources are already initialized.");
+
         try {
-            Initialize(window);
+            InitializeCore();
+            IsInitialized = true;
         }
         catch {
             Dispose();
@@ -41,7 +48,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         }
     }
 
-    private void Initialize(IWindow window)
+    private void InitializeCore()
     {
         DeviceContext = VulkanDeviceContext.Create(window);
         SwapchainResources = new SwapchainResources(DeviceContext, window);
@@ -60,10 +67,13 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
 
     public void RecreateSwapchain()
     {
+        EnsureInitialized();
+
         if (Vk!.DeviceWaitIdle(LogicalDevice) != Result.Success)
             throw new Exception("Failed to wait for the Vulkan device before recreating the swapchain.");
 
         DestroySyncPrimitives();
+
         if (CommandPool.Handle != 0)
             Vk.DestroyCommandPool(LogicalDevice, CommandPool, null);
 
@@ -85,6 +95,7 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
 
         if (Vk!.CreateCommandPool(LogicalDevice, in poolInfo, null, out var commandPool) != Result.Success)
             throw new InvalidOperationException("Failed to create the Vulkan command pool.");
+
         CommandPool = commandPool;
 
         CommandBufferAllocateInfo allocInfo = new() {
@@ -173,10 +184,21 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
         SwapchainResources = null;
         DeviceContext?.Dispose();
         DeviceContext = null;
+        IsInitialized = false;
+    }
+
+    public void EnsureInitialized()
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+
+        if (!IsInitialized)
+            throw new InvalidOperationException("Shared Vulkan resources have not been initialized by the window load event.");
     }
 
     public void BeginCommands(CommandBuffer commandBuffer)
     {
+        EnsureInitialized();
+
         if (Vk!.ResetCommandBuffer(commandBuffer, 0) != Result.Success)
             throw new InvalidOperationException($"Failed to reset command buffer {commandBuffer}.");
 
@@ -190,6 +212,8 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
 
     public void EndCommands(CommandBuffer commandBuffer, uint imageIndex, Action<CommandBuffer>? drawSceneOutput = null)
     {
+        EnsureInitialized();
+
         var clearValues = stackalloc ClearValue[2];
         clearValues[0] = new ClearValue { Color = new ClearColorValue(0, 0, 0, 1) };
         clearValues[1] = new ClearValue { DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 } };
@@ -216,12 +240,14 @@ internal sealed unsafe class VulkanRenderResources : IDisposable
             MinDepth = 0,
             MaxDepth = 1,
         };
+
         Vk.CmdSetViewport(commandBuffer, 0, 1, &viewport);
 
         var scissor = new Rect2D {
             Offset = new Offset2D(0, 0),
             Extent = SwapchainExtent,
         };
+
         Vk.CmdSetScissor(commandBuffer, 0, 1, &scissor);
 
         drawSceneOutput?.Invoke(commandBuffer);

@@ -34,7 +34,7 @@ If the repository is already cloned, run `git submodule update --init --recursiv
 
 The application starts in **Menu**, with Load Park, Graphics Options, Configuration, and Exit. Configuration has editable `RCT1_PATH`, `RCT2_PATH`, and `OPENRCT2_DATA` fields, each with a folder picker. Apply saves the paths for the next park load; Cancel or closing the window discards edits. Empty fields can be saved, but loading requires all three directories. Errors are displayed without closing Menu.
 
-Paths are saved per user in `%LOCALAPPDATA%\RCT3DViewer\game-paths.json` (the platform's local application data directory). Each path resolves independently in this order: **environment override > saved settings > optional working-directory `config.ini`**. Configuration shows the effective source and warns when an environment override supersedes an edited saved value. Relative data paths resolve from the application output directory. Paths are explicit settings of the embedded viewer instance, not inherited from the main game's OpenRCT2 configuration.
+Paths are saved per user in `%LOCALAPPDATA%\RCT3DViewer\game-paths.json` (the platform's local application data directory). Each path resolves independently in this order: **environment override > saved settings**. Configuration shows the effective source and warns when an environment override supersedes an edited saved value. Empty environment overrides remain invalid rather than falling back to saved paths. Relative data paths resolve from the application output directory. Paths are explicit settings of the embedded viewer instance, not inherited from the main game's OpenRCT2 configuration.
 
 The entry point accepts these environment variables:
 
@@ -55,9 +55,15 @@ $env:RCT3D_RCT2_PATH = 'D:\Games\RollerCoaster Tycoon 2'
 $env:RCT3D_PARK = 'D:\Parks\MyPark.park'
 ```
 
-`config.ini` uses the corresponding unprefixed keys, such as `RCT1_PATH`. INI paths use literal backslashes; they are not C# string literals. Graphics Options are shared between Menu and Park and remain persisted separately in `graphics-options.json`.
+Startup reads `RCT3D_` environment variables; `config.ini` is no longer loaded. Graphics Options are shared between Menu and Park and remain persisted separately in `graphics-options.json`.
 
 Park loading displays progress in Menu and switches to **Park** only after successful scene upload. **Park > Return to Menu** fully unloads simulation and park GPU resources while keeping the window and device alive. A configured startup park is loaded only once, not every time you return to Menu. Loading another park serializes teardown and initialization; failures return to Menu for configuration or retry. Exit during loading waits for owned work to finish safely.
+
+## Infrastructure ownership
+
+`Program.cs` is the DI composition root. App-lifetime settings, UI, window, Vulkan resources, input, and frame coordination are constructor-injected singletons. Managed construction does not initialize Vulkan or input: the window load event initializes Vulkan/ImGui first, then input. Screens submit typed navigation commands that Renderer processes before image acquisition, so they never depend on Renderer itself.
+
+The container owns shared-service disposal; Renderer owns only its event subscriptions and pending/active parks. `ParkScreenFactory` prepares native/CPU startup on background work and constructs the explicitly owned park graph on the render thread. Shutdown disposes parks before shared input, Vulkan/ImGui, and the window. Per-park objects are not registered as root-container transients or retained until application exit.
 
 ## Build and run
 

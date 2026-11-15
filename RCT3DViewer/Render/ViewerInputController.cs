@@ -1,5 +1,5 @@
 using ImGuiNET;
-using Serilog;
+using Microsoft.Extensions.Logging;
 using Silk.NET.Input;
 using Silk.NET.Windowing;
 using System.Runtime.InteropServices;
@@ -10,15 +10,28 @@ internal sealed class ViewerInputController : IDisposable
 {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate IntPtr GetClipboardText(IntPtr context);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void SetClipboardText(IntPtr context, IntPtr text);
 
     private readonly GetClipboardText getClipboard;
     private readonly SetClipboardText setClipboard;
+    private readonly VulkanRenderResources resources;
+    private readonly ILogger<ViewerInputController> logger;
+
+    private IInputContext? input;
     private IntPtr clipboardText;
     private bool isDisposed;
+    private bool clipboardCallbacksAttached;
 
-    public IInputContext Input { get; }
+    public bool IsInitialized { get; private set; }
+
+    public IInputContext Input {
+        get {
+            ObjectDisposedException.ThrowIf(isDisposed, this);
+            return input ?? throw new InvalidOperationException("Shared input has not been initialized by the window load event.");
+        }
+    }
 
     private static readonly (Key Key, ImGuiKey ImGuiKey)[] EditingKeys = [
         (Key.Tab, ImGuiKey.Tab), (Key.Left, ImGuiKey.LeftArrow), (Key.Right, ImGuiKey.RightArrow),
@@ -32,18 +45,47 @@ internal sealed class ViewerInputController : IDisposable
         (Key.SuperLeft, ImGuiKey.LeftSuper), (Key.SuperRight, ImGuiKey.RightSuper)
     ];
 
-    public ViewerInputController(IWindow window)
+    public ViewerInputController(IWindow window, VulkanRenderResources resources, ILogger<ViewerInputController> logger)
     {
-        Input = window.CreateInput();
-        foreach (var keyboard in Input.Keyboards)
-            keyboard.KeyChar += OnCharacter;
-        foreach (var mouse in Input.Mice)
-            mouse.Scroll += OnScroll;
-        window.FocusChanged += OnFocusChanged;
         Window = window;
+        this.resources = resources;
+        this.logger = logger;
         getClipboard = ReadClipboard;
         setClipboard = WriteClipboard;
+    }
+
+    public void Initialize()
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+
+        if (IsInitialized)
+            throw new InvalidOperationException("Shared input is already initialized.");
+
+        resources.EnsureInitialized();
+
+        try {
+            InitializeCore();
+            IsInitialized = true;
+        }
+        catch {
+            Dispose();
+            throw;
+        }
+    }
+
+    private void InitializeCore()
+    {
+        input = Window.CreateInput();
+
+        foreach (var keyboard in Input.Keyboards)
+            keyboard.KeyChar += OnCharacter;
+
+        foreach (var mouse in Input.Mice)
+            mouse.Scroll += OnScroll;
+
+        Window.FocusChanged += OnFocusChanged;
         var platform = ImGui.GetPlatformIO();
+        clipboardCallbacksAttached = true;
         platform.Platform_GetClipboardTextFn = Marshal.GetFunctionPointerForDelegate(getClipboard);
         platform.Platform_SetClipboardTextFn = Marshal.GetFunctionPointerForDelegate(setClipboard);
     }
@@ -56,6 +98,11 @@ internal sealed class ViewerInputController : IDisposable
 
     public void Update()
     {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+
+        if (!IsInitialized)
+            throw new InvalidOperationException("Cannot update input before initialization.");
+
         var io = ImGui.GetIO();
         if (Input.Mice.Count > 0) {
             var mouse = Input.Mice[0];
@@ -64,12 +111,16 @@ internal sealed class ViewerInputController : IDisposable
             io.AddMouseButtonEvent(1, mouse.IsButtonPressed(MouseButton.Right));
             io.AddMouseButtonEvent(2, mouse.IsButtonPressed(MouseButton.Middle));
         }
+
         if (Input.Keyboards.Count == 0) return;
+
         var keyboard = Input.Keyboards[0];
         foreach (var (key, imguiKey) in EditingKeys)
             io.AddKeyEvent(imguiKey, keyboard.IsKeyPressed(key));
+
         for (var index = 0; index < 26; index++)
             io.AddKeyEvent(ImGuiKey.A + index, keyboard.IsKeyPressed(Key.A + index));
+
         io.AddKeyEvent(ImGuiKey.ModCtrl, keyboard.IsKeyPressed(Key.ControlLeft) || keyboard.IsKeyPressed(Key.ControlRight));
         io.AddKeyEvent(ImGuiKey.ModShift, keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight));
         io.AddKeyEvent(ImGuiKey.ModAlt, keyboard.IsKeyPressed(Key.AltLeft) || keyboard.IsKeyPressed(Key.AltRight));
@@ -83,9 +134,10 @@ internal sealed class ViewerInputController : IDisposable
             text = Input.Keyboards.Count > 0 ? Input.Keyboards[0].ClipboardText : string.Empty;
         }
         catch (Exception ex) {
-            Log.Error(ex, "Failed to read the clipboard");
+            logger.LogError(ex, "Failed to read the clipboard");
             text = string.Empty;
         }
+
         Marshal.FreeCoTaskMem(clipboardText);
         clipboardText = Marshal.StringToCoTaskMemUTF8(text);
         return clipboardText;
@@ -98,7 +150,7 @@ internal sealed class ViewerInputController : IDisposable
                 Input.Keyboards[0].ClipboardText = Marshal.PtrToStringUTF8(text) ?? string.Empty;
         }
         catch (Exception ex) {
-            Log.Error(ex, "Failed to write the clipboard");
+            logger.LogError(ex, "Failed to write the clipboard");
         }
     }
 
@@ -106,17 +158,30 @@ internal sealed class ViewerInputController : IDisposable
     {
         if (isDisposed) return;
         isDisposed = true;
+
         Window.FocusChanged -= OnFocusChanged;
-        foreach (var keyboard in Input.Keyboards)
-            keyboard.KeyChar -= OnCharacter;
-        foreach (var mouse in Input.Mice) {
-            mouse.Scroll -= OnScroll;
-            mouse.Cursor.CursorMode = CursorMode.Normal;
+
+        if (input is not null) {
+            foreach (var keyboard in input.Keyboards)
+                keyboard.KeyChar -= OnCharacter;
+
+            foreach (var mouse in input.Mice) {
+                mouse.Scroll -= OnScroll;
+                mouse.Cursor.CursorMode = CursorMode.Normal;
+            }
         }
-        var platform = ImGui.GetPlatformIO();
-        platform.Platform_GetClipboardTextFn = IntPtr.Zero;
-        platform.Platform_SetClipboardTextFn = IntPtr.Zero;
+
+        if (clipboardCallbacksAttached) {
+            var platform = ImGui.GetPlatformIO();
+            platform.Platform_GetClipboardTextFn = IntPtr.Zero;
+            platform.Platform_SetClipboardTextFn = IntPtr.Zero;
+            clipboardCallbacksAttached = false;
+        }
+
         Marshal.FreeCoTaskMem(clipboardText);
-        Input.Dispose();
+        clipboardText = IntPtr.Zero;
+        input?.Dispose();
+        input = null;
+        IsInitialized = false;
     }
 }

@@ -1,14 +1,14 @@
+using RCT3D.Configuration;
 using RCT3D.Render.Buffers;
 using RCT3D.Render.Paths;
 using RCT3D.Render.Paths.Meshing;
-using RCT3D.Render.Terrain;
 using RCT3D.Render.Scenery;
-using RCT3D.Configuration;
+using RCT3D.Render.Terrain;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-namespace RCT3D.Render;
+namespace RCT3D.Render.Park;
 
 internal sealed unsafe class ParkRenderResources : IDisposable
 {
@@ -17,15 +17,15 @@ internal sealed unsafe class ParkRenderResources : IDisposable
 
     public VulkanRenderResources SharedResources { get; }
     public VulkanDeviceContext? DeviceContext => SharedResources.DeviceContext;
-    public SwapchainResources? SwapchainResources => SharedResources.SwapchainResources;
+    //public SwapchainResources? SwapchainResources => SharedResources.SwapchainResources;
     public CommandPool CommandPool => SharedResources.CommandPool;
     public Vk? Vk => SharedResources.Vk;
     public Device LogicalDevice => SharedResources.LogicalDevice;
     public Queue GraphicsQueue => SharedResources.GraphicsQueue;
-    public uint GraphicsQueueFamilyIndex => SharedResources.GraphicsQueueFamilyIndex;
-    public SwapchainKHR Swapchain => SharedResources.Swapchain;
-    public Image[] SwapchainImages => SharedResources.SwapchainImages;
-    public Framebuffer[] Framebuffers => SharedResources.Framebuffers;
+    //public uint GraphicsQueueFamilyIndex => SharedResources.GraphicsQueueFamilyIndex;
+    //public SwapchainKHR Swapchain => SharedResources.Swapchain;
+    //public Image[] SwapchainImages => SharedResources.SwapchainImages;
+    //public Framebuffer[] Framebuffers => SharedResources.Framebuffers;
     public Extent2D SwapchainExtent => SharedResources.SwapchainExtent;
     public RenderPass RenderPass => SharedResources.RenderPass;
     public DeferredRenderTargets? DeferredTargets { get; private set; }
@@ -49,7 +49,7 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     public List<(PathAccessoryBatch Batch, ModelGraphicsResources Resources)> PathAccessoryGraphicsResources { get; } = new();
     public List<(TreeSceneryBatch Batch, ModelGraphicsResources Resources)> TreeSceneryGraphicsResources { get; } = new();
     public PipelineLayout PipelineLayout => TerrainGraphicsResources?.PipelineLayout ?? default;
-    public Pipeline GraphicsPipeline => TerrainGraphicsResources?.Pipeline ?? default;
+    //public Pipeline GraphicsPipeline => TerrainGraphicsResources?.Pipeline ?? default;
     public DescriptorSet TerrainDescriptorSet => TerrainGraphicsResources?.DescriptorSet ?? default;
     public Buffer VertexBuffer => TerrainGraphicsResources?.VertexBuffer ?? default;
     public Buffer IndexBuffer => TerrainGraphicsResources?.IndexBuffer ?? default;
@@ -62,11 +62,14 @@ internal sealed unsafe class ParkRenderResources : IDisposable
         TreeSceneryAssetLibrary treeSceneryAssets,
         GraphicsOptionsSettings graphicsOptions)
     {
+        sharedResources.EnsureInitialized();
+
         SharedResources = sharedResources;
         TerrainMaterials = terrainMaterials;
         PathMaterials = pathMaterials;
         PathAccessoryAssets = pathAccessoryAssets;
         TreeSceneryAssets = treeSceneryAssets;
+
         try {
             Initialize(graphicsOptions);
         }
@@ -80,6 +83,7 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     {
         if (TerrainMaterials is null)
             throw new InvalidOperationException("TerrainMaterials is undefined!");
+
         if (PathMaterials is null)
             throw new InvalidOperationException("PathMaterials is undefined!");
 
@@ -110,10 +114,12 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     {
         RideSupportGraphicsResources?.Dispose();
         RideSupportGraphicsResources = null;
+
         var supportResources = new TerrainGraphicsResources(
             DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, MaterialTextureArrayData.From(TerrainMaterials!),
             shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true, colorAttachmentCount: 3,
             useTrackVertexColor: true);
+
         try {
             supportResources.CreatePipeline();
             supportResources.CreateTextureResources(CommandPool);
@@ -129,10 +135,12 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     {
         RideEntranceGraphicsResources?.Dispose();
         RideEntranceGraphicsResources = null;
+
         var entranceResources = new TerrainGraphicsResources(
             DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, MaterialTextureArrayData.From(TerrainMaterials!),
             shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true, colorAttachmentCount: 3,
             useTrackVertexColor: true);
+
         try {
             entranceResources.CreatePipeline();
             entranceResources.CreateTextureResources(CommandPool);
@@ -148,10 +156,12 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     {
         TrackGraphicsResources?.Dispose();
         TrackGraphicsResources = null;
+
         var trackResources = new TerrainGraphicsResources(
             DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout, MaterialTextureArrayData.From(TerrainMaterials!),
             shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true, colorAttachmentCount: 3,
             useTrackVertexColor: true);
+
         try {
             trackResources.CreatePipeline();
             trackResources.CreateTextureResources(CommandPool);
@@ -167,11 +177,13 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     {
         VehiclePathGraphicsResources?.Dispose();
         VehiclePathGraphicsResources = null;
+
         var lineResources = new TerrainGraphicsResources(
             DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout,
             MaterialTextureArrayData.From(TerrainMaterials!),
             shaderNameOverride: Path.Combine("object", "vehiclePathDebug"), colorAttachmentCount: 3,
             useTrackVertexColor: true, topology: PrimitiveTopology.LineList);
+
         try {
             lineResources.CreatePipeline();
             VehiclePathGraphicsResources = lineResources;
@@ -190,11 +202,14 @@ internal sealed unsafe class ParkRenderResources : IDisposable
             currentTargets.UpdateRadius(radius);
             return;
         }
+
         if (Vk!.DeviceWaitIdle(LogicalDevice) != Result.Success)
             throw new InvalidOperationException("Failed to wait for the Vulkan device before applying shadow resolution.");
+
         var replacementTargets = new ShadowRenderTargets(DeviceContext!, currentTargets.DepthFormat, resolution, radius);
         ShadowGraphicsResources? replacementGraphics = null;
         DeferredPassResources? replacementPasses = null;
+
         try {
             replacementGraphics = new ShadowGraphicsResources(DeviceContext!, replacementTargets.RenderPass,
                 UniformBufferResources!.DescriptorSetLayout, ModelTextureHeap!.DescriptorSetLayout, ModelTextureHeap.SamplerDescriptorSetLayout);
@@ -208,6 +223,7 @@ internal sealed unsafe class ParkRenderResources : IDisposable
             replacementTargets.Dispose();
             throw;
         }
+
         var previousGraphics = ShadowGraphicsResources;
         var previousPasses = DeferredPassResources;
         ShadowGraphicsResources = replacementGraphics;
@@ -226,15 +242,19 @@ internal sealed unsafe class ParkRenderResources : IDisposable
             Level = CommandBufferLevel.Primary,
             CommandBufferCount = 1
         };
+
         if (Vk!.AllocateCommandBuffers(LogicalDevice, in allocateInfo, &commandBuffer) != Result.Success)
             throw new InvalidOperationException("Failed to allocate the sky initialization command buffer.");
+
         try {
             var beginInfo = new CommandBufferBeginInfo {
                 SType = StructureType.CommandBufferBeginInfo,
                 Flags = CommandBufferUsageFlags.OneTimeSubmitBit,
             };
+
             if (Vk.BeginCommandBuffer(commandBuffer, in beginInfo) != Result.Success)
                 throw new InvalidOperationException("Failed to begin the sky initialization command buffer.");
+
             var skyTargets = SkyTargets!;
             var skyPasses = DeferredPassResources!;
             var uniformDescriptorSet = UniformBufferResources!.GetDescriptorSet(0);
@@ -268,15 +288,19 @@ internal sealed unsafe class ParkRenderResources : IDisposable
                 ImageLayout.TransferDstOptimal, ImageLayout.General,
                 PipelineStageFlags.TransferBit, AccessFlags.TransferWriteBit,
                 PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit);
+
             if (Vk.EndCommandBuffer(commandBuffer) != Result.Success)
                 throw new InvalidOperationException("Failed to end the sky initialization command buffer.");
+
             var submitInfo = new SubmitInfo {
                 SType = StructureType.SubmitInfo,
                 CommandBufferCount = 1,
                 PCommandBuffers = &commandBuffer,
             };
+
             if (Vk.QueueSubmit(GraphicsQueue, 1, in submitInfo, default) != Result.Success)
                 throw new InvalidOperationException("Failed to submit the sky initialization commands.");
+
             if (Vk.QueueWaitIdle(GraphicsQueue) != Result.Success)
                 throw new InvalidOperationException("Failed to wait for sky initialization commands.");
         }
@@ -299,6 +323,7 @@ internal sealed unsafe class ParkRenderResources : IDisposable
             SrcAccessMask = sourceAccess,
             DstAccessMask = destinationAccess
         };
+
         Vk!.CmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, null, 0, null, 1, &barrier);
     }
 
@@ -306,9 +331,11 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     {
         var vehicleCube = VehicleCubeRenderer.CreateMesh();
         VehicleCubeGraphicsResources = new ModelGraphicsResources[MaxFramesInFlight];
+
         for (var i = 0; i < VehicleCubeGraphicsResources.Length; i++) {
             var resources = new ModelGraphicsResources(DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout,
                 vehicleCube.Material, ModelTextureHeap!, unlit: true);
+
             try {
                 resources.CreatePipeline();
                 resources.CreateTextureResources(CommandPool);
@@ -326,6 +353,7 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     {
         if (Vk!.DeviceWaitIdle(LogicalDevice) != Result.Success)
             throw new InvalidOperationException("Failed to wait for the Vulkan device before resizing park resources.");
+
         ModelTextureHeap?.SetCommandPool(CommandPool);
         DeferredPassResources?.Dispose();
         DeferredPassResources = null;
@@ -337,18 +365,23 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     {
         if (isDisposed) return;
         isDisposed = true;
+
         var vk = Vk;
         var logicalDevice = LogicalDevice;
         if (vk is not null && logicalDevice.Handle != 0)
             vk.DeviceWaitIdle(logicalDevice);
+
         foreach (var (_, resources) in PathAccessoryGraphicsResources)
             resources.Dispose();
+
         PathAccessoryGraphicsResources.Clear();
         foreach (var (_, resources) in TreeSceneryGraphicsResources)
             resources.Dispose();
+
         TreeSceneryGraphicsResources.Clear();
         foreach (var resources in VehicleCubeGraphicsResources)
             resources?.Dispose();
+
         VehicleCubeGraphicsResources = Array.Empty<ModelGraphicsResources>();
         WaterGraphicsResources?.Dispose();
         WaterGraphicsResources = null;

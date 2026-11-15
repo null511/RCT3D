@@ -1,0 +1,227 @@
+name: Package release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New release version (for example 0.1.0; no v prefix)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publishing
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      tag: ${{ steps.identity.outputs.tag }}
+      commit: ${{ steps.identity.outputs.commit }}
+    steps:
+      - name: Validate new release identity
+        id: identity
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        with:
+          script: |
+            const version = process.env.RELEASE_VERSION;
+            if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(version) ||
+                version.split('.').some(part => !Number.isSafeInteger(Number(part)) || Number(part) > 65534)) {
+              throw new Error('Use three numeric components between 0 and 65534, without leading zeros.');
+            }
+            const tag = `v${version}`;
+            for (const request of [
+              () => github.rest.git.getRef({...context.repo, ref: `tags/${tag}`}),
+              () => github.rest.repos.getReleaseByTag({...context.repo, tag})
+            ]) {
+              try { await request(); } catch (error) { if (error.status === 404) continue; throw error; }
+              throw new Error(`${tag} already exists. Tags and releases are never overwritten.`);
+            }
+            const {data: commit} = await github.rest.repos.getCommit({...context.repo, ref: context.sha});
+            core.setOutput('version', version);
+            core.setOutput('tag', tag);
+            core.setOutput('commit', commit.sha);
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.identity.outputs.commit }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Prepare hash-verified runtime data and graphics
+        shell: pwsh
+        run: ./packaging/Prepare-ReleaseData.ps1 -OutputDirectory "$pwd/artifacts/runtime-data"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runtime-data
+          path: artifacts/runtime-data/
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    needs: prepare
+    runs-on: windows-2025
+    timeout-minutes: 60
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: runtime-data
+          path: artifacts/runtime-data
+      - name: Build only the base OpenRCT2 adapter
+        shell: pwsh
+        run: |
+          $native = "$pwd\OpenRCT2"
+          MSBuild "$native\src\openrct2\libopenrct2.vcxproj" /t:Build /p:Configuration=Release /p:Platform=x64 "/p:SolutionDir=$native\" "/p:OutDir=$pwd\artifacts\native\" /m
+          if ($LASTEXITCODE -ne 0) { throw 'Native base-library build failed.' }
+      - name: Publish self-contained Windows x64
+        shell: pwsh
+        run: |
+          dotnet publish RCT3DViewer/RCT3D-Viewer.csproj -c Release -r win-x64 --self-contained true -p:BuildNativeAdapter=false "-p:OpenRCT2AdapterDll=$pwd/artifacts/native/libopenrct2.dll" "-p:OpenRCT2RuntimeDataDirectory=$pwd/artifacts/runtime-data" "-p:Version=$env:RELEASE_VERSION" -o artifacts/publish
+          if ($LASTEXITCODE -ne 0) { throw 'Windows publish failed.' }
+          ./packaging/Prepare-Package.ps1 -PublishDirectory "$pwd/artifacts/publish" -RuntimeIdentifier win-x64
+      - name: Verify native ABI
+        shell: pwsh
+        run: |
+          python -c "import ctypes,re; from pathlib import Path; expected=int(re.search(r'RCT3D_OPENRCT2_ABI_VERSION ([0-9]+)u', Path('OpenRCT2/src/rct3dviewer/Rct3DViewerAdapter.h').read_text()).group(1)); actual=ctypes.CDLL(str(Path('artifacts/publish/libopenrct2.dll').resolve())).rct3d_openrct2_get_abi_version(); assert actual == expected, (actual, expected)"
+          if ($LASTEXITCODE -ne 0) { throw 'Native ABI validation failed.' }
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:RELEASE_VERSION" "/DPublishDir=$pwd\artifacts\publish" "/DArtifactDir=$pwd\artifacts\release" packaging/windows.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Windows installer compilation failed.' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-x64-installer
+          path: artifacts/release/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  linux:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: runtime-data
+          path: artifacts/runtime-data
+      - name: Install native build and runtime prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ pkg-config libzip-dev libpng-dev zlib1g-dev libzstd-dev libssl-dev libcurl4-openssl-dev libicu-dev libfreetype-dev libfontconfig-dev libsdl2-dev libflac-dev libvorbis-dev libgtk-3-0t64 libvulkan1 libxrandr2 libxinerama1 libxcursor1 libxi6 libwayland-client0 libwayland-cursor0 libwayland-egl1 libxkbcommon0
+      - name: Build only the base OpenRCT2 adapter
+        run: |
+          cmake -S OpenRCT2 -B artifacts/native -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DDISABLE_GUI=ON -DDISABLE_DISCORD_RPC=ON -DWITH_TESTS=OFF -DENABLE_SCRIPTING=ON
+          cmake --build artifacts/native --target libopenrct2 --parallel 2
+      - name: Publish self-contained Linux x64 and inspect dependencies
+        shell: pwsh
+        run: |
+          dotnet publish RCT3DViewer/RCT3D-Viewer.csproj -c Release -r linux-x64 --self-contained true -p:BuildNativeAdapter=false "-p:OpenRCT2AdapterDll=$pwd/artifacts/native/libopenrct2.so" "-p:OpenRCT2RuntimeDataDirectory=$pwd/artifacts/runtime-data" "-p:Version=$env:RELEASE_VERSION" -o artifacts/publish
+          if ($LASTEXITCODE -ne 0) { throw 'Linux publish failed.' }
+          ./packaging/Prepare-Package.ps1 -PublishDirectory "$pwd/artifacts/publish" -RuntimeIdentifier linux-x64
+          ./packaging/Build-DebianPackage.ps1 -PublishDirectory "$pwd/artifacts/publish" -Version $env:RELEASE_VERSION -OutputDirectory "$pwd/artifacts/release"
+      - name: Verify native ABI
+        run: |
+          python3 -c "import ctypes,re; from pathlib import Path; expected=int(re.search(r'RCT3D_OPENRCT2_ABI_VERSION ([0-9]+)u', Path('OpenRCT2/src/rct3dviewer/Rct3DViewerAdapter.h').read_text()).group(1)); actual=ctypes.CDLL(str(Path('artifacts/publish/libopenrct2.so').resolve())).rct3d_openrct2_get_abi_version(); assert actual == expected, (actual, expected)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-amd64-installer
+          path: artifacts/release/*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: [prepare, windows, linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: '*-installer'
+          path: artifacts/release
+          merge-multiple: true
+      - name: Include exact matching source archives and checksums
+        run: |
+          test -s "artifacts/release/RCT3DViewer-$RELEASE_VERSION-windows-x64-setup.exe"
+          test -s "artifacts/release/RCT3DViewer-$RELEASE_VERSION-linux-amd64.deb"
+          git archive --format=tar.gz --prefix="RCT3DViewer-$RELEASE_VERSION/" -o "artifacts/release/RCT3DViewer-$RELEASE_VERSION-source.tar.gz" HEAD
+          git -C OpenRCT2 archive --format=tar.gz --prefix="OpenRCT2-$RELEASE_VERSION/" -o "$GITHUB_WORKSPACE/artifacts/release/OpenRCT2-$RELEASE_VERSION-source.tar.gz" HEAD
+          cd artifacts/release
+          sha256sum ./*.exe ./*.deb ./*-source.tar.gz > SHA256SUMS
+      - name: Create new tag and draft release
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const tag = process.env.RELEASE_TAG;
+            for (const request of [
+              () => github.rest.git.getRef({...context.repo, ref: `tags/${tag}`}),
+              () => github.rest.repos.getReleaseByTag({...context.repo, tag})
+            ]) {
+              try { await request(); } catch (error) { if (error.status === 404) continue; throw error; }
+              throw new Error(`${tag} already exists; refusing to overwrite it.`);
+            }
+            const directory = 'artifacts/release';
+            const version = process.env.RELEASE_VERSION;
+            const expected = [`RCT3DViewer-${version}-windows-x64-setup.exe`, `RCT3DViewer-${version}-linux-amd64.deb`, `RCT3DViewer-${version}-source.tar.gz`, `OpenRCT2-${version}-source.tar.gz`, 'SHA256SUMS'];
+            for (const name of expected) {
+              if (!fs.statSync(path.join(directory, name)).size) throw new Error(`Empty release asset: ${name}`);
+            }
+            let mutated = false;
+            try {
+              await github.rest.git.createRef({...context.repo, ref: `refs/tags/${tag}`, sha: process.env.RELEASE_COMMIT});
+              mutated = true;
+              const {data: release} = await github.rest.repos.createRelease({
+                ...context.repo, tag_name: tag, target_commitish: process.env.RELEASE_COMMIT,
+                name: `RCT3DViewer ${tag}`, draft: true, prerelease: false,
+                body: `Commit: ${process.env.RELEASE_COMMIT}\n\nUnsigned Windows x64 installer and Ubuntu 24.04 amd64 DEB; .NET 10 is bundled. Vulkan drivers and legally owned RCT1/RCT2 data are required.\n\nBefore publishing: manually verify both installers, resolve viewer/asset redistribution rights, and review bundled dependency notices and corresponding-source obligations. Source archives include the parent project and the exact native fork separately; extract the native archive into OpenRCT2 when rebuilding. See README for data configuration and recovery.`
+              });
+              for (const name of expected) {
+                await github.rest.repos.uploadReleaseAsset({
+                  ...context.repo, release_id: release.id, name, data: fs.readFileSync(path.join(directory, name))
+                });
+              }
+              await core.summary.addLink('Draft release', release.html_url).write();
+            } catch (error) {
+              if (mutated) core.error(`Partial ${tag} release/tag may remain. Inspect it, then explicitly remove the draft and tag before retrying. Nothing was published publicly.`);
+              throw error;
+            }

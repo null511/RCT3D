@@ -10,7 +10,7 @@ internal sealed unsafe class FrameCoordinator(IWindow window, VulkanRenderResour
     private uint _currentFrame;
 
     public double ActiveFrameTimeMilliseconds { get; private set; }
-    public uint CurrentFrame => _currentFrame;
+    //public uint CurrentFrame => _currentFrame;
 
 
     public void RenderFrame(
@@ -21,6 +21,7 @@ internal sealed unsafe class FrameCoordinator(IWindow window, VulkanRenderResour
         Action<bool> swapchainRecreated,
         Action<CommandBuffer, uint>? drawPresentation = null)
     {
+        resources.EnsureInitialized();
         if (window.FramebufferSize.X == 0 || window.FramebufferSize.Y == 0) return;
         if (framebufferResized && !RecreateSwapchain(swapchainRecreated)) return;
 

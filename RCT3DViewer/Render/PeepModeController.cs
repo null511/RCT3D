@@ -2,6 +2,7 @@ using RCT3D.Simulation;
 using Silk.NET.Input;
 using System.Numerics;
 using RCT3D.Interop.Models;
+using RCT3D.Render.Park;
 
 namespace RCT3D.Render;
 

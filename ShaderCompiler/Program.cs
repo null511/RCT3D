@@ -189,6 +189,14 @@ namespace ShaderCompiler
                 }
 
                 var dir = Path.GetDirectoryName(asmPath) ?? string.Empty;
+                var compilerName = OperatingSystem.IsWindows() ? "slang-compiler.dll" : "libslang-compiler.so";
+                var pluginName = OperatingSystem.IsWindows() ? "slang-glslang.dll" : "libslang-glslang-2026.14.1.so";
+                if (File.Exists(Path.Combine(dir, compilerName)) && File.Exists(Path.Combine(dir, pluginName))) {
+                    AddNativeSearchPath(dir);
+                    NativeLibrary.Load(Path.Combine(dir, pluginName));
+                    message = dir;
+                    return true;
+                }
 
                 // Walk up to package root (common layout: .../packages/slangc.net/<version>/lib/<tfm>/)
                 var packageRoot = Directory.GetParent(dir)?.Parent?.Parent?.FullName;
@@ -211,6 +219,7 @@ namespace ShaderCompiler
                 foreach (var c in candidates) {
                     // look for native folder
                     if (!Path.GetFileName(c).Equals("native", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (Path.GetFileName(Path.GetDirectoryName(c)) != RuntimeInformation.RuntimeIdentifier) continue;
                     var files = Directory.GetFiles(c);
 
                     foreach (var f in files) {
@@ -250,6 +259,7 @@ namespace ShaderCompiler
                             var nativeDirs = Directory.GetDirectories(runtimesRoot, "native", SearchOption.AllDirectories);
 
                             foreach (var nd in nativeDirs) {
+                                if (Path.GetFileName(Path.GetDirectoryName(nd)) != RuntimeInformation.RuntimeIdentifier) continue;
                                 var nativeFiles = Directory.GetFiles(nd);
 
                                 foreach (var nf in nativeFiles) {

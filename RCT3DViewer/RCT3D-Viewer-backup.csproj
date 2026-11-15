@@ -1,0 +1,93 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <OpenRCT2LibraryName Condition="$([MSBuild]::IsOSPlatform('Windows'))">libopenrct2.dll</OpenRCT2LibraryName>
+    <OpenRCT2LibraryName Condition="$([MSBuild]::IsOSPlatform('Linux'))">libopenrct2.so</OpenRCT2LibraryName>
+    <OpenRCT2AdapterDll Condition="'$(OpenRCT2AdapterDll)' == ''">$(MSBuildProjectDirectory)\..\OpenRCT2\bin\x64\$(OpenRCT2LibraryName)</OpenRCT2AdapterDll>
+    <OpenRCT2AdapterPdb>$([System.IO.Path]::ChangeExtension('$(OpenRCT2AdapterDll)', '.pdb'))</OpenRCT2AdapterPdb>
+    <BuildNativeAdapter Condition="'$(BuildNativeAdapter)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">true</BuildNativeAdapter>
+    <OpenRCT2RuntimeDataDirectory Condition="'$(OpenRCT2RuntimeDataDirectory)' == ''">$(MSBuildProjectDirectory)\..\OpenRCT2\bin-adapter\data</OpenRCT2RuntimeDataDirectory>
+    <RootNamespace>RCT3D</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+    <PackageReference Include="NativeFileDialogSharp" Version="0.5.0" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="SharpGLTF.Toolkit" Version="1.0.5" />
+    <PackageReference Include="Silk.NET.Vulkan" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Input" Version="2.23.0" />
+    <PackageReference Include="StbImageSharp" Version="2.30.15" />
+  </ItemGroup>
+
+  <Target Name="CompileShadersAtBuildTime" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <CompiledShaderDirectory>$(MSBuildProjectDirectory)\$(IntermediateOutputPath)compiled-shaders</CompiledShaderDirectory>
+    </PropertyGroup>
+    <Message Importance="High" Text="Executing Build-Time Shader Compilation via ShaderCompiler project..." />
+    <RemoveDir Directories="$(CompiledShaderDirectory)" />
+    <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\ShaderCompiler\ShaderCompiler.csproj&quot; --configuration $(Configuration) --no-launch-profile -- &quot;$(MSBuildProjectDirectory)\Shaders&quot; &quot;$(CompiledShaderDirectory)&quot;" />
+    <ItemGroup>
+      <Content Include="$(CompiledShaderDirectory)\**\*.spv" Link="Shaders\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="ValidateOpenRCT2AdapterDll" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(OpenRCT2LibraryName)' == ''" Text="This build supports Windows and Linux only." />
+    <Error Condition="!Exists('$(OpenRCT2AdapterDll)')" Text="OpenRCT2 adapter not found at '$(OpenRCT2AdapterDll)'. Build the base native library or set OpenRCT2AdapterDll to its ABI-compatible library path." />
+  </Target>
+
+  <Target Name="BuildOpenRCT2Adapter" BeforeTargets="ValidateOpenRCT2AdapterDll" Condition="'$(BuildNativeAdapter)' == 'true'">
+    <Exec Command="&quot;$(MSBuildBinPath)\MSBuild.exe&quot; &quot;$(MSBuildProjectDirectory)\..\OpenRCT2\src\openrct2\libopenrct2.vcxproj&quot; /t:Build /p:Configuration=$(Configuration) /p:Platform=x64 /p:OutDir=&quot;$(MSBuildProjectDirectory)\..\OpenRCT2\bin\x64/&quot; /m" />
+  </Target>
+
+  <ItemGroup>
+    <UpToDateCheckInput Include="..\OpenRCT2\src\rct3dviewer\*.cpp;..\OpenRCT2\src\rct3dviewer\*.h" Set="OpenRCT2Adapter" />
+    <UpToDateCheckOutput Include="$(OpenRCT2AdapterDll)" Set="OpenRCT2Adapter" />
+    <None Include="$(OpenRCT2AdapterDll)" Link="$(OpenRCT2LibraryName)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="RCT3DViewer.csproj" />
+    <None Include="$(OpenRCT2AdapterPdb)" Link="libopenrct2.pdb" Condition="Exists('$(OpenRCT2AdapterPdb)')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+    <Content Include="Assets\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <None Update="Rides\Vehicles\**\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="RemoveRetiredVehicleDefinition" BeforeTargets="CopyFilesToOutputDirectory;Publish">
+    <Delete Files="$(OutDir)Rides\Vehicles\MonsterTrucks.json" />
+    <Delete Files="$(PublishDir)Rides\Vehicles\MonsterTrucks.json" Condition="'$(PublishDir)' != ''" />
+  </Target>
+
+  <Target Name="CopyOpenRCT2RuntimeData" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <Content Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\language\**\*" Link="openrct2-data\language\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <Content Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\scenario_patches\**\*" Link="openrct2-data\scenario_patches\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <Content Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\shaders\**\*" Link="openrct2-data\shaders\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <Content Include="$(OpenRCT2RuntimeDataDirectory)\**\*" Link="openrct2-data\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+</Project>

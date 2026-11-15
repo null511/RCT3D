@@ -67,7 +67,7 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
 
     private static void LoadSurfaces(string textureDirectory, MaterialLibraryBuilder builder, Dictionary<uint, uint> layers)
     {
-        var surfaceDirectory = Path.Combine(textureDirectory, "terrain");
+        var surfaceDirectory = Path.Combine(textureDirectory, "Terrain");
         var manifestPath = Path.Combine(surfaceDirectory, "materials.json");
 
         using var manifestStream = File.OpenRead(manifestPath);

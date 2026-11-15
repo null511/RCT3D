@@ -8,29 +8,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Slangc.NET" Version="2026.14.1" />
+    <PackageReference Include="Slangc.NET" Version="2026.14.1" GeneratePathProperty="true" />
   </ItemGroup>
 
-  <!-- Copy native runtime assets from Slangc.NET NuGet package into the tool output so runtime components
-       like slang-glslang and spirv-opt are discoverable when the tool runs during the build. -->
-  <PropertyGroup>
-    <SlangPackageId>slangc.net</SlangPackageId>
-  </PropertyGroup>
-
   <Target Name="CopySlangNativeRuntimes" AfterTargets="Build">
-    <PropertyGroup>
-      <!-- Prefer explicit NuGet package root; fall back to user profile .nuget/packages -->
-      <_NuGetRoot Condition=" '$(NuGetPackageRoot)' != '' ">$(NuGetPackageRoot)</_NuGetRoot>
-      <_NuGetRoot Condition=" '$(NuGetPackageRoot)' == '' ">$(UserProfile)\\.nuget\\packages</_NuGetRoot>
-    </PropertyGroup>
-
     <ItemGroup>
-      <SlangNativeFiles Include="$(_NuGetRoot)\\$(SlangPackageId)\\**\\runtimes\\**\\native\\**\\*.*" Condition="Exists('$(_NuGetRoot)')" />
+      <SlangNativeFiles Include="$(PkgSlangc_NET)\runtimes\$(NETCoreSdkRuntimeIdentifier)\native\*" />
     </ItemGroup>
-
-    <Message Text="Found %(SlangNativeFiles.Identity)" Importance="Low" Condition="@(SlangNativeFiles) != ''" />
-
-    <Copy SourceFiles="@(SlangNativeFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="@(SlangNativeFiles) != ''" />
+    <Error Condition="'@(SlangNativeFiles)' == ''" Text="Slang native assets are missing for host $(NETCoreSdkRuntimeIdentifier)." />
+    <Copy SourceFiles="@(SlangNativeFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>
