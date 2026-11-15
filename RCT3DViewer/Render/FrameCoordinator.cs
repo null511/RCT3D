@@ -18,7 +18,8 @@ internal sealed unsafe class FrameCoordinator(IWindow window, VulkanRenderResour
         Action<double> prepareFrame,
         Action<CommandBuffer, uint, uint> recordFrame,
         Action frameSubmitted,
-        Action<bool> swapchainRecreated)
+        Action<bool> swapchainRecreated,
+        Action<CommandBuffer, uint>? drawPresentation = null)
     {
         if (window.FramebufferSize.X == 0 || window.FramebufferSize.Y == 0) return;
         if (framebufferResized && !RecreateSwapchain(swapchainRecreated)) return;
@@ -56,7 +57,10 @@ internal sealed unsafe class FrameCoordinator(IWindow window, VulkanRenderResour
         var commandBuffer = resources.CommandBuffers[imageIndex];
         resources.ImGuiRenderer?.BeginFrame((int)resources.SwapchainExtent.Width, (int)resources.SwapchainExtent.Height, (float)deltaTime);
         prepareFrame(ActiveFrameTimeMilliseconds);
+        resources.BeginCommands(commandBuffer);
         recordFrame(commandBuffer, imageIndex, _currentFrame);
+        resources.EndCommands(commandBuffer, imageIndex,
+            drawPresentation is null ? null : buffer => drawPresentation(buffer, _currentFrame));
 
         var waitStages = PipelineStageFlags.AllCommandsBit;
         var imageAvailableSemaphore = resources.ImageAvailableSemaphores[_currentFrame];

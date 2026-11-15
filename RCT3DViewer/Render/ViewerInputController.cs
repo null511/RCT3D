@@ -1,121 +1,122 @@
 using ImGuiNET;
+using Serilog;
 using Silk.NET.Input;
 using Silk.NET.Windowing;
-using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace RCT3D.Render;
 
 internal sealed class ViewerInputController : IDisposable
 {
-    private readonly IInputContext inputContext;
-    private readonly FlightCamera camera;
-    private readonly PeepModeController peepMode;
-    private readonly Action togglePause;
-    private readonly Action toggleDebug;
-    private bool f9WasPressed;
-    private bool f3WasPressed;
-    private bool pWasPressed;
-    private bool eWasPressed;
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr GetClipboardText(IntPtr context);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void SetClipboardText(IntPtr context, IntPtr text);
 
+    private readonly GetClipboardText getClipboard;
+    private readonly SetClipboardText setClipboard;
+    private IntPtr clipboardText;
+    private bool isDisposed;
 
-    public ViewerInputController(IWindow window, FlightCamera camera, PeepModeController peepMode, Func<bool> wantCaptureMouse, Action togglePause, Action toggleDebug)
+    public IInputContext Input { get; }
+
+    private static readonly (Key Key, ImGuiKey ImGuiKey)[] EditingKeys = [
+        (Key.Tab, ImGuiKey.Tab), (Key.Left, ImGuiKey.LeftArrow), (Key.Right, ImGuiKey.RightArrow),
+        (Key.Up, ImGuiKey.UpArrow), (Key.Down, ImGuiKey.DownArrow), (Key.Home, ImGuiKey.Home),
+        (Key.End, ImGuiKey.End), (Key.PageUp, ImGuiKey.PageUp), (Key.PageDown, ImGuiKey.PageDown),
+        (Key.Backspace, ImGuiKey.Backspace), (Key.Delete, ImGuiKey.Delete), (Key.Insert, ImGuiKey.Insert),
+        (Key.Enter, ImGuiKey.Enter), (Key.Escape, ImGuiKey.Escape),
+        (Key.ControlLeft, ImGuiKey.LeftCtrl), (Key.ControlRight, ImGuiKey.RightCtrl),
+        (Key.ShiftLeft, ImGuiKey.LeftShift), (Key.ShiftRight, ImGuiKey.RightShift),
+        (Key.AltLeft, ImGuiKey.LeftAlt), (Key.AltRight, ImGuiKey.RightAlt),
+        (Key.SuperLeft, ImGuiKey.LeftSuper), (Key.SuperRight, ImGuiKey.RightSuper)
+    ];
+
+    public ViewerInputController(IWindow window)
     {
-        this.camera = camera;
-        this.peepMode = peepMode;
-        this.togglePause = togglePause;
-        this.toggleDebug = toggleDebug;
-
-        inputContext = window.CreateInput();
-
-        foreach (var mouse in inputContext.Mice) {
-            mouse.MouseDown += (_, button) => {
-                if (button == MouseButton.Right)
-                    this.camera.ResetMouseTracking();
-            };
-
-            mouse.MouseUp += (_, button) => {
-                if (button == MouseButton.Right)
-                    this.camera.ResetMouseTracking();
-            };
-
-            mouse.MouseMove += (m, pos) => {
-                if (m.IsButtonPressed(MouseButton.Right) && !wantCaptureMouse()) {
-                    this.camera.HandleMouse(new Vector2(pos.X, pos.Y));
-                    m.Cursor.CursorMode = CursorMode.Raw;
-                }
-                else {
-                    m.Cursor.CursorMode = CursorMode.Normal;
-                }
-            };
-
-            mouse.Scroll += (_, scroll) => {
-                if (!wantCaptureMouse())
-                    this.camera.HandleScroll(scroll.Y);
-            };
-        }
+        Input = window.CreateInput();
+        foreach (var keyboard in Input.Keyboards)
+            keyboard.KeyChar += OnCharacter;
+        foreach (var mouse in Input.Mice)
+            mouse.Scroll += OnScroll;
+        window.FocusChanged += OnFocusChanged;
+        Window = window;
+        getClipboard = ReadClipboard;
+        setClipboard = WriteClipboard;
+        var platform = ImGui.GetPlatformIO();
+        platform.Platform_GetClipboardTextFn = Marshal.GetFunctionPointerForDelegate(getClipboard);
+        platform.Platform_SetClipboardTextFn = Marshal.GetFunctionPointerForDelegate(setClipboard);
     }
 
-    public void Update(double deltaTime, ImGuiVulkanRenderer? imguiRenderer)
+    private IWindow Window { get; }
+
+    private static void OnCharacter(IKeyboard keyboard, char character) => ImGui.GetIO().AddInputCharacterUTF16(character);
+    private static void OnScroll(IMouse mouse, ScrollWheel scroll) => ImGui.GetIO().AddMouseWheelEvent(scroll.X, scroll.Y);
+    private static void OnFocusChanged(bool focused) => ImGui.GetIO().AddFocusEvent(focused);
+
+    public void Update()
     {
-        if (inputContext.Keyboards.Count > 0) {
-            var keyboard = inputContext.Keyboards[0];
-            var f9Pressed = keyboard.IsKeyPressed(Key.F9);
-            if (f9Pressed && !f9WasPressed)
-                togglePause();
-            f9WasPressed = f9Pressed;
-
-            var f3Pressed = keyboard.IsKeyPressed(Key.F3);
-            if (f3Pressed && !f3WasPressed)
-                toggleDebug();
-            f3WasPressed = f3Pressed;
-
-            var pPressed = keyboard.IsKeyPressed(Key.P);
-            if (pPressed && !pWasPressed)
-                peepMode.Toggle();
-            pWasPressed = pPressed;
-
-            var ePressed = keyboard.IsKeyPressed(Key.E);
-            if (ePressed && !eWasPressed)
-                peepMode.Interact();
-            eWasPressed = ePressed;
-
-            peepMode.Update(keyboard, (float)deltaTime, !(imguiRenderer?.WantCaptureKeyboard ?? false));
+        var io = ImGui.GetIO();
+        if (Input.Mice.Count > 0) {
+            var mouse = Input.Mice[0];
+            io.AddMousePosEvent(mouse.Position.X, mouse.Position.Y);
+            io.AddMouseButtonEvent(0, mouse.IsButtonPressed(MouseButton.Left));
+            io.AddMouseButtonEvent(1, mouse.IsButtonPressed(MouseButton.Right));
+            io.AddMouseButtonEvent(2, mouse.IsButtonPressed(MouseButton.Middle));
         }
+        if (Input.Keyboards.Count == 0) return;
+        var keyboard = Input.Keyboards[0];
+        foreach (var (key, imguiKey) in EditingKeys)
+            io.AddKeyEvent(imguiKey, keyboard.IsKeyPressed(key));
+        for (var index = 0; index < 26; index++)
+            io.AddKeyEvent(ImGuiKey.A + index, keyboard.IsKeyPressed(Key.A + index));
+        io.AddKeyEvent(ImGuiKey.ModCtrl, keyboard.IsKeyPressed(Key.ControlLeft) || keyboard.IsKeyPressed(Key.ControlRight));
+        io.AddKeyEvent(ImGuiKey.ModShift, keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight));
+        io.AddKeyEvent(ImGuiKey.ModAlt, keyboard.IsKeyPressed(Key.AltLeft) || keyboard.IsKeyPressed(Key.AltRight));
+        io.AddKeyEvent(ImGuiKey.ModSuper, keyboard.IsKeyPressed(Key.SuperLeft) || keyboard.IsKeyPressed(Key.SuperRight));
+    }
 
-        if (imguiRenderer is not null) {
-            var io = ImGui.GetIO();
-
-            if (inputContext.Mice.Count > 0) {
-                var mouse = inputContext.Mice[0];
-                var position = mouse.Position;
-
-                io.AddMousePosEvent(position.X, position.Y);
-                io.AddMouseButtonEvent(0, mouse.IsButtonPressed(MouseButton.Left));
-                io.AddMouseButtonEvent(1, mouse.IsButtonPressed(MouseButton.Right));
-            }
-
-            if (inputContext.Keyboards.Count > 0) {
-                var keyboard = inputContext.Keyboards[0];
-
-                io.AddKeyEvent(ImGuiKey.Tab, keyboard.IsKeyPressed(Key.Tab));
-                io.AddKeyEvent(ImGuiKey.LeftArrow, keyboard.IsKeyPressed(Key.Left));
-                io.AddKeyEvent(ImGuiKey.RightArrow, keyboard.IsKeyPressed(Key.Right));
-                io.AddKeyEvent(ImGuiKey.UpArrow, keyboard.IsKeyPressed(Key.Up));
-                io.AddKeyEvent(ImGuiKey.DownArrow, keyboard.IsKeyPressed(Key.Down));
-                io.AddKeyEvent(ImGuiKey.Enter, keyboard.IsKeyPressed(Key.Enter));
-                io.AddKeyEvent(ImGuiKey.Escape, keyboard.IsKeyPressed(Key.Escape));
-                io.AddKeyEvent(ImGuiKey.LeftCtrl, keyboard.IsKeyPressed(Key.ControlLeft));
-                io.AddKeyEvent(ImGuiKey.LeftShift, keyboard.IsKeyPressed(Key.ShiftLeft));
-            }
+    private IntPtr ReadClipboard(IntPtr context)
+    {
+        string text;
+        try {
+            text = Input.Keyboards.Count > 0 ? Input.Keyboards[0].ClipboardText : string.Empty;
         }
+        catch (Exception ex) {
+            Log.Error(ex, "Failed to read the clipboard");
+            text = string.Empty;
+        }
+        Marshal.FreeCoTaskMem(clipboardText);
+        clipboardText = Marshal.StringToCoTaskMemUTF8(text);
+        return clipboardText;
+    }
 
-        if (inputContext.Keyboards.Count > 0 && !(imguiRenderer?.WantCaptureKeyboard ?? false)
-            && !peepMode.IsEnabled && !peepMode.IsEntering)
-            camera.HandleKeyboard(inputContext.Keyboards[0], (float)deltaTime);
+    private void WriteClipboard(IntPtr context, IntPtr text)
+    {
+        try {
+            if (Input.Keyboards.Count > 0)
+                Input.Keyboards[0].ClipboardText = Marshal.PtrToStringUTF8(text) ?? string.Empty;
+        }
+        catch (Exception ex) {
+            Log.Error(ex, "Failed to write the clipboard");
+        }
     }
 
     public void Dispose()
     {
-        inputContext.Dispose();
+        if (isDisposed) return;
+        isDisposed = true;
+        Window.FocusChanged -= OnFocusChanged;
+        foreach (var keyboard in Input.Keyboards)
+            keyboard.KeyChar -= OnCharacter;
+        foreach (var mouse in Input.Mice) {
+            mouse.Scroll -= OnScroll;
+            mouse.Cursor.CursorMode = CursorMode.Normal;
+        }
+        var platform = ImGui.GetPlatformIO();
+        platform.Platform_GetClipboardTextFn = IntPtr.Zero;
+        platform.Platform_SetClipboardTextFn = IntPtr.Zero;
+        Marshal.FreeCoTaskMem(clipboardText);
+        Input.Dispose();
     }
 }

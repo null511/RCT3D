@@ -13,8 +13,8 @@ RCT3DViewer is an experimental real-time 3D viewer for RollerCoaster Tycoon 1/2 
 - .NET 10 SDK.
 - Vulkan-capable graphics hardware and a Vulkan runtime/driver.
 - Git with submodule support.
-- The OpenRCT2 adapter DLL at `OpenRCT2/bin-adapter/libopenrct2.dll` for the currently configured Windows build. The application project copies it to the application output as `libopenrct2.dll`.
-- Valid OpenRCT2 and RollerCoaster Tycoon 2 data directories, plus a park file supported by OpenRCT2.
+- The OpenRCT2 adapter DLL at `OpenRCT2\bin\x64\libopenrct2.dll` for the currently configured Windows build. The application project copies it to the application output as `libopenrct2.dll`.
+- Valid OpenRCT2, RollerCoaster Tycoon 1, and RollerCoaster Tycoon 2 data directories, plus a park file supported by OpenRCT2, to enter the Park screen. Menu does not require game data or native initialization.
 
 The renderer uses Silk.NET Vulkan and Slang shaders. During the application build, `ShaderCompiler` compiles `.slang` sources to SPIR-V and the project copies terrain textures and OpenRCT2 runtime data into the output directory.
 
@@ -32,39 +32,46 @@ If the repository is already cloned, run `git submodule update --init --recursiv
 
 ## Configure data paths
 
-The current entry point accepts these environment variables to override its configured defaults:
+The application starts in **Menu**, with Load Park, Graphics Options, Configuration, and Exit. Configuration has editable `RCT1_PATH`, `RCT2_PATH`, and `OPENRCT2_DATA` fields, each with a folder picker. Apply saves the paths for the next park load; Cancel or closing the window discards edits. Empty fields can be saved, but loading requires all three directories. Errors are displayed without closing Menu.
+
+Paths are saved per user in `%LOCALAPPDATA%\RCT3DViewer\game-paths.json` (the platform's local application data directory). Each path resolves independently in this order: **environment override > saved settings > optional working-directory `config.ini`**. Configuration shows the effective source and warns when an environment override supersedes an edited saved value. Relative data paths resolve from the application output directory. Paths are explicit settings of the embedded viewer instance, not inherited from the main game's OpenRCT2 configuration.
+
+The entry point accepts these environment variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `RCT3DVIEWER_OPENRCT2_DLL` | Full path to the OpenRCT2 adapter DLL. Defaults to `libopenrct2.dll` in the application output directory. |
-| `RCT3DVIEWER_OPENRCT2_DATA` | OpenRCT2 data directory. A relative path is resolved from the application output directory; the default is `openrct2-data`. |
-| `RCT3DVIEWER_RCT2_DATA` | RollerCoaster Tycoon 2 data directory. |
-| `RCT3DVIEWER_PARK` | Park/save file to load. |
+| `RCT3D_OPENRCT2_DLL` | Full path to the OpenRCT2 adapter DLL. Defaults to `libopenrct2.dll` in the application output directory. |
+| `RCT3D_OPENRCT2_DATA` | OpenRCT2 data directory, including its `object` subdirectory. |
+| `RCT3D_RCT1_PATH` | RollerCoaster Tycoon 1 installation directory. |
+| `RCT3D_RCT2_PATH` | RollerCoaster Tycoon 2 installation directory. |
+| `RCT3D_PARK` | Park/save file to load automatically after the initial Menu frame. |
 
 For example, set paths in PowerShell before launching:
 
 ```powershell
-$env:RCT3DVIEWER_OPENRCT2_DLL = 'D:\RCT3DViewer\OpenRCT2\bin-adapter\libopenrct2.dll'
-$env:RCT3DVIEWER_OPENRCT2_DATA = 'D:\RCT3DViewer\RCT3DViewer\bin\Debug\net10.0\openrct2-data'
-$env:RCT3DVIEWER_RCT2_DATA = 'D:\Games\RollerCoaster Tycoon 2'
-$env:RCT3DVIEWER_PARK = 'D:\Parks\MyPark.park'
+$env:RCT3D_OPENRCT2_DATA = 'D:\RCT3DViewer\RCT3DViewer\bin\Release\net10.0\openrct2-data'
+$env:RCT3D_RCT1_PATH = 'D:\Games\RollerCoaster Tycoon Deluxe'
+$env:RCT3D_RCT2_PATH = 'D:\Games\RollerCoaster Tycoon 2'
+$env:RCT3D_PARK = 'D:\Parks\MyPark.park'
 ```
 
-The application currently has developer-machine defaults for the RCT2 data directory and park path in `RCT3DViewer/Program.cs`; use the environment variables above when those defaults do not exist on your machine.
+`config.ini` uses the corresponding unprefixed keys, such as `RCT1_PATH`. INI paths use literal backslashes; they are not C# string literals. Graphics Options are shared between Menu and Park and remain persisted separately in `graphics-options.json`.
+
+Park loading displays progress in Menu and switches to **Park** only after successful scene upload. **Park > Return to Menu** fully unloads simulation and park GPU resources while keeping the window and device alive. A configured startup park is loaded only once, not every time you return to Menu. Loading another park serializes teardown and initialization; failures return to Menu for configuration or retry. Exit during loading waits for owned work to finish safely.
 
 ## Build and run
 
-From the repository root:
+From the repository root in a Visual Studio Developer PowerShell:
 
 ```powershell
-dotnet build RCT3DViewer.slnx
-dotnet run --project RCT3DViewer/RCT3DViewer.csproj
+MSBuild .\RCT3DViewer\RCT3D-Viewer.csproj /restore /p:Configuration=Release
+dotnet run --project .\RCT3DViewer\RCT3D-Viewer.csproj --configuration Release --no-build
 ```
 
-The build compiles the Slang shaders and copies the OpenRCT2 adapter, runtime data, and terrain textures to the application output directory. It specifically uses `OpenRCT2/bin-adapter/libopenrct2.dll`; it does not fall back to `OpenRCT2/bin/libopenrct2.dll`, which may be a regular or older OpenRCT2 build without the viewer's ABI 6 exports. Build the OpenRCT2 `libopenrct2` target with `src/rct3dviewer/Rct3DViewerAdapter.cpp` included, and place its ABI 6 DLL at that path before building the app. Alternatively, set `OpenRCT2AdapterDll` to the ABI 6 adapter DLL path:
+The application build compiles Slang shaders, builds only the base OpenRCT2 `libopenrct2.vcxproj` target, and copies the adapter, runtime data, and terrain textures to the application output directory. It does not build the full OpenRCT2 solution. The DLL must include the viewer adapter's ABI 6 exports. Alternatively, set `OpenRCT2AdapterDll` to an ABI-compatible adapter DLL path:
 
 ```powershell
-dotnet build RCT3DViewer.slnx -p:OpenRCT2AdapterDll="D:\path\to\libopenrct2.dll"
+MSBuild .\RCT3DViewer\RCT3D-Viewer.csproj /restore /p:Configuration=Release /p:OpenRCT2AdapterDll="D:\path\to\libopenrct2.dll"
 ```
 
 ## Controls
@@ -72,6 +79,9 @@ dotnet build RCT3DViewer.slnx -p:OpenRCT2AdapterDll="D:\path\to\libopenrct2.dll"
 - Hold the right mouse button and move the mouse to look around.
 - `W`, `A`, `S`, `D` to fly.
 - `Space` to move up; `Left Ctrl` to move down.
+- `F9` toggles simulation pause; `F3` toggles the debug overlay.
+- `P` toggles Peep Mode; `E` interacts with a ride entrance in Peep Mode.
+- Use **Park > Return to Menu** to unload the park. Park controls are inactive in Menu and while typing in UI fields.
 
 ## Current scope
 

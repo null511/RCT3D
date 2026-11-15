@@ -4,12 +4,17 @@ namespace RCT3D.Configuration;
 
 internal sealed class GraphicsOptionsStore
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions SerializerOptions = new() {
+        WriteIndented = true,
+    };
+
     private readonly string _settingsPath;
+
 
     public GraphicsOptionsStore()
     {
         var localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
         if (string.IsNullOrWhiteSpace(localApplicationData))
             throw new InvalidOperationException("The per-user application data directory is unavailable.");
 
@@ -39,12 +44,14 @@ internal sealed class GraphicsOptionsStore
     public void Save(GraphicsOptionsSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+
         if (!IsValid(settings))
             throw new ArgumentOutOfRangeException(nameof(settings));
 
         var directory = Path.GetDirectoryName(_settingsPath)!;
         Directory.CreateDirectory(directory);
         var temporaryPath = Path.Combine(directory, $"graphics-options-{Guid.NewGuid():N}.tmp");
+
         try {
             using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None)) {
                 JsonSerializer.Serialize(stream, settings, SerializerOptions);

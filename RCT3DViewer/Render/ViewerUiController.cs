@@ -1,4 +1,5 @@
 using ImGuiNET;
+using Microsoft.Extensions.Logging;
 using NativeFileDialogSharp;
 using RCT3D.Configuration;
 using RCT3D.Interop.Models;
@@ -8,6 +9,8 @@ namespace RCT3D.Render;
 
 internal sealed class ViewerUiController
 {
+    private readonly ILogger logger;
+
     private string? _loadedParkPath;
     private string? _parkLoadError;
     private string? _loadingParkPath;
@@ -38,41 +41,17 @@ internal sealed class ViewerUiController
     private float _supportsRenderDistance;
     private float _sceneryRenderDistance;
     private bool _shadowMappingEnabled = true;
-    private float _shadowRadius = ShadowRenderTargets.DefaultRadius;
-    private uint _appliedShadowResolution = ShadowRenderTargets.DefaultResolution;
-    private uint _selectedShadowResolution = ShadowRenderTargets.DefaultResolution;
+    private float _shadowRadius;// = ShadowRenderTargets.DefaultRadius;
+    private uint _appliedShadowResolution;// = ShadowRenderTargets.DefaultResolution;
+    private uint _selectedShadowResolution;// = ShadowRenderTargets.DefaultResolution;
     private string? _graphicsOptionsSaveError;
-    private GraphicsOptionsSettings _appliedGraphicsOptions = GraphicsOptionsSettings.Defaults;
+    private GraphicsOptionsSettings _appliedGraphicsOptions;// = GraphicsOptionsSettings.Defaults;
     private bool _editingGraphicsOptions;
-
-    private static readonly string[] DebugViewOptions = {
-        "None", "Albedo", "Geometry Normal", "Texture Normal", "Specular Roughness", "Specular Metalness", "Specular SSS", "Specular Emission"
-    };
-
-    private static readonly string[] ShadowResolutionOptions = { "512", "1024", "2048", "4096" };
-
-    public ViewerUiController(GraphicsOptionsSettings settings)
-    {
-        _taaEnabled = settings.TaaEnabled;
-        _debugView = settings.DebugView;
-        _fieldOfView = settings.FieldOfView;
-        _lookAheadDistance = settings.LookAheadDistance;
-        _sharpening = settings.Sharpening;
-        _mipBias = settings.MipBias;
-        _ridesRenderDistance = settings.RidesRenderDistance;
-        _supportsRenderDistance = settings.SupportsRenderDistance;
-        _sceneryRenderDistance = settings.SceneryRenderDistance;
-        _shadowMappingEnabled = settings.ShadowMappingEnabled;
-        _shadowRadius = settings.ShadowRadius;
-        _appliedShadowResolution = settings.ShadowResolution;
-        _selectedShadowResolution = settings.ShadowResolution;
-        _appliedGraphicsOptions = settings;
-    }
 
     //public float TimeOfDayHours => _timeOfDayHours;
     public float EffectiveTimeOfDayHours => _useGameTime && _gameTimeOfDayHours is float gameTime
-        ? gameTime
-        : _timeOfDayHours;
+        ? gameTime : _timeOfDayHours;
+
     public float AzimuthDegrees => _azimuthDegrees;
     public float ZenithDegrees => _zenithDegrees;
     public bool WireframeEnabled => _wireframeEnabled;
@@ -91,10 +70,42 @@ internal sealed class ViewerUiController
     //public string? LoadedParkPath => _loadedParkPath;
     //public bool HasParkLoadError => _parkLoadError is not null;
     public bool IsParkLoading => _isParkLoading;
+    public GraphicsOptionsSettings AppliedGraphicsOptions => _appliedGraphicsOptions;
 
     private bool HasPendingGraphicsOptions => CaptureGraphicsOptions() != _appliedGraphicsOptions
-        || _selectedShadowResolution != _appliedShadowResolution
-        || _graphicsOptionsSaveError is not null;
+                                              || _selectedShadowResolution != _appliedShadowResolution
+                                              || _graphicsOptionsSaveError is not null;
+
+    private static readonly string[] DebugViewOptions = {
+        "None", "Albedo", "Geometry Normal", "Texture Normal", "Specular Roughness", "Specular Metalness", "Specular SSS", "Specular Emission"
+    };
+
+    private static readonly string[] ShadowResolutionOptions = { "512", "1024", "2048", "4096" };
+
+
+    public ViewerUiController(
+        ILogger<ViewerUiController> logger,
+        GraphicsOptionsStore graphicsOptionsStore)
+    {
+        this.logger = logger;
+
+        var settings = graphicsOptionsStore.Load();
+
+        _taaEnabled = settings.TaaEnabled;
+        _debugView = settings.DebugView;
+        _fieldOfView = settings.FieldOfView;
+        _lookAheadDistance = settings.LookAheadDistance;
+        _sharpening = settings.Sharpening;
+        _mipBias = settings.MipBias;
+        _ridesRenderDistance = settings.RidesRenderDistance;
+        _supportsRenderDistance = settings.SupportsRenderDistance;
+        _sceneryRenderDistance = settings.SceneryRenderDistance;
+        _shadowMappingEnabled = settings.ShadowMappingEnabled;
+        _shadowRadius = settings.ShadowRadius;
+        _appliedShadowResolution = settings.ShadowResolution;
+        _selectedShadowResolution = settings.ShadowResolution;
+        _appliedGraphicsOptions = settings;
+    }
 
     private void BeginGraphicsOptionsEdit()
     {
@@ -135,6 +146,7 @@ internal sealed class ViewerUiController
             _graphicsOptionsSaveError = null;
         }
         catch (Exception ex) {
+            logger.LogError(ex, "Failed to save graphics options");
             _graphicsOptionsSaveError = ex.Message;
         }
     }
@@ -155,6 +167,23 @@ internal sealed class ViewerUiController
     };
 
     public void ToggleDebug() => _showDebug = !_showDebug;
+
+    public void CloseScreenWindows(Action<float> applyFieldOfView)
+    {
+        CancelGraphicsOptionsEdit(applyFieldOfView);
+        _showGraphicsOptions = false;
+        _showDebug = false;
+        _showSkyModal = false;
+        _gameTimeOfDayHours = null;
+    }
+
+    public void UnloadPark()
+    {
+        _loadedParkPath = null;
+        _loadingParkPath = null;
+        _isParkLoading = false;
+        _parkLoadStatus = string.Empty;
+    }
 
     public void BeginParkLoad(string parkPath)
     {
@@ -177,6 +206,8 @@ internal sealed class ViewerUiController
 
     public void ShowParkLoadError(string? message)
     {
+        logger.LogError("Viewer operation failed: {Message}", message);
+
         _isParkLoading = false;
         _loadingParkPath = null;
         _parkLoadStatus = string.Empty;
@@ -199,7 +230,7 @@ internal sealed class ViewerUiController
     public void BuildFrameUi(double deltaTime, double activeFrameTimeMilliseconds, float? gameTimeOfDayHours, bool? isPaused, int cameraTileX, int cameraTileY,
         int visibleSections, int totalSections,
         VisibilityQueryMetrics cameraVisibility, ReadOnlySpan<VisibilityQueryMetrics> shadowVisibility,
-        IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit,
+        IReadOnlyList<RCTTrackElementData> cameraTileTrackElements, Action<string> loadPark, Action togglePause, Action requestExit, Action returnToMenu,
         bool peepModeEnabled, string? peepModeStatus, Action togglePeepMode, Action<uint, float> applyShadowSettings,
         Action<float> applyFieldOfView, Action<GraphicsOptionsSettings> saveGraphicsOptions, bool wireframeAvailable = true)
     {
@@ -224,6 +255,8 @@ internal sealed class ViewerUiController
                     OpenParkPicker(loadPark);
                 if (ImGui.MenuItem("Pause", string.Empty, isPaused == true, isPaused.HasValue))
                     togglePause();
+                if (ImGui.MenuItem("Return to Menu", string.Empty, false, !_isParkLoading))
+                    returnToMenu();
                 if (ImGui.MenuItem("Exit"))
                     requestExit();
                 ImGui.EndMenu();
@@ -285,8 +318,39 @@ internal sealed class ViewerUiController
         if (peepModeEnabled || peepModeStatus is not null)
             DrawPeepModeOverlay(peepModeEnabled, peepModeStatus);
 
+        DrawCommonWindows(applyShadowSettings, applyFieldOfView, saveGraphicsOptions);
+    }
+
+    public void BuildMenuUi(Action<string> loadPark, Action showConfiguration, Action requestExit,
+        Action<uint, float> applyShadowSettings, Action<float> applyFieldOfView,
+        Action<GraphicsOptionsSettings> saveGraphicsOptions)
+    {
+        var viewport = ImGui.GetMainViewport();
+        ImGui.SetNextWindowPos(viewport.GetCenter(), ImGuiCond.Always, new Vector2(0.5f, 0.5f));
+        if (ImGui.Begin("RCT3DViewer", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse)) {
+            ImGui.BeginDisabled(_isParkLoading);
+            if (ImGui.Button("Load Park", new Vector2(240.0f, 0.0f)))
+                OpenParkPicker(loadPark);
+            if (ImGui.Button("Graphics Options", new Vector2(240.0f, 0.0f))) {
+                if (!_showGraphicsOptions)
+                    BeginGraphicsOptionsEdit();
+                _showGraphicsOptions = true;
+            }
+            if (ImGui.Button("Configuration", new Vector2(240.0f, 0.0f)))
+                showConfiguration();
+            ImGui.EndDisabled();
+            if (ImGui.Button("Exit", new Vector2(240.0f, 0.0f)))
+                requestExit();
+        }
+        ImGui.End();
+        DrawCommonWindows(applyShadowSettings, applyFieldOfView, saveGraphicsOptions);
+    }
+
+    private void DrawCommonWindows(Action<uint, float> applyShadowSettings, Action<float> applyFieldOfView,
+        Action<GraphicsOptionsSettings> saveGraphicsOptions)
+    {
         if (_showParkLoadError) {
-            var errorWindowVisible = ImGui.Begin("Park load error", ref _showParkLoadError, ImGuiWindowFlags.AlwaysAutoResize);
+            var errorWindowVisible = ImGui.Begin("Viewer error", ref _showParkLoadError, ImGuiWindowFlags.AlwaysAutoResize);
             if (errorWindowVisible) {
                 ImGui.TextWrapped(_parkLoadError ?? "The park could not be loaded.");
                 if (ImGui.Button("OK"))

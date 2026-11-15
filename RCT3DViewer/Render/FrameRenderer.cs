@@ -10,7 +10,7 @@ using System.Numerics;
 
 namespace RCT3D.Render;
 
-internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, ViewerUiController ui, FlightCamera camera)
+internal sealed unsafe class FrameRenderer(ParkRenderResources resources, ViewerUiController ui, FlightCamera camera)
 {
     private uint frameCounter;
     private Vector3 cameraPositionLast;
@@ -58,14 +58,6 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             taaHistoryValid = false;
             taaEnabledLastFrame = ui.TaaEnabled;
         }
-
-        Vk.ResetCommandBuffer(commandBuffer, 0);
-
-        CommandBufferBeginInfo beginInfo = new() {
-            SType = StructureType.CommandBufferBeginInfo,
-        };
-
-        Vk.BeginCommandBuffer(commandBuffer, in beginInfo);
 
         var extent = resources.SwapchainExtent;
         var deferredTargets = resources.DeferredTargets!;
@@ -462,37 +454,15 @@ internal sealed unsafe class FrameRenderer(VulkanRenderResources resources, View
             PipelineStageFlags.ComputeShaderBit, AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit,
             PipelineStageFlags.FragmentShaderBit, AccessFlags.ShaderReadBit);
 
-        clearValues[0] = new ClearValue {
-            Color = new ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
-        };
-
-        clearValues[1] = new ClearValue {
-            DepthStencil = new ClearDepthStencilValue {
-                Depth = 1.0f,
-                Stencil = 0,
-            },
-        };
-
-        RenderPassBeginInfo presentationRenderPassInfo = new() {
-            SType = StructureType.RenderPassBeginInfo,
-            RenderPass = resources.RenderPass,
-            Framebuffer = resources.Framebuffers[imageIndex],
-            RenderArea = new Rect2D(new Offset2D(0, 0), extent),
-            ClearValueCount = 2,
-            PClearValues = clearValues
-        };
-
-        Vk.CmdBeginRenderPass(commandBuffer, in presentationRenderPassInfo, SubpassContents.Inline);
-        Vk.CmdSetViewport(commandBuffer, 0, 1, &viewport);
-        Vk.CmdSetScissor(commandBuffer, 0, 1, &scissor);
-        deferredPassResources.Final.Draw(commandBuffer, 0, uniformDescriptorSet);
-        resources.ImGuiRenderer?.Render(commandBuffer, imageIndex);
-        Vk.CmdEndRenderPass(commandBuffer);
-        Vk.EndCommandBuffer(commandBuffer);
-
         cameraPositionCurrent = cameraPosition;
         viewRotationCurrent = viewRotation;
         projectionCurrent = projection;
+    }
+
+    public void DrawPresentation(CommandBuffer commandBuffer, uint currentFrame)
+    {
+        var uniformDescriptorSet = resources.UniformBufferResources!.GetDescriptorSet(currentFrame);
+        resources.DeferredPassResources!.Final.Draw(commandBuffer, 0, uniformDescriptorSet);
     }
 
     public void FrameSubmitted()

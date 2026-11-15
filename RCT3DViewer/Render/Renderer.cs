@@ -1,66 +1,40 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using RCT3D.Configuration;
-using RCT3D.Render.Paths;
-using RCT3D.Render.Paths.Meshing;
-using RCT3D.Render.Rides;
-using RCT3D.Render.Scenery;
-using RCT3D.Render.Terrain;
-using RCT3D.Simulation;
-using Serilog;
+using RCT3D.Interop;
 using Silk.NET.Maths;
+using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 
 namespace RCT3D.Render;
 
-public sealed class Renderer : IDisposable
+internal sealed class Renderer : IDisposable
 {
+    private readonly ILogger<Renderer> logger;
+    private readonly IServiceProvider provider;
+    private readonly GraphicsOptionsStore graphicsOptionsStore;
+
     private IWindow? window;
     private VulkanRenderResources? renderResources;
-
-    private readonly GraphicsOptionsStore graphicsOptionsStore = new();
     private ViewerUiController ui = null!;
-    private readonly FlightCamera camera = new();
-
-    private VulkanDeviceContext? deviceContext => renderResources?.DeviceContext;
-    private ImGuiVulkanRenderer? imguiRenderer => renderResources?.ImGuiRenderer;
     private ViewerInputController? inputController;
-    private FrameRenderer? frameRenderer;
     private FrameCoordinator? frameCoordinator;
-    private ParkSceneController? parkScene;
-    private PeepModeController? peepMode;
-    private SimulationBridge? simulation;
+    private MenuScreen? menuScreen;
+    private IViewerScreen? activeScreen;
+    private ParkScreen? pendingPark;
+    private Task<ParkStartupData>? startupTask;
+    private string? loadingParkPath;
+    private string? requestedParkPath;
+    private bool menuRequested;
     private bool framebufferResized;
     private bool exitRequested;
+    private bool initialFrameSubmitted;
+    private bool startupParkHandled;
+    private bool isDisposed;
     private double currentDeltaTime;
 
-    private readonly Action<double> prepareFrame;
-    private readonly Action<Silk.NET.Vulkan.CommandBuffer, uint, uint> recordFrame;
-    private readonly Action<uint> updateVehicleInstances;
-    private readonly Action frameSubmitted;
-    private readonly Action<bool> swapchainRecreated;
-    private readonly Action<string> loadPark;
-    private readonly Action togglePause;
-    private readonly Action requestExit;
-    private readonly Action togglePeepMode;
-    private readonly Action<uint, float> applyShadowSettings;
-    private readonly Action<float> applyFieldOfView;
-    private readonly Action<GraphicsOptionsSettings> saveGraphicsOptions;
-
-    public Renderer()
-    {
-        prepareFrame = PrepareFrame;
-        recordFrame = RecordFrame;
-        updateVehicleInstances = UpdateVehicleInstances;
-        frameSubmitted = OnFrameSubmitted;
-        swapchainRecreated = OnSwapchainRecreated;
-        loadPark = LoadPark;
-        togglePause = TogglePause;
-        requestExit = RequestExit;
-        togglePeepMode = TogglePeepMode;
-        applyShadowSettings = ApplyShadowSettings;
-        applyFieldOfView = ApplyFieldOfView;
-        saveGraphicsOptions = graphicsOptionsStore.Save;
-    }
-
+    public string? ConfigurationError { get; set; }
     public string? LibraryPath { get; set; }
     public string? OpenRCT2Path { get; set; }
     public string? Rct2Path { get; set; }
@@ -69,11 +43,30 @@ public sealed class Renderer : IDisposable
     public float TerrainSkirtFloor { get; set; } = -24.0f;
 
 
+    public Renderer(
+        ILogger<Renderer> logger,
+        IServiceProvider provider,
+        IConfiguration configuration,
+        GraphicsOptionsStore graphicsOptionsStore)
+    {
+        this.logger = logger;
+        this.provider = provider;
+        this.graphicsOptionsStore = graphicsOptionsStore;
+
+        //ConfigurationError = configurationError;
+        LibraryPath = configuration["OPENRCT2_DLL"] ?? LibOpenRCT2.DefaultLibraryPath;
+        StartupPark = configuration["PARK"];
+
+        OpenRCT2Path = configuration["OPENRCT2_DATA"];
+        Rct2Path = configuration["RCT2_PATH"];
+        Rct1Path = configuration["RCT1_PATH"];
+    }
+
     public void Run()
     {
         var options = WindowOptions.DefaultVulkan;
         options.Size = new Vector2D<int>(1280, 720);
-        options.Title = "RCT Cross-Platform 3D Real-Time Viewer";
+        options.Title = "RCT3D Viewer";
 
         window = Window.Create(options);
         window.FramebufferResize += _ => {
@@ -98,171 +91,239 @@ public sealed class Renderer : IDisposable
 
     public void Initialize()
     {
-        var graphicsOptions = graphicsOptionsStore.Load();
-        camera.FieldOfViewDegrees = graphicsOptions.FieldOfView;
-        ui = new ViewerUiController(graphicsOptions);
+        ui = provider.GetRequiredService<ViewerUiController>();
 
-        if (string.IsNullOrEmpty(OpenRCT2Path))
-            throw new InvalidOperationException("OpenRCT2Path is undefined!");
+        logger.LogInformation("Initializing graphics subsystems via Silk.NET Vulkan");
 
-        if (string.IsNullOrEmpty(Rct2Path))
-            throw new InvalidOperationException("Rct2Path is undefined!");
-
-        if (string.IsNullOrEmpty(Rct1Path))
-            throw new InvalidOperationException("Rct1Path is undefined! Set RCT3DVIEWER_RCT1_DATA to the RCT1 data directory.");
-        
-        if (string.IsNullOrEmpty(LibraryPath))
-            throw new InvalidOperationException("LibraryPath is undefined!");
-
-        TerrainMaterialLibrary? terrainMaterials;
-        PathMaterialLibrary? pathMaterials;
-        PathAccessoryAssetLibrary? pathAccessoryAssets;
-        TreeSceneryAssetLibrary? treeSceneryAssets;
-
-        try {
-            if (!Path.IsPathRooted(OpenRCT2Path))
-                OpenRCT2Path = Path.Combine(AppContext.BaseDirectory, OpenRCT2Path);
-
-            RideVehicleDefinitions.Initialize(OpenRCT2Path);
-            simulation = new SimulationBridge(LibraryPath, OpenRCT2Path, Rct2Path, Rct1Path);
-
-            var textureRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Textures");
-            var missingTexturePath = Path.Combine(textureRoot, "missing.png");
-            terrainMaterials = TerrainMaterialLibrary.Load(textureRoot, null, missingTexturePath);
-            pathMaterials = PathMaterialLibrary.Load(textureRoot, missingTexturePath);
-
-            pathAccessoryAssets = PathAccessoryAssetLibrary.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Models"));
-            var modelRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Models");
-            treeSceneryAssets = TreeSceneryAssetLibrary.Load(modelRoot, Path.Combine(textureRoot, "tree"));
-        }
-        catch (Exception ex) {
-            simulation?.Dispose();
-            simulation = null;
-
-            throw new InvalidOperationException("Failed to initialize OpenRCT2!", ex);
-        }
-
-        Log.Information("Initializing graphics subsystems via Silk.NET Vulkan");
-        renderResources = new VulkanRenderResources(window!, terrainMaterials, pathMaterials, pathAccessoryAssets,
-            treeSceneryAssets, graphicsOptions);
-        frameRenderer = new FrameRenderer(renderResources, ui, camera);
+        renderResources = new VulkanRenderResources(window!);
         frameCoordinator = new FrameCoordinator(window!, renderResources);
-        parkScene = new ParkSceneController(simulation!, renderResources, ui, camera, frameRenderer);
-        simulation = null;
+        inputController = new ViewerInputController(window!);
+
+        //var configuration = Configuration ?? new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+        //    ["RCT1_PATH"] = Rct1Path,
+        //    ["RCT2_PATH"] = Rct2Path,
+        //    ["OPENRCT2_DATA"] = OpenRCT2Path
+        //}).Build();
+
+        menuScreen = provider.GetRequiredService<MenuScreen>();
+        menuScreen.LoadPark = LoadPark;
+        menuScreen.RequestExit = RequestExit;
+
+        activeScreen = menuScreen;
+
+        if (ConfigurationError is not null)
+            ui.ShowParkLoadError(ConfigurationError);
 
         if (framebufferResized) {
             frameCoordinator.MarkFramebufferResized();
             framebufferResized = false;
         }
 
-        SetupInputs();
-
-        Log.Information("Vulkan engine pipeline is operational");
-        Log.Information("Hold down RIGHT-MOUSE BUTTON to look around. Use W,A,S,D to fly. Press F9 to toggle simulation pause.");
-
-        var startupParkPath = StartupPark;
-        if (!string.IsNullOrWhiteSpace(startupParkPath))
-            parkScene.LoadPark(startupParkPath, TerrainSkirtFloor);
-    }
-
-    private void SetupInputs()
-    {
-        peepMode = new PeepModeController(camera, parkScene!);
-        inputController = new ViewerInputController(window!, camera, peepMode,
-            () => imguiRenderer?.WantCaptureMouse ?? false, () => parkScene?.TogglePause(), ui.ToggleDebug);
-    }
-
-    private void ApplyShadowSettings(uint resolution, float radius)
-    {
-        var currentResolution = renderResources!.DeferredTargets!.ShadowTargets!.Resolution;
-        renderResources.ApplyShadowSettings(resolution, radius);
-
-        if (currentResolution != resolution)
-            frameRenderer!.InvalidateShadowMap();
+        logger.LogInformation("Vulkan engine pipeline is operational; Menu is active");
     }
 
     private void OnUpdateFrame(double deltaTime)
     {
-        if (exitRequested) {
-            exitRequested = false;
-            window?.Close();
-            return;
-        }
-
-        inputController?.Update(deltaTime, imguiRenderer);
+        inputController?.Update();
+        activeScreen?.Update(deltaTime);
     }
 
     private void OnRenderFrame(double deltaTime)
     {
-        if (parkScene == null) return;
+        if (activeScreen is null || isDisposed) return;
+
+        if (exitRequested) {
+            window?.Close();
+            return;
+        }
+
+        ProcessTransitions();
+        ProcessLoading();
+
+        try {
+            activeScreen.BeforeRender();
+        }
+        catch (Exception ex) {
+            FailParkLoad(ex);
+        }
 
         currentDeltaTime = deltaTime;
-        frameCoordinator!.RenderFrame(deltaTime, prepareFrame, recordFrame, frameSubmitted, swapchainRecreated);
+        frameCoordinator!.RenderFrame(deltaTime, PrepareFrame, RecordFrame, OnFrameSubmitted, OnSwapchainRecreated, DrawPresentation);
     }
 
-    private void PrepareFrame(double activeFrameTimeMilliseconds)
+    private void ProcessTransitions()
     {
-        parkScene!.Update();
-        peepMode!.UpdateRideCamera(ui.LookAheadDistance);
+        if (!startupParkHandled && initialFrameSubmitted) {
+            startupParkHandled = true;
 
-        var cameraTileX = (int)MathF.Floor(camera.Position.X / WorldUnits.TileSize);
-        var cameraTileY = (int)MathF.Floor(camera.Position.Z / WorldUnits.TileSize);
-        var sectionMetrics = frameRenderer!.SectionMetrics;
+            if (requestedParkPath is null && !string.IsNullOrWhiteSpace(StartupPark))
+                requestedParkPath = StartupPark;
+        }
 
-        ui.BuildFrameUi(currentDeltaTime, activeFrameTimeMilliseconds, parkScene.GameTimeOfDayHours, parkScene.IsPaused,
-            cameraTileX, cameraTileY, sectionMetrics.Visible, sectionMetrics.Total,
-            frameRenderer.CameraVisibilityMetrics, frameRenderer.ShadowVisibilityMetrics,
-            parkScene.GetTrackElementsAtTile(cameraTileX, cameraTileY),
-            loadPark, togglePause, requestExit, peepMode!.IsEnabled, peepMode.StatusMessage, togglePeepMode,
-            applyShadowSettings, applyFieldOfView, saveGraphicsOptions, deviceContext!.SupportsWireframe);
+        if (menuRequested) {
+            menuRequested = false;
+
+            try {
+                UnloadPark();
+            }
+            catch (Exception ex) {
+                FailParkLoad(ex);
+            }
+        }
+
+        if (requestedParkPath is not { } parkPath) return;
+        requestedParkPath = null;
+
+        try {
+            UnloadPark();
+
+            menuScreen!.CloseWindows();
+            loadingParkPath = parkPath;
+            ui.BeginParkLoad(parkPath);
+            ui.SetParkLoadStatus("Initializing OpenRCT2 and park rendering assets...");
+            startupTask = ParkScreen.StartAsync(menuScreen.EffectivePaths, LibraryPath ?? LibOpenRCT2.DefaultLibraryPath);
+        }
+        catch (Exception ex) {
+            FailParkLoad(ex);
+        }
     }
 
-    private void RecordFrame(Silk.NET.Vulkan.CommandBuffer commandBuffer, uint imageIndex, uint currentFrame) =>
-        frameRenderer!.Record(commandBuffer, imageIndex, currentFrame,
-            parkScene!.TerrainMesh, parkScene.PathMesh, parkScene.WaterMesh, parkScene.TrackMesh, parkScene.RideSupportMesh,
-            parkScene.RideEntranceExitMesh, parkScene.RenderRegions, updateVehicleInstances);
+    private void ProcessLoading()
+    {
+        try {
+            if (startupTask is { IsCompleted: true } completed) {
+                startupTask = null;
+                var startup = completed.GetAwaiter().GetResult();
 
-    private void UpdateVehicleInstances(uint currentFrame) => parkScene!.UpdateVehicleCubeInstances(currentFrame);
+                try {
+                    pendingPark = new ParkScreen(
+                        graphicsOptionsStore, ui,
+                        renderResources!, startup, LoadPark, RequestExit, ReturnToMenu);
+                }
+                catch {
+                    startup.Dispose();
+                    throw;
+                }
 
-    private void OnFrameSubmitted() => frameRenderer!.FrameSubmitted();
+                pendingPark.Load(loadingParkPath!, TerrainSkirtFloor);
+            }
 
-    private void OnSwapchainRecreated(bool extentChanged) => frameRenderer!.ResetForSwapchain(extentChanged);
+            if (pendingPark is not { } park) return;
 
-    private void LoadPark(string parkPath) => parkScene!.LoadPark(parkPath, TerrainSkirtFloor);
+            park.BeforeRender();
+            if (park.LoadError is { } error)
+                throw new InvalidOperationException(error);
 
-    private void TogglePause() => parkScene!.TogglePause();
+            if (!park.IsReady) return;
+            park.Activate(inputController!.Input, renderResources!.ImGuiRenderer!);
+
+            activeScreen = park;
+            pendingPark = null;
+            loadingParkPath = null;
+            logger.LogInformation("Park screen is active");
+        }
+        catch (Exception ex) {
+            FailParkLoad(ex);
+        }
+    }
+
+    private void FailParkLoad(Exception failure)
+    {
+        logger.LogError(failure, "Park session failed");
+
+        try {
+            UnloadPark();
+        }
+        catch (Exception cleanupError) {
+            logger.LogError(cleanupError, "Failed to unload the park after an error");
+            failure = new AggregateException(failure, cleanupError);
+        }
+
+        ui.ShowParkLoadError(failure.Message);
+    }
+
+    private void UnloadPark()
+    {
+        var previous = activeScreen;
+        activeScreen = menuScreen;
+
+        try {
+            if (previous is not null && previous != menuScreen)
+                previous.Dispose();
+        }
+        finally {
+            var pending = pendingPark;
+            pendingPark = null;
+
+            try {
+                pending?.Dispose();
+            }
+            finally {
+                try {
+                    if (startupTask is { } task) {
+                        startupTask = null;
+                        task.GetAwaiter().GetResult().Dispose();
+                    }
+                }
+                finally {
+                    loadingParkPath = null;
+                    ui.UnloadPark();
+                }
+            }
+        }
+    }
+
+    private void PrepareFrame(double activeFrameTimeMilliseconds) => activeScreen!.PrepareFrame(currentDeltaTime, activeFrameTimeMilliseconds);
+    private void RecordFrame(CommandBuffer commandBuffer, uint imageIndex, uint currentFrame) => activeScreen!.Record(commandBuffer, imageIndex, currentFrame);
+    private void DrawPresentation(CommandBuffer commandBuffer, uint currentFrame) => activeScreen!.DrawPresentation(commandBuffer, currentFrame);
+    
+    private void OnFrameSubmitted()
+    {
+        initialFrameSubmitted = true;
+        activeScreen!.FrameSubmitted();
+    }
+
+    private void OnSwapchainRecreated(bool extentChanged)
+    {
+        activeScreen!.Resize(extentChanged);
+        pendingPark?.Resize(extentChanged);
+    }
+
+    private void LoadPark(string parkPath)
+    {
+        if (ui.IsParkLoading || requestedParkPath is not null) return;
+        requestedParkPath = parkPath;
+    }
 
     private void RequestExit() => exitRequested = true;
-
-    private void TogglePeepMode() => peepMode!.Toggle();
-
-    private void ApplyFieldOfView(float fieldOfView) => camera.FieldOfViewDegrees = fieldOfView;
-
-    private void OnEngineShutdown() => Dispose();
+    private void ReturnToMenu() => menuRequested = true;
+    private void OnEngineShutdown() => exitRequested = true;
 
     public void Dispose()
     {
-        peepMode?.Exit();
-        peepMode = null;
-
-        parkScene?.Dispose();
-        parkScene = null;
-
-        inputController?.Dispose();
-        inputController = null;
-
-        var _renderResources = renderResources;
-        renderResources = null;
-        _renderResources?.Dispose();
-
-        var _simulation = simulation;
-        simulation = null;
+        if (isDisposed) return;
+        isDisposed = true;
 
         try {
-            _simulation?.Dispose();
+            UnloadPark();
         }
         catch (Exception ex) {
-            Log.Error(ex, "Failed to shut down OpenRCT2");
+            logger.LogError(ex, "Failed to shut down the park session");
+        }
+        finally {
+            try {
+                inputController?.Dispose();
+                inputController = null;
+                menuScreen?.Dispose();
+                menuScreen = null;
+                activeScreen = null;
+            }
+            finally {
+                renderResources?.Dispose();
+                renderResources = null;
+                window?.Dispose();
+                window = null;
+            }
         }
     }
 }

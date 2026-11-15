@@ -16,7 +16,7 @@ namespace RCT3D.Render;
 
 internal sealed class ParkSceneController(
     SimulationBridge simulation,
-    VulkanRenderResources resources,
+    ParkRenderResources resources,
     ViewerUiController ui,
     FlightCamera camera,
     FrameRenderer frameRenderer) : IDisposable
@@ -59,6 +59,8 @@ internal sealed class ParkSceneController(
     internal SimulationBridge Simulation => simulation;
     public float? GameTimeOfDayHours => simulation.GameTimeOfDayHours;
     public bool? IsPaused => simulation.IsPaused;
+    public bool IsReady { get; private set; }
+    public string? LoadError { get; private set; }
 
     public void TogglePause() => simulation.TogglePause();
 
@@ -82,8 +84,11 @@ internal sealed class ParkSceneController(
 
     public void LoadPark(string parkPath, float terrainSkirtFloor)
     {
-        if (ui.IsParkLoading || parkLoadTask is not null || pendingParkLoadResult is not null) return;
+        if (parkLoadTask is not null || pendingParkLoadResult is not null)
+            throw new InvalidOperationException("A park load is already in progress.");
 
+        IsReady = false;
+        LoadError = null;
         ResetVehicleState();
         vehiclePalette = [];
         treeSceneryMeshBuilder.ClearCaches();
@@ -237,6 +242,7 @@ internal sealed class ParkSceneController(
                 pendingParkLoadResult = null;
 
                 ui.CompleteParkLoad(result.ParkPath);
+                IsReady = true;
             }
             catch (Exception ex) {
                 ClearParkState($"Failed to upload meshes for '{result.ParkPath}': {ex.Message}");
@@ -251,6 +257,7 @@ internal sealed class ParkSceneController(
 
     private void ClearParkState(string failure)
     {
+        IsReady = false;
         TerrainMesh = null;
         PathMesh = null;
         WaterMesh = null;
@@ -297,6 +304,7 @@ internal sealed class ParkSceneController(
         }
 
         ui.ClearParkAfterLoadFailure(failure);
+        LoadError = failure;
     }
 
     private void RebuildRenderRegions()
@@ -488,20 +496,15 @@ internal sealed class ParkSceneController(
         try {
             parkLoadTask?.GetAwaiter().GetResult();
         }
-        catch {
-            // ignore
+        catch (Exception ex) {
+            Log.Error(ex, "Park loading failed during shutdown");
         }
 
         parkLoadTask = null;
         pendingParkLoadResult = null;
         ResetVehicleState();
 
-        try {
-            simulation.Dispose();
-        }
-        catch (Exception ex) {
-            Log.Error(ex, "Failed to shut down OpenRCT2");
-        }
+        simulation.Dispose();
     }
 
     private sealed record ParkLoadResult(
