@@ -76,11 +76,6 @@
     </None>
   </ItemGroup>
 
-  <Target Name="RemoveRetiredVehicleDefinition" BeforeTargets="CopyFilesToOutputDirectory;Publish">
-    <Delete Files="$(OutDir)Rides\Vehicles\MonsterTrucks.json" />
-    <Delete Files="$(PublishDir)Rides\Vehicles\MonsterTrucks.json" Condition="'$(PublishDir)' != ''" />
-  </Target>
-
   <Target Name="CopyOpenRCT2RuntimeData" BeforeTargets="AssignTargetPaths">
     <ItemGroup>
       <Content Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\language\**\*" Link="openrct2-data\language\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

@@ -6,8 +6,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <OpenRCT2AdapterDll Condition="'$(OpenRCT2AdapterDll)' == ''">$(MSBuildProjectDirectory)\..\OpenRCT2\bin\x64\libopenrct2.dll</OpenRCT2AdapterDll>
     <RootNamespace>RCT3D</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <OpenRCT2LibraryName Condition="$([MSBuild]::IsOSPlatform('Windows'))">libopenrct2.dll</OpenRCT2LibraryName>
+    <OpenRCT2LibraryName Condition="$([MSBuild]::IsOSPlatform('Linux'))">libopenrct2.so</OpenRCT2LibraryName>
+    <OpenRCT2AdapterDll Condition="'$(OpenRCT2AdapterDll)' == ''">$(MSBuildProjectDirectory)\..\OpenRCT2\bin\x64\$(OpenRCT2LibraryName)</OpenRCT2AdapterDll>
+    <OpenRCT2AdapterPdb>$([System.IO.Path]::ChangeExtension('$(OpenRCT2AdapterDll)', '.pdb'))</OpenRCT2AdapterPdb>
+    <BuildNativeAdapter Condition="'$(BuildNativeAdapter)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">true</BuildNativeAdapter>
+    <!--<OpenRCT2RuntimeDataDirectory Condition="'$(OpenRCT2RuntimeDataDirectory)' == ''">$(MSBuildProjectDirectory)\..\OpenRCT2\bin-adapter\data</OpenRCT2RuntimeDataDirectory>-->
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,7 +33,6 @@
     <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Input" Version="2.23.0" />
-    <PackageReference Include="Slangc.NET" Version="2026.14.1" />
     <PackageReference Include="StbImageSharp" Version="2.30.15" />
   </ItemGroup>
 
@@ -41,23 +48,23 @@
   </Target>
 
   <Target Name="ValidateOpenRCT2AdapterDll" BeforeTargets="BeforeBuild">
-    <Error Condition="!Exists('$(OpenRCT2AdapterDll)')" Text="OpenRCT2 adapter DLL not found at '$(OpenRCT2AdapterDll)'. Build the OpenRCT2 RCT3DViewer adapter or set OpenRCT2AdapterDll to its ABI-compatible DLL path." />
+    <Error Condition="'$(OpenRCT2LibraryName)' == ''" Text="This build supports Windows and Linux only." />
+    <Error Condition="!Exists('$(OpenRCT2AdapterDll)')" Text="OpenRCT2 adapter not found at '$(OpenRCT2AdapterDll)'. Build the base native library or set OpenRCT2AdapterDll to its ABI-compatible library path." />
   </Target>
 
-  <Target Name="BuildOpenRCT2Adapter" BeforeTargets="ValidateOpenRCT2AdapterDll">
+  <Target Name="BuildOpenRCT2Adapter" BeforeTargets="ValidateOpenRCT2AdapterDll" Condition="'$(BuildNativeAdapter)' == 'true'">
     <Exec Command="&quot;$(MSBuildBinPath)\MSBuild.exe&quot; &quot;$(MSBuildProjectDirectory)\..\OpenRCT2\src\openrct2\libopenrct2.vcxproj&quot; /t:Build /p:Configuration=$(Configuration) /p:Platform=x64 /p:OutDir=&quot;$(MSBuildProjectDirectory)\..\OpenRCT2\bin\x64/&quot; /m" />
   </Target>
 
   <ItemGroup>
     <UpToDateCheckInput Include="..\OpenRCT2\src\rct3dviewer\*.cpp;..\OpenRCT2\src\rct3dviewer\*.h" Set="OpenRCT2Adapter" />
     <UpToDateCheckOutput Include="$(OpenRCT2AdapterDll)" Set="OpenRCT2Adapter" />
-    <None Include="$(OpenRCT2AdapterDll)" Link="libopenrct2.dll">
+    <None Include="$(OpenRCT2AdapterDll)" Link="$(OpenRCT2LibraryName)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="RCT3DViewer.csproj" />
-    <None Update="$(OpenRCT2AdapterDll)" TargetPath="libopenrct2.dll" />
-    <None Include="$([System.IO.Path]::ChangeExtension('$(OpenRCT2AdapterDll)', '.pdb'))" Link="libopenrct2.pdb">
+    <None Include="$(OpenRCT2AdapterPdb)" Link="libopenrct2.pdb" Condition="Exists('$(OpenRCT2AdapterPdb)')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
     <None Update="$([System.IO.Path]::ChangeExtension('$(OpenRCT2AdapterDll)', '.pdb'))" TargetPath="libopenrct2.pdb" />
     <Content Include="Assets\**\*">
@@ -69,12 +76,16 @@
     </None>
   </ItemGroup>
 
-  <Target Name="RemoveRetiredVehicleDefinition" BeforeTargets="CopyFilesToOutputDirectory;Publish">
-    <Delete Files="$(OutDir)Rides\Vehicles\MonsterTrucks.json" />
-    <Delete Files="$(PublishDir)Rides\Vehicles\MonsterTrucks.json" Condition="'$(PublishDir)' != ''" />
-  </Target>
+  <!--<Target Name="CopyOpenRCT2RuntimeData" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <Content Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\language\**\*" Link="openrct2-data\language\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <Content Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\scenario_patches\**\*" Link="openrct2-data\scenario_patches\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <Content Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\shaders\**\*" Link="openrct2-data\shaders\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <Content Include="$(OpenRCT2RuntimeDataDirectory)\**\*" Link="openrct2-data\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>-->
 
-  <Target Name="CopyOpenRCT2RuntimeData" AfterTargets="Build">
+  <!--<Target Name="CopyOpenRCT2RuntimeData" AfterTargets="Build">
     <ItemGroup>
       <OpenRCT2Language Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\language\**\*" />
       <OpenRCT2ScenarioPatches Include="$(MSBuildProjectDirectory)\..\OpenRCT2\data\scenario_patches\**\*" />
@@ -87,6 +98,6 @@
     <Copy SourceFiles="@(OpenRCT2Shaders)" DestinationFiles="@(OpenRCT2Shaders->'$(OutDir)openrct2-data\shaders\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(OpenRCT2Objects)" DestinationFiles="@(OpenRCT2Objects->'$(OutDir)openrct2-data\object\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(OpenRCT2Sequences)" DestinationFiles="@(OpenRCT2Sequences->'$(OutDir)openrct2-data\sequence\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-  </Target>
+  </Target>-->
 
 </Project>
