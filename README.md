@@ -11,8 +11,8 @@ RCT3DViewer is an experimental real-time 3D viewer for RollerCoaster Tycoon 1/2 
 ## Requirements
 
 - .NET 10 SDK.
-- Vulkan-capable graphics hardware and a Vulkan runtime/driver.
 - Git with submodule support.
+- Vulkan-capable graphics hardware and a Vulkan runtime/driver.
 - The OpenRCT2 adapter DLL at `OpenRCT2\bin\x64\libopenrct2.dll` for the currently configured Windows build. The application project copies it to the application output as `libopenrct2.dll`.
 - Valid OpenRCT2, RollerCoaster Tycoon 1, and RollerCoaster Tycoon 2 data directories, plus a park file supported by OpenRCT2, to enter the Park screen. Menu does not require game data or native initialization.
 

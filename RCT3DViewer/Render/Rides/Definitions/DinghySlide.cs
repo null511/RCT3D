@@ -23,12 +23,6 @@ internal sealed class DinghySlide : RideDefinition
         SupportTrackOffset = -1.25f;
 
         StationBuilder = new DefaultTrackStationBuilder();
-
-        //Vehicles = new RideVehicleDefinition {
-        //    Size = new Vector3(0.86f, 0.42f, 1.8f),
-        //    WorldOffset =  1.0f,
-        //    LocalOffset = -0.9f,
-        //};
     }
 
     protected override TrackPart GetTrackShape(RCTTrackElementData track)
@@ -42,7 +36,47 @@ internal sealed class DinghySlide : RideDefinition
                 shape.Specular = new TrackRailSpecularData(80, 0);
             });
 
-            // TODO: left and right edges
+            var bedTop = -0.5f;
+
+            // bed top
+            part.RailProfiles.Add(new TrackRailProfileShape([
+                new Vector2( 0.9f, bedTop),
+                new Vector2( 0.7f, -1.15f),
+                new Vector2(-0.7f, -1.15f),
+                new Vector2(-0.9f, bedTop),
+            ], false) {
+                Swatch = TrackRailSwatch.Alternate,
+                Specular = paintSpecular,
+            });
+
+            // TODO: bed bottom
+            part.RailProfiles.Add(new TrackRailProfileShape([
+                new Vector2(-0.9f - TubeThickness, bedTop),
+                new Vector2(-0.7f - TubeThickness, -1.15f - TubeThickness),
+                new Vector2( 0.7f + TubeThickness, -1.15f - TubeThickness),
+                new Vector2( 0.9f + TubeThickness, bedTop),
+            ], false) {
+                Swatch = TrackRailSwatch.Main,
+                Specular = paintSpecular,
+            });
+
+            // left
+            part.RailProfiles.Add(new TrackRailProfileShape([
+                new Vector2(-0.9f, bedTop),
+                new Vector2(-0.9f - TubeThickness, bedTop),
+            ], false) {
+                Swatch = TrackRailSwatch.Main,
+                Specular = paintSpecular,
+            });
+
+            // right
+            part.RailProfiles.Add(new TrackRailProfileShape([
+                new Vector2( 0.9f + TubeThickness, bedTop),
+                new Vector2( 0.9f, bedTop),
+            ], false) {
+                Swatch = TrackRailSwatch.Main,
+                Specular = paintSpecular,
+            });
         }
         else if (track.Part.IsCovered()) {
             FullTube(part);

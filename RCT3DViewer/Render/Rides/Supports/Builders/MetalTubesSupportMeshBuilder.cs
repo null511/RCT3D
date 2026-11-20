@@ -7,12 +7,12 @@ namespace RCT3D.Render.Rides.Supports.Builders;
 internal sealed class MetalTubesSupportMeshBuilder : IRideSupportMeshBuilder
 {
     private const int PillarSideCount = 6;
-    private const float FootingHalfWidth = 0.20f;
-    private const float FootingHalfHeight = 0.24f;
-    private const float PlateHalfWidth = 0.13f;
+    private const float PlateHalfWidth = 0.23f;
     private const float PlateHalfHeight = 0.025f;
-    private const float PillarRadius = 0.10f;
+    private const float PillarRadius = 0.20f;
     private const float PillarTopOffset = 0.08f;
+    private const float FootingHalfWidth = 0.40f;
+    private const float FootingHalfHeight = 0.24f;
     private const float SupportSurfaceOffset = -0.2f;
 
     private static readonly TrackRailSpecularData supportSpecular = new(150, 190);
