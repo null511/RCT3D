@@ -29,13 +29,14 @@ internal sealed class ParkSceneController(
     private readonly TunnelLayoutBuilder tunnelLayoutBuilder = new();
     private readonly RideEntranceExitMeshBuilder rideEntranceExitMeshBuilder = new();
     private readonly VehiclePoseResolver vehiclePoseResolver = new();
-    private readonly VehicleCubeRenderer vehicleCubeRenderer = new();
+    private readonly VehicleRenderer vehicleRenderer = new();
 
     private Func<ushort, bool>? usesSmoothMovement;
     private TryGetCenterlinePoseDelegate? tryGetCenterlinePose;
 
     private Task<ParkLoadResult>? parkLoadTask;
     private ParkLoadResult? pendingParkLoadResult;
+    private Task<VehicleModel[]>? vehicleModelLoadTask;
     private string parkLoadProgress = string.Empty;
     private int loadedMapWidth;
     private int loadedMapHeight;
@@ -88,6 +89,7 @@ internal sealed class ParkSceneController(
         if (parkLoadTask is not null || pendingParkLoadResult is not null)
             throw new InvalidOperationException("A park load is already in progress.");
 
+        CompleteVehicleModelLoad(upload: false);
         IsReady = false;
         LoadError = null;
         ResetVehicleState();
@@ -102,6 +104,7 @@ internal sealed class ParkSceneController(
     {
         try {
             var snapshot = await simulation.LoadParkAsync(parkPath, progress => Volatile.Write(ref parkLoadProgress, progress));
+            var vehicles = simulation.VehicleSnapshots?.Current.Vehicles ?? ReadOnlyMemory<RCTVehicleData>.Empty;
             Volatile.Write(ref parkLoadProgress, "Generating terrain, tunnel, water, path, accessory, tree, track, support, and station meshes...");
 
             var meshData = await Task.Run(() => {
@@ -121,6 +124,10 @@ internal sealed class ParkSceneController(
                     PathAccessories: pathAccessoryMeshBuilder.Build(snapshot.PathData, snapshot.Width, snapshot.Height),
                     Trees: treeSceneryMeshBuilder.Build(snapshot.TreeData, snapshot.Width, snapshot.Height),
                     Tracks: tracks,
+                    Vehicles: vehicles.ToArray()
+                        .Where(vehicle => RideVehicleDefinitions.Resolve(vehicle).ShouldRender(vehicle))
+                        .Select(vehicle => RideVehicleDefinitions.Resolve(vehicle)).Distinct()
+                        .Select(VehicleModel.Load).ToArray(),
                     RideEntrances: rideEntranceExitMeshBuilder.Build(
                         snapshot.RideEntranceData, snapshot.TrackData, snapshot.Width, snapshot.Height));
             });
@@ -129,7 +136,7 @@ internal sealed class ParkSceneController(
                 parkPath, snapshot.Width, snapshot.Height,
                 meshData.Terrain.Terrain, meshData.Water, meshData.Paths, meshData.Navigation, meshData.PathAccessories,
                 meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, meshData.Trees, meshData.Tracks.TrackElements, snapshot.RideEntranceData,
-                meshData.Tracks.Centerlines, snapshot.PaletteData);
+                meshData.Tracks.Centerlines, snapshot.PaletteData, meshData.Vehicles);
         }
         catch (Exception ex) {
             throw new InvalidOperationException($"Failed to load '{parkPath}': {ex.Message}", ex);
@@ -174,7 +181,12 @@ internal sealed class ParkSceneController(
                 resources.VehiclePathGraphicsResources!.UploadMesh(vehiclePathMesh);
                 DisposePathAccessoryResources();
                 DisposeTreeSceneryResources();
+                resources.DisposeVehicleResources();
+                vehicleRenderer.Clear();
                 resources.ModelTextureHeap!.ResetParkTextures();
+
+                foreach (var model in result.Vehicles)
+                    resources.CreateVehicleResources(vehicleRenderer.AddModel(model));
 
                 foreach (var batch in result.PathAccessories) {
                     var accessoryResources = new ModelGraphicsResources(resources.DeviceContext!, resources.DeferredTargets!.GBufferRenderPass,
@@ -283,12 +295,15 @@ internal sealed class ParkSceneController(
         parkLoadTask = null;
 
         try {
+            CompleteVehicleModelLoad(upload: false);
             if (resources.Vk is not null && resources.LogicalDevice.Handle != 0) {
                 if (resources.Vk.DeviceWaitIdle(resources.LogicalDevice) != Silk.NET.Vulkan.Result.Success)
                     throw new InvalidOperationException("Could not wait for the Vulkan device before clearing park meshes.");
 
                 DisposePathAccessoryResources();
                 DisposeTreeSceneryResources();
+                resources.DisposeVehicleResources();
+                vehicleRenderer.Clear();
                 resources.ModelTextureHeap!.ResetParkTextures();
                 resources.TerrainGraphicsResources?.ClearMesh();
                 resources.PathGraphicsResources?.ClearMesh();
@@ -297,7 +312,7 @@ internal sealed class ParkSceneController(
                 resources.VehiclePathGraphicsResources?.ClearMesh();
                 resources.RideSupportGraphicsResources?.ClearMesh();
                 resources.RideEntranceGraphicsResources?.ClearMesh();
-                ClearVehicleCubeInstances();
+                ClearVehicleInstances();
             }
         }
         catch (Exception clearException) {
@@ -416,60 +431,89 @@ internal sealed class ParkSceneController(
 
     private void PrepareVehiclePoses()
     {
-        foreach (var previousRegion in vehicleCubeRenderer.Regions) {
-            if (renderRegionsByCoordinate.TryGetValue(previousRegion.Coordinate, out var region))
+        foreach (var previousRegion in vehicleRenderer.Regions.Keys) {
+            if (renderRegionsByCoordinate.TryGetValue(previousRegion, out var region))
                 region.ClearDynamicContents();
         }
 
-        var snapshots = parkLoadTask is null && pendingParkLoadResult is null
+        var snapshots = IsReady && parkLoadTask is null && pendingParkLoadResult is null
             ? simulation.VehicleSnapshots : null;
 
         vehiclePoses = vehiclePoseResolver.ResolveFrame(
             snapshots, Stopwatch.GetTimestamp(),
             usesSmoothMovement ??= UsesSmoothMovement, tryGetCenterlinePose ??= TryGetCenterlinePose);
 
-        vehicleCubeRenderer.PrepareRegions(vehiclePoses, loadedMapWidth, loadedMapHeight);
+        try {
+            if (vehicleModelLoadTask is { IsCompleted: true })
+                CompleteVehicleModelLoad(upload: true);
+
+            if (IsReady && vehicleModelLoadTask is null) {
+                var missingDefinitions = vehiclePoses.Values
+                    .Where(pose => pose.IsVisible && !vehicleRenderer.HasModel(pose.Definition))
+                    .Select(pose => pose.Definition).Distinct().ToArray();
+                if (missingDefinitions.Length > 0)
+                    vehicleModelLoadTask = Task.Run(() => missingDefinitions.Select(VehicleModel.Load).ToArray());
+            }
+        }
+        catch (Exception ex) {
+            ClearParkState($"Failed to prepare vehicle models: {ex.Message}");
+            return;
+        }
+
+        vehicleRenderer.PrepareRegions(vehiclePoses, loadedMapWidth, loadedMapHeight);
         var previousRegionCount = renderRegionsByCoordinate.Count;
-        foreach (var vehicleRegion in vehicleCubeRenderer.Regions) {
-            var region = GetOrCreateRenderRegion(vehicleRegion.Coordinate);
-            region.IncludeDynamicBounds(vehicleRegion.Bounds);
+        foreach (var (coordinate, bounds) in vehicleRenderer.Regions) {
+            var region = GetOrCreateRenderRegion(coordinate);
+            region.IncludeDynamicBounds(bounds);
         }
 
         if (renderRegionsByCoordinate.Count != previousRegionCount)
             RenderRegions = renderRegionsByCoordinate.Values.ToArray();
     }
 
-    public void UpdateVehicleCubeInstances(uint currentFrame)
+    private void CompleteVehicleModelLoad(bool upload)
     {
-        var vehicleResources = resources.VehicleCubeGraphicsResources;
-        if (vehicleResources.Length == 0) return;
+        if (vehicleModelLoadTask is not { } task) return;
+        vehicleModelLoadTask = null;
+        var models = task.GetAwaiter().GetResult();
+        if (!upload) return;
 
-        vehicleCubeRenderer.BuildInstances(renderRegionsByCoordinate, vehiclePalette);
-        var currentVehicleResources = vehicleResources[(int)currentFrame];
-        currentVehicleResources.UploadInstances(vehicleCubeRenderer.Instances, vehicleCubeRenderer.RegionBatches);
+        if (resources.Vk!.DeviceWaitIdle(resources.LogicalDevice) != Silk.NET.Vulkan.Result.Success)
+            throw new InvalidOperationException("Could not wait for the Vulkan device before uploading vehicle models.");
 
-        foreach (var batch in currentVehicleResources.RegionBatches) {
-            var region = renderRegionsByCoordinate[batch.Region];
-            region.Vehicles = new RenderRegionModelBatch(currentVehicleResources, batch);
+        foreach (var model in models)
+            resources.CreateVehicleResources(vehicleRenderer.AddModel(model));
+    }
+
+    public void UpdateVehicleInstances(uint currentFrame)
+    {
+        foreach (var (model, meshes) in resources.VehicleGraphicsResources) {
+            model.BuildInstances(renderRegionsByCoordinate, vehiclePalette);
+            foreach (var mesh in meshes) {
+                mesh.UploadInstances(model.Instances, model.RegionBatches, currentFrame);
+                foreach (var batch in mesh.RegionBatches)
+                    renderRegionsByCoordinate[batch.Region].Vehicles.Add(new RenderRegionModelBatch(mesh, batch));
+            }
         }
     }
 
     private void ResetVehicleState()
     {
-        foreach (var vehicleRegion in vehicleCubeRenderer.Regions) {
-            if (renderRegionsByCoordinate.TryGetValue(vehicleRegion.Coordinate, out var region))
+        foreach (var vehicleRegion in vehicleRenderer.Regions.Keys) {
+            if (renderRegionsByCoordinate.TryGetValue(vehicleRegion, out var region))
                 region.ClearDynamicContents();
         }
 
         vehiclePoseResolver.Clear();
         vehiclePoses.Clear();
-        vehicleCubeRenderer.Clear();
-        ClearVehicleCubeInstances();
+        vehicleRenderer.ClearInstances();
+        ClearVehicleInstances();
     }
 
-    private void ClearVehicleCubeInstances()
+    private void ClearVehicleInstances()
     {
-        foreach (var resources1 in resources.VehicleCubeGraphicsResources)
+        foreach (var (_, meshes) in resources.VehicleGraphicsResources)
+        foreach (var resources1 in meshes)
             resources1.ClearInstances();
     }
 
@@ -496,6 +540,7 @@ internal sealed class ParkSceneController(
 
         try {
             parkLoadTask?.GetAwaiter().GetResult();
+            CompleteVehicleModelLoad(upload: false);
         }
         catch (Exception ex) {
             Log.Error(ex, "Park loading failed during shutdown");
@@ -504,6 +549,7 @@ internal sealed class ParkSceneController(
         parkLoadTask = null;
         pendingParkLoadResult = null;
         ResetVehicleState();
+        vehicleRenderer.Clear();
 
         simulation.Dispose();
     }
@@ -512,5 +558,5 @@ internal sealed class ParkSceneController(
         string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water, PathMeshData Paths,
         PathNavigation Navigation, PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks, RideSupportMeshData RideSupports,
         RideEntranceExitMeshData RideEntrances, TreeSceneryBatch[] Trees, RCTTrackElementData[] TrackElements, RCTRideEntranceData[] RideEntranceData,
-        TrackCenterlinePiece[] Centerlines, RCTPaletteEntry[] PaletteData);
+        TrackCenterlinePiece[] Centerlines, RCTPaletteEntry[] PaletteData, VehicleModel[] Vehicles);
 }

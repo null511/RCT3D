@@ -80,6 +80,29 @@ The application build compiles Slang shaders, builds only the base OpenRCT2 `lib
 MSBuild .\RCT3DViewer\RCT3D-Viewer.csproj /restore /p:Configuration=Release /p:OpenRCT2AdapterDll="D:\path\to\libopenrct2.dll"
 ```
 
+## Ride vehicle models
+
+Each car in `RCT3DViewer\Rides\Vehicles\*.json` can optionally specify a static glTF/GLB model:
+
+```json
+{
+  "cars": [
+	{
+	  "model": "canoe.glb",
+	  "modelScale": 1.0,
+	  "size": [0.4, 0.24, 2.0],
+	  "localOffset": -0.02
+	}
+  ]
+}
+```
+
+Model paths resolve relative to the application's `Assets\Models\Vehicle` directory, not the current working directory or the user's home. Subdirectories are allowed; absolute paths and paths outside that directory are rejected. Only vehicle types needed by the current park load models, with one shared model reference per type; there is no startup preloading or separate asset cache. Newly appearing vehicle types load on demand.
+
+`modelScale` defaults to `1.0`, must be finite and positive, and is baked into mesh vertices and bounds once at load time. Models retain their authored origin and axes (Y up, X width, Z length), without automatic centering or height fitting. Existing `localOffset`, `worldOffset`, and `cameraOffset` retain their meanings.
+
+Missing or null `model` uses the existing cube. A configured model that cannot load logs an error once per type per park and also uses the cube. `size` controls only that cube and is baked into its shared geometry; it does not resize imported models. Both model and cube instances carry only pose and dynamic primary vehicle color. The shader multiplies authored base-color RGB by the linearized per-instance color, preserving textures and opacity. Geometry/materials are shared by differently colored vehicles of the same type, and park-specific resources are released on unload/replacement.
+
 ## Controls
 
 - Hold the right mouse button and move the mouse to look around.

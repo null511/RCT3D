@@ -26,7 +26,8 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
 
 
     public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout,
-        ImportedModelMaterial material, ModelTextureHeap textureHeap, bool unlit = false, bool createWireframePipeline = false)
+        ImportedModelMaterial material, ModelTextureHeap textureHeap, bool unlit = false, bool createWireframePipeline = false,
+        int instanceBufferCount = 1)
     {
         _context = context;
         _textureHeap = textureHeap;
@@ -43,7 +44,8 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
             createWireframePipeline: createWireframePipeline,
             colorAttachmentCount: 3u,
             sharedModelMaterialDescriptorSetLayout: textureHeap.DescriptorSetLayout,
-            sharedModelSamplerDescriptorSetLayout: textureHeap.SamplerDescriptorSetLayout);
+            sharedModelSamplerDescriptorSetLayout: textureHeap.SamplerDescriptorSetLayout,
+            instanceBufferCount: instanceBufferCount);
     }
 
     public void CreatePipeline() => _graphicsResources.CreatePipeline();
@@ -81,7 +83,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
         UploadInstances(instances, uploadedRegions);
     }
 
-    public void UploadInstances(ReadOnlySpan<ModelInstance> instances, ReadOnlySpan<ModelRegionRange> regions)
+    public void UploadInstances(ReadOnlySpan<ModelInstance> instances, ReadOnlySpan<ModelRegionRange> regions, uint currentFrame = 0)
     {
         regionBatchCount = 0;
         if (instances.IsEmpty) return;
@@ -89,7 +91,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
         if (regionBatches.Length < regions.Length)
             Array.Resize(ref regionBatches, Math.Max(regions.Length, regionBatches.Length * 2));
 
-        _graphicsResources.UploadInstances(instances);
+        _graphicsResources.UploadInstances(instances, currentFrame);
         regions.CopyTo(regionBatches);
         regionBatchCount = regions.Length;
     }

@@ -88,7 +88,13 @@ internal static class RideVehicleDefinitions
                 throw new InvalidDataException("Car size must be finite and greater than zero.");
         }
 
+        var modelScale = element.TryGetProperty("modelScale", out var scaleElement) ? scaleElement.GetSingle() : 1.0f;
+        if (!float.IsFinite(modelScale) || modelScale <= 0.0f)
+            throw new InvalidDataException("Car 'modelScale' must be finite and greater than zero.");
+
         return new RideVehicleCarDefinition {
+            Model = element.TryGetProperty("model", out var modelElement) ? modelElement.GetString() : null,
+            ModelScale = modelScale,
             Size = size,
             LocalOffset = ReadOffset("localOffset", defaultDefinition.LocalOffset),
             WorldOffset = ReadOffset("worldOffset", defaultDefinition.WorldOffset),

@@ -41,7 +41,7 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     public TerrainGraphicsResources? RideSupportGraphicsResources { get; private set; }
     public TerrainGraphicsResources? RideEntranceGraphicsResources { get; private set; }
     public WaterGraphicsResources? WaterGraphicsResources { get; private set; }
-    public ModelGraphicsResources[] VehicleCubeGraphicsResources { get; private set; } = Array.Empty<ModelGraphicsResources>();
+    public List<(VehicleRenderer.ModelBatch Batch, ModelGraphicsResources[] Resources)> VehicleGraphicsResources { get; } = new();
     public TerrainMaterialLibrary? TerrainMaterials { get; private set; }
     public PathMaterialLibrary? PathMaterials { get; private set; }
     public PathAccessoryAssetLibrary? PathAccessoryAssets { get; private set; }
@@ -106,7 +106,6 @@ internal sealed unsafe class ParkRenderResources : IDisposable
         InitializeSkyTextures();
         TerrainGraphicsResources.CreateTextureResources(CommandPool);
         PathGraphicsResources.CreateTextureResources(CommandPool);
-        CreateVehicleCubeResources();
         ModelTextureHeap.SetParkTextureStartIndex();
     }
 
@@ -327,26 +326,35 @@ internal sealed unsafe class ParkRenderResources : IDisposable
         Vk!.CmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, null, 0, null, 1, &barrier);
     }
 
-    private void CreateVehicleCubeResources()
+    public void CreateVehicleResources(VehicleRenderer.ModelBatch batch)
     {
-        var vehicleCube = VehicleCubeRenderer.CreateMesh();
-        VehicleCubeGraphicsResources = new ModelGraphicsResources[MaxFramesInFlight];
-
-        for (var i = 0; i < VehicleCubeGraphicsResources.Length; i++) {
-            var resources = new ModelGraphicsResources(DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout,
-                vehicleCube.Material, ModelTextureHeap!, unlit: true);
-
-            try {
+        var meshes = batch.Model.Data.Meshes;
+        var modelResources = new ModelGraphicsResources[meshes.Length];
+        try {
+            for (var i = 0; i < meshes.Length; i++) {
+                var mesh = meshes[i];
+                var resources = new ModelGraphicsResources(DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout,
+                    mesh.Material, ModelTextureHeap!, unlit: batch.Model.IsFallback, instanceBufferCount: MaxFramesInFlight);
+                modelResources[i] = resources;
                 resources.CreatePipeline();
                 resources.CreateTextureResources(CommandPool);
-                resources.UploadMesh(vehicleCube);
-                VehicleCubeGraphicsResources[i] = resources;
+                resources.UploadMesh(mesh);
             }
-            catch {
-                resources.Dispose();
-                throw;
-            }
+            VehicleGraphicsResources.Add((batch, modelResources));
         }
+        catch {
+            foreach (var resources in modelResources)
+                resources?.Dispose();
+            throw;
+        }
+    }
+
+    public void DisposeVehicleResources()
+    {
+        foreach (var (_, meshes) in VehicleGraphicsResources)
+        foreach (var resources in meshes)
+            resources.Dispose();
+        VehicleGraphicsResources.Clear();
     }
 
     public void RecreateSwapchain()
@@ -379,10 +387,7 @@ internal sealed unsafe class ParkRenderResources : IDisposable
             resources.Dispose();
 
         TreeSceneryGraphicsResources.Clear();
-        foreach (var resources in VehicleCubeGraphicsResources)
-            resources?.Dispose();
-
-        VehicleCubeGraphicsResources = Array.Empty<ModelGraphicsResources>();
+        DisposeVehicleResources();
         WaterGraphicsResources?.Dispose();
         WaterGraphicsResources = null;
         TrackGraphicsResources?.Dispose();

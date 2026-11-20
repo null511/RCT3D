@@ -7,6 +7,9 @@ internal class RideVehicleCarDefinition
 {
     public static readonly Vector3 DefaultSize = new(0.7f);
 
+    public string? Model { get; init; }
+    public float ModelScale { get; init; } = 1.0f;
+
     /// <summary>
     /// The track-local Y offset to apply to the vehicle position.
     /// </summary>
@@ -23,7 +26,7 @@ internal class RideVehicleCarDefinition
     public float CameraOffset {get; init;} = 0.6f;
 
     /// <summary>
-    /// Full car dimensions in world units along local X (width), Y (height), and Z (length).
+    /// Full fallback cube dimensions in world units along local X (width), Y (height), and Z (length).
     /// </summary>
     public Vector3 Size { get; init; } = DefaultSize;
 

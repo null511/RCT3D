@@ -94,7 +94,7 @@ internal sealed class ParkScreen : IViewerScreen
     public void Record(CommandBuffer commandBuffer, uint imageIndex, uint currentFrame) =>
         frameRenderer.Record(commandBuffer, imageIndex, currentFrame, scene.TerrainMesh, scene.PathMesh,
             scene.WaterMesh, scene.TrackMesh, scene.RideSupportMesh, scene.RideEntranceExitMesh,
-            scene.RenderRegions, scene.UpdateVehicleCubeInstances);
+            scene.RenderRegions, scene.UpdateVehicleInstances);
 
     public void DrawPresentation(CommandBuffer commandBuffer, uint currentFrame) =>
         frameRenderer.DrawPresentation(commandBuffer, currentFrame);

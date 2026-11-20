@@ -315,7 +315,8 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
         }
 
         foreach (var region in parkRegions) {
-            if (region.Vehicles is { } vehicleBatch && region.CameraVisible && region.RidesInRange)
+            if (!region.CameraVisible || !region.RidesInRange) continue;
+            foreach (var vehicleBatch in region.Vehicles)
                 vehicleBatch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, vehicleBatch.Batch);
         }
 
@@ -652,10 +653,10 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
             DrawShadowRegions(commandBuffer, shadowResources.TrackPipeline, entranceResources.VertexBuffer, entranceResources.IndexBuffer,
                 parkRegions, ShadowRegionCategory.RideEntrances);
 
-        var vehicleResources = resources.VehicleCubeGraphicsResources;
-        if (vehicleResources.Length > 0)
+        foreach (var (_, meshes) in resources.VehicleGraphicsResources)
+        foreach (var vehicleResources in meshes)
             DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout,
-                vehicleResources[(int)currentFrame], regionsByCoordinate, (uint)cascade, ShadowRegionCategory.Vehicles);
+                vehicleResources, regionsByCoordinate, (uint)cascade, ShadowRegionCategory.Vehicles);
 
         foreach (var (_, modelResources) in resources.PathAccessoryGraphicsResources)
             DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout, modelResources, regionsByCoordinate, (uint)cascade, ShadowRegionCategory.Scenery);

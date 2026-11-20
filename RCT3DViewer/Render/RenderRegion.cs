@@ -81,7 +81,7 @@ internal sealed class ParkRenderRegion(RenderRegionCoordinate coordinate)
     public RenderRegionIndexRange? RideEntrances { get; set; }
     public List<RenderRegionModelBatch> PathAccessories { get; } = new();
     public List<RenderRegionModelBatch> Trees { get; } = new();
-    public RenderRegionModelBatch? Vehicles { get; set; }
+    public List<RenderRegionModelBatch> Vehicles { get; } = new();
 
     public void IncludeStaticBounds(AxisAlignedBounds bounds)
     {
@@ -93,7 +93,7 @@ internal sealed class ParkRenderRegion(RenderRegionCoordinate coordinate)
     {
         dynamicBounds = default;
         hasDynamicBounds = false;
-        Vehicles = null;
+        Vehicles.Clear();
     }
 
     public void IncludeDynamicBounds(AxisAlignedBounds bounds)

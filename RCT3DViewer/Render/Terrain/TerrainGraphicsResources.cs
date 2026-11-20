@@ -23,7 +23,8 @@ internal sealed unsafe class TerrainGraphicsResources(
     bool useTrackVertexColor = false,
     DescriptorSetLayout sharedModelMaterialDescriptorSetLayout = default,
     DescriptorSetLayout sharedModelSamplerDescriptorSetLayout = default,
-    PrimitiveTopology topology = PrimitiveTopology.TriangleList) : IDisposable
+    PrimitiveTopology topology = PrimitiveTopology.TriangleList,
+    int instanceBufferCount = 1) : IDisposable
 {
     private CommandPool _commandPool;
     private DescriptorSetLayout _descriptorSetLayout;
@@ -42,9 +43,9 @@ internal sealed unsafe class TerrainGraphicsResources(
     private DeviceMemory _vertexBufferMemory;
     private Buffer _indexBuffer;
     private DeviceMemory _indexBufferMemory;
-    private Buffer _instanceBuffer;
-    private DeviceMemory _instanceBufferMemory;
-    private ulong _instanceBufferCapacity;
+    private readonly InstanceBufferResources[] _instanceBuffers = Enumerable.Range(0, instanceBufferCount)
+        .Select(_ => new InstanceBufferResources()).ToArray();
+    private int _currentInstanceBuffer;
     private readonly DescriptorSetLayout _sharedModelMaterialDescriptorSetLayout = sharedModelMaterialDescriptorSetLayout;
     private readonly DescriptorSetLayout _sharedModelSamplerDescriptorSetLayout = sharedModelSamplerDescriptorSetLayout;
 
@@ -54,7 +55,7 @@ internal sealed unsafe class TerrainGraphicsResources(
     public DescriptorSet DescriptorSet { get; private set; }
     public Buffer VertexBuffer => _vertexBuffer;
     public Buffer IndexBuffer => _indexBuffer;
-    public Buffer InstanceBuffer => _instanceBuffer;
+    public Buffer InstanceBuffer => _instanceBuffers[_currentInstanceBuffer].Buffer;
     public uint IndexCount { get; private set; }
     public bool UsesTrackVertexColor => useTrackVertexColor;
 
@@ -578,32 +579,35 @@ internal sealed unsafe class TerrainGraphicsResources(
         UploadMesh(mesh.Vertices, mesh.Indices);
     }
 
-    public void UploadInstances(ReadOnlySpan<ModelInstance> instances)
+    public void UploadInstances(ReadOnlySpan<ModelInstance> instances, uint currentFrame = 0)
     {
         if (!useInstances)
             throw new InvalidOperationException("Instance data can only be uploaded to an instanced model pipeline.");
+
+        _currentInstanceBuffer = checked((int)currentFrame);
+        var buffer = _instanceBuffers[_currentInstanceBuffer];
 
         if (instances.Length == 0)
             return;
 
         var device = context.LogicalDevice;
         var size = checked((ulong)Marshal.SizeOf<ModelInstance>() * (ulong)instances.Length);
-        if (size > _instanceBufferCapacity) {
-            var capacity = Math.Max(size, _instanceBufferCapacity * 2);
+        if (size > buffer.Capacity) {
+            var capacity = Math.Max(size, buffer.Capacity * 2);
             ClearInstanceBuffer();
             AllocateBuffer(capacity, BufferUsageFlags.VertexBufferBit,
                 MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
-                out _instanceBuffer, out _instanceBufferMemory);
-            _instanceBufferCapacity = capacity;
+                out buffer.Buffer, out buffer.Memory);
+            buffer.Capacity = capacity;
         }
 
         try {
             void* instanceData;
-            if (context.Api.MapMemory(device, _instanceBufferMemory, 0, size, 0, &instanceData) != Result.Success)
+            if (context.Api.MapMemory(device, buffer.Memory, 0, size, 0, &instanceData) != Result.Success)
                 throw new InvalidOperationException("Failed to map model instance buffer memory.");
 
             instances.CopyTo(new Span<ModelInstance>(instanceData, instances.Length));
-            context.Api.UnmapMemory(device, _instanceBufferMemory);
+            context.Api.UnmapMemory(device, buffer.Memory);
         }
         catch {
             ClearInstanceBuffer();
@@ -724,23 +728,35 @@ internal sealed unsafe class TerrainGraphicsResources(
         _indexBuffer = default;
         _indexBufferMemory = default;
         IndexCount = 0;
-        ClearInstanceBuffer();
+        for (var i = 0; i < _instanceBuffers.Length; i++) {
+            _currentInstanceBuffer = i;
+            ClearInstanceBuffer();
+        }
+        _currentInstanceBuffer = 0;
     }
 
     private void ClearInstanceBuffer()
     {
         var vk = context.Api;
         var device = context.LogicalDevice;
+        var buffer = _instanceBuffers[_currentInstanceBuffer];
 
-        if (_instanceBuffer.Handle != 0)
-            vk.DestroyBuffer(device, _instanceBuffer, null);
+        if (buffer.Buffer.Handle != 0)
+            vk.DestroyBuffer(device, buffer.Buffer, null);
 
-        if (_instanceBufferMemory.Handle != 0)
-            vk.FreeMemory(device, _instanceBufferMemory, null);
+        if (buffer.Memory.Handle != 0)
+            vk.FreeMemory(device, buffer.Memory, null);
 
-        _instanceBuffer = default;
-        _instanceBufferMemory = default;
-        _instanceBufferCapacity = 0;
+        buffer.Buffer = default;
+        buffer.Memory = default;
+        buffer.Capacity = 0;
+    }
+
+    private sealed class InstanceBufferResources
+    {
+        public Buffer Buffer;
+        public DeviceMemory Memory;
+        public ulong Capacity;
     }
 
     private void UploadTextureArray(Image image, Buffer stagingBuffer, BufferImageCopy[] regions, uint mipLevels)
