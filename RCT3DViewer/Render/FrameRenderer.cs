@@ -88,7 +88,7 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
             * inverseViewRotation
             * previousViewRotation;
         var currentViewToPreviousClip = currentViewToPreviousView * previousProjection;
-        var (shadowViewProjections, cascadeSplits) = CreateShadowViewProjections(camera, aspect, sunDirection, ui.ShadowRadius,
+        var (shadowViewProjections, shadowProjections, cascadeSplits) = CreateShadowViewProjections(camera, aspect, sunDirection, ui.ShadowRadius,
             ui.ShadowResolution);
         Span<ViewFrustum> shadowFrusta = stackalloc ViewFrustum[(int)ShadowRenderTargets.CascadeCount];
         if (ui.ShadowMappingEnabled) {
@@ -153,8 +153,10 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
         };
 
         ShadowUniforms shadowUniforms = new() { CascadeSplits = cascadeSplits };
-        for (var cascade = 0; cascade < ShadowRenderTargets.CascadeCount; cascade++)
+        for (var cascade = 0; cascade < ShadowRenderTargets.CascadeCount; cascade++) {
             shadowUniforms.ShadowViewProjection[cascade] = shadowViewProjections[cascade];
+            shadowUniforms.ShadowProjection[cascade] = shadowProjections[cascade];
+        }
 
         resources.UniformBufferResources.Update(currentFrame, cameraUniforms, temporalUniforms, sceneUniforms, shadowUniforms);
 
@@ -762,7 +764,7 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
         }
     }
 
-    private static (Matrix4x4[] ViewProjections, Vector4 Splits) CreateShadowViewProjections(FlightCamera camera, float aspect,
+    private static (Matrix4x4[] ViewProjections, Matrix4x4[] Projections, Vector4 Splits) CreateShadowViewProjections(FlightCamera camera, float aspect,
         Vector3 sunDirection, float shadowRadius, uint shadowResolution)
     {
         const float splitLambda = 0.5f;
@@ -786,6 +788,7 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
 
         var splitValues = new float[ShadowRenderTargets.CascadeCount];
         var viewProjections = new Matrix4x4[ShadowRenderTargets.CascadeCount];
+        var projections = new Matrix4x4[ShadowRenderTargets.CascadeCount];
         var previousSplit = nearDistance;
         for (var cascade = 0; cascade < ShadowRenderTargets.CascadeCount; cascade++) {
             var fraction = (cascade + 1.0f) / ShadowRenderTargets.CascadeCount;
@@ -801,14 +804,14 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
                 corners[corner + 4] = camera.Position + rayDirections[corner] * (split / forwardDot);
             }
 
-            viewProjections[cascade] = CreateCascadeViewProjection(corners, sunDirection, shadowRadius, shadowResolution);
+            (viewProjections[cascade], projections[cascade]) = CreateCascadeViewProjection(corners, sunDirection, shadowRadius, shadowResolution);
             previousSplit = split;
         }
 
-        return (viewProjections, new Vector4(splitValues[0], splitValues[1], splitValues[2], splitValues[3]));
+        return (viewProjections, projections, new Vector4(splitValues[0], splitValues[1], splitValues[2], splitValues[3]));
     }
 
-    private static Matrix4x4 CreateCascadeViewProjection(Vector3[] corners, Vector3 sunDirection, float shadowRadius, uint shadowResolution)
+    private static (Matrix4x4 ViewProjection, Matrix4x4 Projection) CreateCascadeViewProjection(Vector3[] corners, Vector3 sunDirection, float shadowRadius, uint shadowResolution)
     {
         var center = Vector3.Zero;
         foreach (var corner in corners)
@@ -838,7 +841,9 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
             MathF.Round(centerNdc.Y / texelNdcSize) * texelNdcSize);
         viewProjection.M41 += snappedNdc.X - centerNdc.X;
         viewProjection.M42 += snappedNdc.Y - centerNdc.Y;
-        return viewProjection;
+        lightProjection.M41 += snappedNdc.X - centerNdc.X;
+        lightProjection.M42 += snappedNdc.Y - centerNdc.Y;
+        return (viewProjection, lightProjection);
     }
 
     private void RecordImageBarrier(CommandBuffer commandBuffer, Image image, ImageLayout oldLayout, ImageLayout newLayout,

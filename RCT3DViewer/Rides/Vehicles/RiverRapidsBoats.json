@@ -1,6 +1,8 @@
 {
   "cars": [
     {
+      "model": "river_rapids_boats.glb",
+      "modelScale":  2.0,
       "size": [ 1.6, 0.5, 1.6 ],
       "localOffset": 0.2
     }

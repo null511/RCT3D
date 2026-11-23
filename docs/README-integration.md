@@ -22,6 +22,9 @@ Development notes
 - The project currently targets .NET 10 in the repository. For strict compatibility with the Core Project Goal you may prefer to retarget to net9.0 or net8.0; this is optional but recommended for parity with some native interop toolchains.
 - The SimulationBridge exposes a FillSurfaceData(Span<T>) method so callers can reuse pinned buffers and avoid allocations during per-frame updates.
 - The ShaderCompiler project compiles Slang shaders at build time into SPIR-V blobs saved into the project's output Shaders/ folder.
+- ShadowUniforms exports four per-cascade shadowViewProjection matrices and separate shadowProjection matrices (including Vulkan Y flip and texel snapping), followed by cascadeSplits. Keep the C# and Slang uniform layouts synchronized.
+- PCSS blocker search uses mip-zero depth texel loads and the PCF receiver bias, averaging only actual blockers. World-space filter radii convert to UV space using half the absolute XY projection scale; no blockers produce a zero-radius comparison filter.
+- The native adapter normalizes exported vehicle swing for `useWoodenWildMouseSwing` cars to lean outward. Slide-mode cars (including dinghies and bobsleighs) retain their existing sign; track banking is unchanged.
 
 Next steps suggested by plan
 - Add a robust native distribution mechanism for libopenrct2, MoltenVK and Slang into CI and release artifacts.

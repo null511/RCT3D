@@ -1,4 +1,6 @@
+import argparse
 import os
+import sys
 import zipfile
 import configuration
 
@@ -126,5 +128,20 @@ def square_terrain_tile(idx, name):
         print(f" [!] Processing failed on asset index #{idx}: {e}")
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(description="Extract and process game sprites.")
+    parser.add_argument(
+        "--export-vehicle", choices=("mine-cars",),
+        help="Export four empty, upright Mine Cars reference views only.",
+    )
+    args = parser.parse_args()
+    if args.export_vehicle == "mine-cars":
+        from RideVehicles import RideVehicles
+        return 0 if RideVehicles.export_mine_cars() else 1
+
     run()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

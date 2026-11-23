@@ -5,6 +5,8 @@
   "rct2.footpath_surface.dirt": "dirt.png",
   "rct2.footpath_surface.tarmac": "tarmac.png",
   "rct1.footpath_surface.tarmac": "tarmac.png",
+  "rct2.footpath_surface.tarmac_brown": "tarmac_brown.png",
+  "rct1aa.footpath_surface.tarmac_brown": "tarmac_brown.png",
   "rct1.footpath_surface.queue_blue": "queue_blue.png",
   "rct2.footpath_surface.queue_blue": "queue_blue.png"
 }

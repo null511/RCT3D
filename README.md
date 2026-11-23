@@ -103,6 +103,21 @@ Model paths resolve relative to the application's `Assets\Models\Vehicle` direct
 
 Missing or null `model` uses the existing cube. A configured model that cannot load logs an error once per type per park and also uses the cube. `size` controls only that cube and is baked into its shared geometry; it does not resize imported models. Both model and cube instances carry only pose and dynamic primary vehicle color. The shader multiplies authored base-color RGB by the linearized per-instance color, preserving textures and opacity. Geometry/materials are shared by differently colored vehicles of the same type, and park-specific resources are released on unload/replacement.
 
+## Mine-car reference sprites
+
+AssetExtractor can export four empty, upright Mine Cars views for the wooden wild mouse (`rct2.ride.wmmine`). Configure `GAME_PATH` and `OPENRCT2_BIN` in `AssetExtractor\configuration.py`: it requires your own game's `ObjData\WMMINE.DAT`, the OpenRCT2 executable, and its installed `data\object\rct2\ride\rct2.ride.wmmine.json` catalog entry.
+
+Run from the AssetExtractor directory with its configured Python environment and dependencies:
+
+```powershell
+Set-Location .\AssetExtractor
+.\.venv\Scripts\python.exe main.py --export-vehicle mine-cars
+```
+
+The full raw object sprite set and original drawing offsets are saved under `RAW_DIR\Vehicles\rct2.ride.wmmine\WMMINE`. Only four final PNGs are published under `OUTPUT_DIR\vehicles\mine-cars`: `view-00.png`, `view-08.png`, `view-16.png`, and `view-24.png`. These are quarter-turn isometric views of car type 0 on flat track with neutral swing, not orthographic views. Pixels, dimensions, transparency, and the original exported palette are preserved without colour remapping or passenger overlays. `reference_views.json` records the source indices (3, 27, 51, 75) and x/y drawing offsets.
+
+Output paths follow `configuration.py` and resolve relative to the working directory when configured as relative paths. Reruns refresh the raw export and replace only the named final outputs. Missing files, incompatible metadata, or export failures report an error and return a nonzero exit code. Running without `--export-vehicle` keeps the existing extraction/processing workflow; the vehicle command does not process vegetation or deploy assets into the viewer.
+
 ## Controls
 
 - Hold the right mouse button and move the mouse to look around.

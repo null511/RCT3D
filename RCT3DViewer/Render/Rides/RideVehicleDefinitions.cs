@@ -9,6 +9,10 @@ internal static class RideVehicleDefinitions
     private static readonly RideVehicleCarDefinition defaultDefinition = new();
     private static Dictionary<(uint ObjectIdHash, byte VehicleType), RideVehicleCarDefinition> definitions = new();
 
+    private static readonly JsonDocumentOptions jsonOptions = new() {
+        CommentHandling = JsonCommentHandling.Skip,
+    };
+
     public static void Initialize(string openRCT2Path) =>
         definitions = CreateDefinitions(Path.Combine(openRCT2Path, "object"));
 
@@ -31,7 +35,7 @@ internal static class RideVehicleDefinitions
 
         foreach (var file in files) {
             try {
-                using var document = JsonDocument.Parse(File.ReadAllText(file));
+                using var document = JsonDocument.Parse(File.ReadAllText(file), jsonOptions);
                 var carsElement = document.RootElement.GetProperty("cars");
 
                 if (carsElement.ValueKind != JsonValueKind.Array || carsElement.GetArrayLength() is 0 or > 256)

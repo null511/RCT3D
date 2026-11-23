@@ -22,7 +22,7 @@ class Exporter:
             return False
 
         try:
-            sprites = json.loads(output if output.lstrip().startswith("[") else f"[{output}]")
+            sprites = Exporter.__parse_object_sprites(output)
             offsets = {
                 str(index): {
                     "file": os.path.basename(sprite["path"]),
@@ -35,11 +35,37 @@ class Exporter:
             }
             with open(os.path.join(output_dir, "sprite_offsets.json"), "w", encoding="utf-8") as metadata_file:
                 json.dump(offsets, metadata_file, indent=2)
-        except (json.JSONDecodeError, KeyError, OSError, TypeError) as error:
+        except (ValueError, KeyError, OSError, TypeError) as error:
             print(f" [!] Could not save sprite offsets for {object_path}: {error}", file=sys.stderr)
             return False
 
         return True
+
+    @staticmethod
+    def __parse_object_sprites(output: str):
+        try:
+            sprites = json.loads(output)
+            if isinstance(sprites, dict) or sprites == "":
+                sprites = [sprites]
+        except json.JSONDecodeError:
+            # exportobject emits comma-separated records after context startup diagnostics.
+            start = re.search(r'(?m)^[ \t]*(?=\{\s*"path"\s*:|""[ \t]*(?:,|$))', output)
+            if start is None:
+                raise ValueError(f"No sprite records in OpenRCT2 output: {output[:200]!r}")
+            sprites = json.loads(f"[{output[start.start():]}]")
+
+        if not isinstance(sprites, list) or not sprites:
+            raise ValueError("OpenRCT2 did not return a nonempty sprite list")
+        for index, sprite in enumerate(sprites):
+            if sprite == "":
+                continue
+            if (
+                not isinstance(sprite, dict)
+                or not isinstance(sprite.get("path"), str) or not sprite["path"]
+                or type(sprite.get("x")) is not int or type(sprite.get("y")) is not int
+            ):
+                raise ValueError(f"Invalid OpenRCT2 sprite record at index {index}: {sprite!r}")
+        return sprites
 
     @staticmethod
     def __execute(*args: str, capture_stdout=False):
@@ -70,6 +96,6 @@ class Exporter:
             print(f"Error details:\n{err_msg}", file=sys.stderr)
             sys.exit(result.returncode)
         except FileNotFoundError:
-            print(f"\n[!] Critical Error: Could not find or execute the binary at '{Exporter.OPENRCT2_BIN}'.", file=sys.stderr)
+            print(f"\n[!] Critical Error: Could not find or execute the binary at '{configuration.OPENRCT2_BIN}'.", file=sys.stderr)
             print("Please double check your OPENRCT2_BIN path setting configuration.", file=sys.stderr)
             sys.exit(1)

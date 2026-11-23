@@ -14,5 +14,6 @@ public struct ShadowViewProjections
 public struct ShadowUniforms
 {
     public ShadowViewProjections ShadowViewProjection;
+    public ShadowViewProjections ShadowProjection;
     public Vector4 CascadeSplits;
 }

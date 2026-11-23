@@ -68,8 +68,9 @@ void main(uint2 globalPos: SV_DispatchThreadID) {
                 shadowPos.xy = shadowPos.xy * 0.5 + 0.5;
 
                 float dither = IGN::getAnimated(globalPos, sceneUniforms.frameCounter);
+                float3 shadowScale = GetShadowProjectionScale(shadowUniforms.shadowProjection[cascade]);
                 // shadowVisibility = getShadowVisibility(shadowDepth, linearSampler, linearShadowSampler, shadowPos, cascade, dither);
-                shadowVisibility = getShadowVisibility(shadowDepth, linearShadowSampler, shadowPos, cascade, dither);
+                shadowVisibility = getShadowVisibility(shadowDepth, linearShadowSampler, shadowPos, shadowScale, cascade, dither);
             }
         }
 
