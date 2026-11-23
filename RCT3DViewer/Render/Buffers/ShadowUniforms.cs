@@ -16,4 +16,5 @@ public struct ShadowUniforms
     public ShadowViewProjections ShadowViewProjection;
     public ShadowViewProjections ShadowProjection;
     public Vector4 CascadeSplits;
+    public float Resolution;
 }

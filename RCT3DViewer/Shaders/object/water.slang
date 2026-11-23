@@ -12,7 +12,8 @@ import lib.sky_view;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
-[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
+//[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
+
 [[vk::binding(0, 1)]] Texture2D<float4> sky_transmit;
 [[vk::binding(1, 1)]] Texture2D<float4> sky_view;
 [[vk::binding(2, 1)]] SamplerState skySampler;
@@ -55,7 +56,7 @@ float4 fragmentMain(VertexStageOutput input) : SV_Target
 
     // shadow
     float3 sunDir = normalize(sceneUniforms.sunDirection.xyz);
-    int cascade = getShadowCascade(shadowUniforms, -input.viewPositionZ);
+    int cascade = getShadowCascade(-input.viewPositionZ);
     float shadowVisibility = 1.0;
 
     if (cascade >= 0) {

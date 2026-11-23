@@ -1,9 +1,10 @@
 {
   "cars": [
     {
-      "size": [ 1.4, 0.8, 1.9 ],
-      "localOffset": 0.4,
-      "cameraOffset":  0.85
+      "model": "WoodenRollerCoasterTrains.glb",
+      "size": [ 1.40, 0.80, 1.90 ],
+      "localOffset": 0.00,
+      "cameraOffset": 1.10
     }
   ]
 }

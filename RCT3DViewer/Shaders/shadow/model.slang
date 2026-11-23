@@ -1,7 +1,8 @@
 import lib.common;
 import lib.uniforms;
+import lib.shadow;
 
-[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
+//[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
 
 struct VertexInput {
 	[[vk::location(0)]] float3 position;

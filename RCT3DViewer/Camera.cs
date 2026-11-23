@@ -20,6 +20,13 @@ public class FlightCamera
     private float _yaw = 90.0f;
     private float _pitch = -30.0f;
     private Matrix4x4 _baseRotation = Matrix4x4.Identity;
+    private bool _rideCameraActive;
+    private float _rideLookAheadYaw;
+    private float _rideLookAheadPitch;
+    private float _savedRideYaw;
+    private float _savedRidePitch;
+    private float _savedRideLookAheadYaw;
+    private float _savedRideLookAheadPitch;
     private float _speed = 40.0f;
     private const float MinimumSpeed = 0.0f;
     private const float MaximumSpeed = 100.0f;
@@ -79,15 +86,47 @@ public class FlightCamera
         _firstMouse = true;
     }
 
-    public void SetBaseRotation(Matrix4x4 rotation)
+    public void BeginRideCamera(bool resume)
     {
-        _baseRotation = rotation;
+        _rideCameraActive = true;
+        _yaw = resume ? _savedRideYaw : 90.0f;
+        _pitch = resume ? _savedRidePitch : 0.0f;
+        _rideLookAheadYaw = resume ? _savedRideLookAheadYaw : 0.0f;
+        _rideLookAheadPitch = resume ? _savedRideLookAheadPitch : 0.0f;
+    }
+
+    public void SetRideRotation(Matrix4x4 vehicleRotation, Matrix4x4 lookAheadRotation, bool applyLookAhead)
+    {
+        var forward = Vector3.TransformNormal(Vector3.UnitZ, lookAheadRotation);
+        var localForward = Vector3.TransformNormal(forward, Matrix4x4.Transpose(vehicleRotation));
+        var lookAheadYaw = MathF.Atan2(localForward.X, localForward.Z) * 180.0f / MathF.PI;
+        var lookAheadPitch = MathF.Asin(Math.Clamp(localForward.Y, -1.0f, 1.0f)) * 180.0f / MathF.PI;
+
+        if (applyLookAhead) {
+            var yawDelta = MathF.IEEERemainder(lookAheadYaw - _rideLookAheadYaw, 360.0f);
+            _yaw = Math.Clamp(_yaw - yawDelta, 0.0f, 180.0f);
+            _pitch = Math.Clamp(_pitch + lookAheadPitch - _rideLookAheadPitch, -89.0f, 89.0f);
+            _rideLookAheadYaw = lookAheadYaw;
+            _rideLookAheadPitch = lookAheadPitch;
+        }
+
+        _baseRotation = vehicleRotation;
         UpdateOrientation();
+    }
+
+    public void SuspendRideCamera()
+    {
+        _savedRideYaw = _yaw;
+        _savedRidePitch = _pitch;
+        _savedRideLookAheadYaw = _rideLookAheadYaw;
+        _savedRideLookAheadPitch = _rideLookAheadPitch;
+        ClearBaseRotationPreservingOrientation();
     }
 
     public void ClearBaseRotationPreservingOrientation()
     {
         var worldFront = Front;
+        _rideCameraActive = false;
         _baseRotation = Matrix4x4.Identity;
         _yaw = MathF.Atan2(worldFront.Z, worldFront.X) * 180.0f / MathF.PI;
         _pitch = MathF.Asin(Math.Clamp(worldFront.Y, -1.0f, 1.0f)) * 180.0f / MathF.PI;
@@ -108,6 +147,8 @@ public class FlightCamera
         _lastMousePosition = mousePosition;
 
         _yaw -= xOffset;
+        if (_rideCameraActive)
+            _yaw = Math.Clamp(_yaw, 0.0f, 180.0f);
         _pitch = Math.Clamp(_pitch + yOffset, -89.0f, 89.0f);
 
         UpdateOrientation();
@@ -124,5 +165,7 @@ public class FlightCamera
 
         Front = Vector3.Normalize(Vector3.TransformNormal(direction, _baseRotation));
         Up = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY, _baseRotation));
+        if (Vector3.Cross(Front, Up).LengthSquared() < 0.000001f)
+            Up = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitZ, _baseRotation));
     }
 }

@@ -1,10 +1,11 @@
 {
   "cars": [
     {
-      //"model": "mine_car.glb",
+      "model": "MineCars.glb",
       "size": [ 0.8, 0.6, 1.4 ],
-      "localOffset": 0.34,
-      "cameraOffset": 0.75
+      //"localOffset": 0.34,
+      "localOffset": 0.0,
+      "cameraOffset": 1.0
     },
     {
       "paintStyle": 1

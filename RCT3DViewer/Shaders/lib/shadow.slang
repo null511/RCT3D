@@ -3,18 +3,22 @@ public module shadow;
 import lib.common;
 import lib.uniforms;
 
+[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
+
 extern static const int Shadow_Resolution = 1024;
 extern static const int Shadow_PcssSamples = 4;
 extern static const int Shadow_PcfSamples = 4;
 
 static const float Shadow_PenumbraScale = 64.0;
-static const float Shadow_MaxRadius = 1.0;
+static const float Shadow_MinRadiusPixels = 0.25;
+static const float Shadow_MaxRadiusBlocks = 1.00;
 
-int getShadowCascade(ShadowUniforms uniforms, float viewDepth) {
-    if (viewDepth > uniforms.cascadeSplits.w) return -1;
-    if (viewDepth > uniforms.cascadeSplits.z) return 3;
-    if (viewDepth > uniforms.cascadeSplits.y) return 2;
-    if (viewDepth > uniforms.cascadeSplits.x) return 1;
+
+int getShadowCascade(float viewDepth) {
+    if (viewDepth > shadowUniforms.cascadeSplits.w) return -1;
+    if (viewDepth > shadowUniforms.cascadeSplits.z) return 3;
+    if (viewDepth > shadowUniforms.cascadeSplits.y) return 2;
+    if (viewDepth > shadowUniforms.cascadeSplits.x) return 1;
     return 0;
 }
 
@@ -41,12 +45,15 @@ float getShadowVisibility(Texture2DArray<float> depthTexture, SamplerComparisonS
     if (any(shadowPos.xy < 0.0) || any(shadowPos.xy > 1.0) || shadowPos.z < 0.0 || shadowPos.z > 1.0) return 1.0;
 
     float2 uvScale = 0.5 * abs(projectionScale.xy);
-    float2 maxPixelRadius = Shadow_MaxRadius * uvScale;
+    float2 maxPixelRadius = Shadow_MaxRadiusBlocks * uvScale;
 
     float blockerDistance = getShadowBlockerDistance(depthTexture, shadowPos, cascade, maxPixelRadius, projectionScale.z, dither);
 
+    float2 minPixelRadius = Shadow_MinRadiusPixels / shadowUniforms.resolution;// * uvScale;
+
     float2 pixelRadius = (blockerDistance / Shadow_PenumbraScale) * uvScale;
-    pixelRadius = clamp(pixelRadius, float2(0.0), maxPixelRadius);
+    pixelRadius = clamp(pixelRadius, minPixelRadius, maxPixelRadius);
+
     return SampleShadow_PCF(depthTexture, comparisonSampler, shadowPos, cascade, pixelRadius, dither);
 }
 

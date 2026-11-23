@@ -1,6 +1,7 @@
 import lib.uniforms;
+import lib.shadow;
 
-[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
+//[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
 
 struct ShadowPushConstants {
 	uint baseTextureIndex;
@@ -29,4 +30,5 @@ VertexOutput vertexMain(VertexInput input)
 [shader("fragment")]
 void fragmentMain()
 {
+	//
 }

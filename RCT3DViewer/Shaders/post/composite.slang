@@ -14,7 +14,7 @@ import lib.shadow;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
-[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
+//[[vk::binding(3, 0)]] ConstantBuffer<ShadowUniforms> shadowUniforms;
 
 [[vk::binding(0, 1)]] Texture2D<float4> defer_albedo;
 [[vk::binding(1, 1)]] Texture2D<float4> defer_normals;
@@ -61,7 +61,7 @@ void main(uint2 globalPos: SV_DispatchThreadID) {
         float shadowVisibility = 1.0;
 
         if (sceneUniforms.shadowMappingEnabled != 0) {
-            int cascade = getShadowCascade(shadowUniforms, -viewPosition.z);
+            int cascade = getShadowCascade(-viewPosition.z);
 
             if (cascade >= 0) {
                 float3 shadowPos = mul_project(worldPosition, shadowUniforms.shadowViewProjection[cascade]);

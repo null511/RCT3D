@@ -31,6 +31,9 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
     private bool exitPoseReady;
     private PathPose exitPose;
     private bool rideCameraAttached;
+    private bool rideCameraInitialized;
+    private ushort rideCameraVehicleId;
+    private ushort rideCameraRideId;
     private string? statusMessage;
 
     public bool IsEnabled => peepEntityId.HasValue;
@@ -42,14 +45,24 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
         var nativeDistance = lookAheadDistance / WorldUnits.NativeUnit;
         scene.Simulation.RideCameraLookAheadDistanceNative = nativeDistance;
         var peep = scene.Simulation.Peep;
-        if (!rideInteractionActive || peepEntityId != peep?.EntityId
-            || peep is null || (NativePeepState)peep.State != NativePeepState.OnRide) {
+        if (!rideInteractionActive) {
+            ClearRideCameraRotation();
+            return;
+        }
+        if (peep is null) {
+            SuspendRideCameraRotation();
+            return;
+        }
+        if (peepEntityId != peep.EntityId || (NativePeepState)peep.State != NativePeepState.OnRide) {
             ClearRideCameraRotation();
             return;
         }
 
-        if (!scene.TryGetVehiclePose(peep.VehicleEntityId, peep.RideId, out var pose)) {
+        if (rideCameraInitialized && (rideCameraVehicleId != peep.VehicleEntityId || rideCameraRideId != peep.RideId))
             ClearRideCameraRotation();
+
+        if (!scene.TryGetVehiclePose(peep.VehicleEntityId, peep.RideId, out var pose)) {
+            SuspendRideCameraRotation();
             return;
         }
 
@@ -75,7 +88,14 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
                 rotation = Matrix4x4.CreateRotationY(pose.BodyYawRadians) * rotation;
             }
         }
-        camera.SetBaseRotation(rotation);
+        var firstAttachment = !rideCameraInitialized;
+        if (!rideCameraAttached) {
+            camera.BeginRideCamera(resume: rideCameraInitialized);
+            rideCameraInitialized = true;
+            rideCameraVehicleId = peep.VehicleEntityId;
+            rideCameraRideId = peep.RideId;
+        }
+        camera.SetRideRotation(pose.Rotation, rotation, applyLookAhead: !firstAttachment);
         rideCameraAttached = true;
         camera.Position = pose.Position + Vector3.TransformNormal(
             new Vector3(0.0f, pose.Definition.CameraOffset, 0.0f), pose.Rotation);
@@ -181,10 +201,7 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
         rideInteractionActive = false;
         hasRidden = false;
         exitPoseReady = false;
-        if (rideCameraAttached) {
-            camera.ClearBaseRotationPreservingOrientation();
-            rideCameraAttached = false;
-        }
+        ClearRideCameraRotation();
         statusMessage = null;
         camera.ResetMouseTracking();
     }
@@ -322,12 +339,20 @@ internal sealed class PeepModeController(FlightCamera camera, ParkSceneControlle
         return true;
     }
 
-    private void ClearRideCameraRotation()
+    private void SuspendRideCameraRotation()
     {
         if (!rideCameraAttached) return;
 
-        camera.ClearBaseRotationPreservingOrientation();
+        camera.SuspendRideCamera();
         rideCameraAttached = false;
+    }
+
+    private void ClearRideCameraRotation()
+    {
+        if (rideCameraAttached)
+            camera.ClearBaseRotationPreservingOrientation();
+        rideCameraAttached = false;
+        rideCameraInitialized = false;
     }
 
     private static Vector3 ToWorldCameraPosition(PeepSnapshot peep) => new(

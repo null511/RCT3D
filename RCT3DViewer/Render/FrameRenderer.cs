@@ -152,7 +152,10 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
             ShadowMappingEnabled = ui.ShadowMappingEnabled ? 1u : 0u,
         };
 
-        ShadowUniforms shadowUniforms = new() { CascadeSplits = cascadeSplits };
+        ShadowUniforms shadowUniforms = new() {
+            CascadeSplits = cascadeSplits,
+            Resolution = ui.ShadowResolution,
+        };
         for (var cascade = 0; cascade < ShadowRenderTargets.CascadeCount; cascade++) {
             shadowUniforms.ShadowViewProjection[cascade] = shadowViewProjections[cascade];
             shadowUniforms.ShadowProjection[cascade] = shadowProjections[cascade];

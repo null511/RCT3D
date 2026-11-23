@@ -125,6 +125,7 @@ Output paths follow `configuration.py` and resolve relative to the working direc
 - `Space` to move up; `Left Ctrl` to move down.
 - `F9` toggles simulation pause; `F3` toggles the debug overlay.
 - `P` toggles Peep Mode; `E` interacts with a ride entrance in Peep Mode.
+- While riding, look is limited to 90° left or right and 89° up or down relative to the vehicle.
 - Use **Park > Return to Menu** to unload the park. Park controls are inactive in Menu and while typing in UI fields.
 
 ## Current scope

@@ -28,7 +28,8 @@ struct ShadowUniforms {
 	// Keep this bound in sync with ShadowRenderTargets.CascadeCount.
 	float4x4 shadowViewProjection[4];
 	float4x4 shadowProjection[4];
-	float4 cascadeSplits;
+    float4 cascadeSplits;
+    float resolution;
 };
 
 enum DebugView : uint {
