@@ -26,7 +26,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
 
 
     public ModelGraphicsResources(VulkanDeviceContext context, RenderPass renderPass, DescriptorSetLayout uniformDescriptorSetLayout,
-        ImportedModelMaterial material, ModelTextureHeap textureHeap, bool unlit = false, bool createWireframePipeline = false,
+        ImportedModelMaterial material, ModelTextureHeap textureHeap, bool isVehicle = false, bool createWireframePipeline = false,
         int instanceBufferCount = 1)
     {
         _context = context;
@@ -40,7 +40,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
             uniformDescriptorSetLayout,
             MaterialTextureArrayData.FromModel(packedMaterial),
             useInstances: true,
-            shaderNameOverride: Path.Combine("object", unlit ? "vehicleCube" : "model"),
+            shaderNameOverride: Path.Combine("object", isVehicle ? "vehicle" : "model"),
             createWireframePipeline: createWireframePipeline,
             colorAttachmentCount: 3u,
             sharedModelMaterialDescriptorSetLayout: textureHeap.DescriptorSetLayout,

@@ -164,7 +164,13 @@ internal sealed unsafe class TerrainGraphicsResources(
                 Binding = 1,
                 Location = 7,
                 Format = Format.R32G32B32A32Sfloat,
-                Offset = (uint)Marshal.OffsetOf<ModelInstance>(nameof(ModelInstance.Color))
+                Offset = (uint)Marshal.OffsetOf<ModelInstance>(nameof(ModelInstance.ColorBody))
+            });
+            attributeDescriptions.Add(new VertexInputAttributeDescription {
+                Binding = 1,
+                Location = 8,
+                Format = Format.R32G32B32A32Sfloat,
+                Offset = (uint)Marshal.OffsetOf<ModelInstance>(nameof(ModelInstance.ColorTrim))
             });
         }
 
@@ -348,9 +354,9 @@ internal sealed unsafe class TerrainGraphicsResources(
 
         var samplerInfo = new SamplerCreateInfo {
             SType = StructureType.SamplerCreateInfo,
-            MagFilter = Filter.Linear,
-            MinFilter = Filter.Linear,
-            MipmapMode = SamplerMipmapMode.Linear,
+            MagFilter = Filter.Nearest,
+            MinFilter = Filter.Nearest,
+            MipmapMode = SamplerMipmapMode.Nearest,
             AddressModeU = SamplerAddressMode.Repeat,
             AddressModeV = SamplerAddressMode.Repeat,
             AddressModeW = SamplerAddressMode.Repeat,

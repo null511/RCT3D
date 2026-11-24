@@ -1,9 +1,12 @@
 {
-  "rct2.terrain_surface.dirt": "dirt.png",
-  "rct2.terrain_surface.grass": "grass.png",
-  "rct2.terrain_surface.grass_clumps": "grass_clumps.png",
-  "rct2.terrain_surface.rock": "rock.png",
-  "rct2.terrain_surface.sand": "sand.png",
-  "rct2.terrain_surface.sand_brown": "sand_brown.png",
-  "rct2.terrain_surface.sand_red": "sand_red.png"
+  // "rct2.terrain_surface.chequerboard": "chequerboard.png",
+  // "rct2.terrain_surface.dirt": "dirt.png",
+  // "rct2.terrain_surface.grass": "grass_0.png",
+  // "rct2.terrain_surface.grass_clumps": "grass_clumps.png",
+  // "rct2.terrain_surface.ice": "ice.png",
+  // "rct2.terrain_surface.martian": "martian.png",
+  // "rct2.terrain_surface.rock": "rock.png",
+  "rct2.terrain_surface.sand": "sand.png"
+  // "rct2.terrain_surface.sand_brown": "sand_brown.png",
+  // "rct2.terrain_surface.sand_red": "sand_red.png"
 }

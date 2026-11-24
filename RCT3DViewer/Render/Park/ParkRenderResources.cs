@@ -334,7 +334,7 @@ internal sealed unsafe class ParkRenderResources : IDisposable
             for (var i = 0; i < meshes.Length; i++) {
                 var mesh = meshes[i];
                 var resources = new ModelGraphicsResources(DeviceContext!, DeferredTargets!.GBufferRenderPass, UniformBufferResources!.DescriptorSetLayout,
-                    mesh.Material, ModelTextureHeap!, unlit: batch.Model.IsFallback, instanceBufferCount: MaxFramesInFlight);
+                    mesh.Material, ModelTextureHeap!, isVehicle: true, instanceBufferCount: MaxFramesInFlight);
                 modelResources[i] = resources;
                 resources.CreatePipeline();
                 resources.CreateTextureResources(CommandPool);

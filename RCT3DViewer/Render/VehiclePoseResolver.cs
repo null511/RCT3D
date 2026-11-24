@@ -8,7 +8,7 @@ using System.Numerics;
 namespace RCT3D.Render;
 
 internal readonly record struct VehiclePose(
-    ushort RideId, Vector3 Position, Matrix4x4 Rotation, byte PrimaryPaletteIndex,
+    ushort RideId, Vector3 Position, Matrix4x4 Rotation, byte BodyPaletteIndex, byte TrimPaletteIndex,
     RideVehicleCarDefinition Definition, bool IsVisible)
 {
     public Vector3? LookAheadOffset { get; init; }
@@ -108,7 +108,7 @@ internal sealed class VehiclePoseResolver
                 lookAheadOffset = Vector3.Lerp(previousOffset, lookAheadOffset.Value, amount);
             }
             poses[current.EntityId] = new VehiclePose(
-                current.RideId, position, rotation, current.PrimaryPaletteIndex, definition, definition.ShouldRender(current)) {
+                current.RideId, position, rotation, current.BodyPaletteIndex, current.TrimPaletteIndex, definition, definition.ShouldRender(current)) {
                 LookAheadOffset = lookAheadOffset,
                 LookAheadDistanceNative = lookAhead?.NativeDistance ?? 0.0f,
                 BodyYawRadians = bodyYaw

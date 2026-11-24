@@ -244,9 +244,9 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
 
         var samplerInfo = new SamplerCreateInfo {
             SType = StructureType.SamplerCreateInfo,
-            MagFilter = Filter.Linear,
-            MinFilter = Filter.Linear,
-            MipmapMode = SamplerMipmapMode.Linear,
+            MagFilter = Filter.Nearest,
+            MinFilter = Filter.Nearest,
+            MipmapMode = SamplerMipmapMode.Nearest,
             AddressModeU = SamplerAddressMode.Repeat,
             AddressModeV = SamplerAddressMode.Repeat,
             AddressModeW = SamplerAddressMode.Repeat,

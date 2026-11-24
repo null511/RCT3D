@@ -113,9 +113,11 @@ internal sealed class VehicleRenderer
                     region.Coordinate, region.Bounds, (uint)firstInstance, (uint)region.Poses.Count);
 
                 foreach (var pose in region.Poses) {
-                    var color = palette[pose.PrimaryPaletteIndex];
+                    var bodyColor = palette[pose.BodyPaletteIndex];
+                    var trimColor = palette[pose.TrimPaletteIndex];
                     instances[firstInstance++] = new ModelInstance(pose.Rotation * Matrix4x4.CreateTranslation(pose.Position)) {
-                        Color = new Vector4(color.Red / 255.0f, color.Green / 255.0f, color.Blue / 255.0f, 1.0f)
+                        ColorBody = new Vector4(bodyColor.Red / 255.0f, bodyColor.Green / 255.0f, bodyColor.Blue / 255.0f, 1.0f),
+                        ColorTrim = new Vector4(trimColor.Red / 255.0f, trimColor.Green / 255.0f, trimColor.Blue / 255.0f, 1.0f)
                     };
                 }
             }

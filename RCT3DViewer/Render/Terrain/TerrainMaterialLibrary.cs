@@ -8,6 +8,11 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
     private readonly IReadOnlyDictionary<uint, uint> _surfaceLayersByObjectIdHash;
     private readonly IReadOnlyDictionary<uint, uint> _sidingLayersByObjectIdHash;
 
+    private static readonly JsonDocumentOptions jsonOptions = new() {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
     public int Width { get; }
     public int Height { get; }
     public byte[] ColorPixels { get; }
@@ -49,12 +54,9 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
         var builder = new MaterialLibraryBuilder();
 
         // missing/fallback image
-        var missingTextureFullPath = Path.GetFullPath(missingTexturePath);
-        var missingTextureDirectory = Path.GetDirectoryName(missingTextureFullPath)
-            ?? throw new InvalidDataException($"Missing texture path has no directory: {missingTexturePath}");
-
         var fallbackLayer = 0u; //(uint)images.Count;
-        builder.AddImage(string.Empty, Path.GetFileName(missingTextureFullPath), missingTextureDirectory);
+        var surfaceDirectory = Path.Combine(textureDirectory, "Terrain");
+        builder.AddImage(string.Empty, "missing.png", surfaceDirectory);
 
         // load data
         LoadSurfaces(textureDirectory, builder, surfaceLayers);
@@ -71,7 +73,7 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
         var manifestPath = Path.Combine(surfaceDirectory, "materials.json");
 
         using var manifestStream = File.OpenRead(manifestPath);
-        using var manifest = JsonDocument.Parse(manifestStream);
+        using var manifest = JsonDocument.Parse(manifestStream, jsonOptions);
         
         foreach (var entry in manifest.RootElement.EnumerateObject()) {
             var objectId = entry.Name;

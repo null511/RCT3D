@@ -111,8 +111,6 @@ internal static class WoodenCoasterTrack
 
             const float platformCenterX = (platformMinX + platformMaxX) * 0.5f;
             const float platformHalfWidth = (platformMaxX - platformMinX) * 0.5f;
-            //const float woodHalfMargin = (1.5f - 2f*postHalfSize - (RailHalfSeparation - RailWoodInset)) * 0.5f;
-            //const float woodPlatformCenterX = 1.5f - woodHalfMargin;
 
             // side platform left
             part.AppendRailPart.Box(-platformCenterX, WoodPlatformCenterY, platformHalfWidth, WoodPlatformHalfHeight, shape => {

@@ -12,7 +12,7 @@ public struct RCTVehicleData
     public byte Orientation;
     public byte Pitch;
     public byte Roll;
-    public byte PrimaryPaletteIndex;
+    public byte BodyPaletteIndex;
     public float PitchRadians;
     public float RollRadians;
     public ushort RideId;
@@ -26,7 +26,7 @@ public struct RCTVehicleData
     public ushort TrackProgressTotal;
     public ushort TrackTypeAndDirection;
     public byte TrackSubposition;
-    public byte TrackReserved;
+    public byte TrimPaletteIndex;
     public short SwingPosition;
     public uint ObjectIdHash;
     public byte VehicleType;

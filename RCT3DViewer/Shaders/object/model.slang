@@ -12,19 +12,19 @@ struct VertexInput {
     [[vk::location(0)]] float3 position;
     [[vk::location(1)]] float3 normal;
     [[vk::location(2)]] float2 texCoord;
-    [[vk::location(3)]] float4 transformRow0;
-    [[vk::location(4)]] float4 transformRow1;
-    [[vk::location(5)]] float4 transformRow2;
-    [[vk::location(6)]] float4 transformRow3;
-    [[vk::location(7)]] float4 color;
+	[[vk::location(3)]] float4 transformRow0;
+	[[vk::location(4)]] float4 transformRow1;
+	[[vk::location(5)]] float4 transformRow2;
+	[[vk::location(6)]] float4 transformRow3;
+	[[vk::location(7)]] float4 colorBody;
 };
 
 struct VertexStageOutput {
-    float4 position : SV_Position;
-    float3 worldPosition : TEXCOORD2;
-    float3 normal : NORMAL;
+	float4 position : SV_Position;
+	float3 worldPosition : TEXCOORD2;
+	float3 normal : NORMAL;
 	float2 texCoord : TEXCOORD0;
-    nointerpolation float3 color : COLOR0;
+	nointerpolation float3 colorBody : COLOR0;
 };
 
 struct GBufferOutput {
@@ -57,15 +57,15 @@ VertexStageOutput vertexMain(VertexInput input)
 		+ input.normal.z * input.transformRow2.xyz;
 
 	VertexStageOutput output;
-    output.position = mul(worldPosition, cameraUniforms.viewProjection);
-    output.worldPosition = worldPosition.xyz;
-    output.normal = normalize(worldNormal);
+	output.position = mul(worldPosition, cameraUniforms.viewProjection);
+	output.worldPosition = worldPosition.xyz;
+	output.normal = normalize(worldNormal);
 	output.texCoord = input.texCoord;
-    output.color = srgbToLinear(input.color.rgb);
+	output.colorBody = srgbToLinear(input.colorBody.rgb);
 
-    output.position.xy += (sceneUniforms.taa_jitter / sceneUniforms.renderDimensions) * (2.0 * output.position.w);
+	output.position.xy += (sceneUniforms.taa_jitter / sceneUniforms.renderDimensions) * (2.0 * output.position.w);
 
-    return output;
+	return output;
 }
 
 [shader("fragment")]
@@ -73,11 +73,11 @@ GBufferOutput fragmentMain(VertexStageOutput input)
 {
     uint baseTextureIndex = materialPushConstants.baseTextureIndex;
     float4 albedo = modelTextures[baseTextureIndex].Sample(modelSampler, input.texCoord);
+    float4 normalMap = modelTextures[baseTextureIndex + 1].Sample(modelSampler, input.texCoord);
+    float4 specularMap = modelTextures[baseTextureIndex + 2].Sample(modelSampler, input.texCoord);
 
     if (albedo.a < AlphaThreshold) discard;
 
-    float4 normalMap = modelTextures[baseTextureIndex + 1].Sample(modelSampler, input.texCoord);
-    float4 specularMap = modelTextures[baseTextureIndex + 2].Sample(modelSampler, input.texCoord);
 
 
     float3 geoNormal = normalize(input.normal);
@@ -88,7 +88,7 @@ GBufferOutput fragmentMain(VertexStageOutput input)
     float3 texNormal = normalize(tangent * tangentNormal.x + bitangent * tangentNormal.y + geoNormal * tangentNormal.z);
 
     GBufferOutput output;
-    output.albedo = float4(albedo.rgb * input.color, normalMap.b);
+    output.albedo = float4(albedo.rgb * input.colorBody, normalMap.b);
     output.normals.xy = octohedral::encode(geoNormal);
     output.normals.zw = octohedral::encode(texNormal);
     output.specular = specularMap;

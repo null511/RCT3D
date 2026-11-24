@@ -182,5 +182,6 @@ internal sealed record ModelRegionBatch(
 internal struct ModelInstance(Matrix4x4 transform)
 {
     public Matrix4x4 Transform = transform;
-    public Vector4 Color = Vector4.One;
+    public Vector4 ColorBody = Vector4.One;
+    public Vector4 ColorTrim = Vector4.One;
 }

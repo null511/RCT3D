@@ -1,5 +1,6 @@
 import lib.uniforms;
 import lib.colors;
+import lib.normals;
 import lib.octohedral;
 
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
@@ -24,14 +25,17 @@ struct VertexInput {
 	[[vk::location(4)]] float4 transformRow1;
 	[[vk::location(5)]] float4 transformRow2;
 	[[vk::location(6)]] float4 transformRow3;
-	[[vk::location(7)]] float4 color;
+	[[vk::location(7)]] float4 colorBody;
+	[[vk::location(8)]] float4 colorTrim;
 };
 
 struct VertexStageOutput {
 	float4 position : SV_Position;
 	float3 normal : NORMAL;
 	float2 texCoord : TEXCOORD0;
-	nointerpolation float3 color : COLOR0;
+	float3 worldPosition : TEXCOORD1;
+	nointerpolation float3 colorBody : COLOR0;
+	nointerpolation float3 colorTrim : COLOR1;
 };
 
 struct GBufferOutput {
@@ -53,13 +57,15 @@ VertexStageOutput vertexMain(VertexInput input) {
 
 	VertexStageOutput output;
 	output.position = mul(worldPosition, cameraUniforms.viewProjection);
-    output.normal = normalize(worldNormal);
+	output.worldPosition = worldPosition.xyz;
+	output.normal = normalize(worldNormal);
 	output.texCoord = input.texCoord;
-	output.color = srgbToLinear(input.color.rgb);
+	output.colorBody = srgbToLinear(input.colorBody.rgb);
+	output.colorTrim = srgbToLinear(input.colorTrim.rgb);
 
-    output.position.xy += (sceneUniforms.taa_jitter / sceneUniforms.renderDimensions) * (2.0 * output.position.w);
+	output.position.xy += (sceneUniforms.taa_jitter / sceneUniforms.renderDimensions) * (2.0 * output.position.w);
 
-    return output;
+	return output;
 }
 
 [shader("fragment")]
@@ -69,13 +75,24 @@ GBufferOutput fragmentMain(VertexStageOutput input) {
 	float4 normalMap = modelTextures[baseTextureIndex + 1].Sample(modelSampler, input.texCoord);
 	float4 specularMap = modelTextures[baseTextureIndex + 2].Sample(modelSampler, input.texCoord);
 
-    float3 geoNormal = normalize(input.normal);
-    float3 texNormal = geoNormal;
+    float3 mask = modelTextures[baseTextureIndex].SampleLevel(modelSampler, input.texCoord, 0).rgb;
 
-    GBufferOutput output;
-	output.albedo = float4(albedo.rgb * input.color, normalMap.b);
+    if (all(mask.rgb == float3(1, 0, 0)))
+        albedo.rgb = input.colorTrim;
+    else if (all(mask.rgb == float3(0, 1, 0)))
+        albedo.rgb = input.colorBody;
+
+	float3 geoNormal = normalize(input.normal);
+	float3 tangentNormal = restoreNormal(normalMap.rg * 2.0 - 1.0);
+
+	float3 tangent, bitangent;
+	getTangent(input.texCoord, input.worldPosition, geoNormal, tangent, bitangent);
+	float3 texNormal = normalize(tangent * tangentNormal.x + bitangent * tangentNormal.y + geoNormal * tangentNormal.z);
+
+	GBufferOutput output;
+	output.albedo = float4(albedo.rgb, normalMap.b);
 	output.normals.xy = octohedral::encode(geoNormal);
 	output.normals.zw = octohedral::encode(texNormal);
-    output.specular = specularMap;
-    return output;
+	output.specular = specularMap;
+	return output;
 }
