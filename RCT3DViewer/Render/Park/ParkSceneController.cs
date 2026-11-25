@@ -27,7 +27,7 @@ internal sealed class ParkSceneController(
     private readonly TreeSceneryMeshBuilder treeSceneryMeshBuilder = new(resources.TreeSceneryAssets!);
     private readonly TrackMeshBuilder trackMeshBuilder = new();
     private readonly TunnelLayoutBuilder tunnelLayoutBuilder = new();
-    private readonly RideEntranceExitMeshBuilder rideEntranceExitMeshBuilder = new();
+    private readonly RideEntranceModelBuilder rideEntranceModelBuilder = new();
     private readonly VehiclePoseResolver vehiclePoseResolver = new();
     private readonly VehicleRenderer vehicleRenderer = new();
 
@@ -109,13 +109,19 @@ internal sealed class ParkSceneController(
 
             var meshData = await Task.Run(() => {
                 var occupancy = new MapOccupancyMap(snapshot.SurfaceData, snapshot.Width, snapshot.Height);
+
                 foreach (var obstacle in snapshot.ObstacleData)
                     occupancy.AddObstacle(obstacle);
+
                 var tracks = trackMeshBuilder.Build(snapshot.TrackData, snapshot.PathData, snapshot.RideEntranceData,
                     snapshot.SurfaceData, occupancy, snapshot.Width, snapshot.Height, snapshot.PaletteData);
+
                 var tunnelLayout = tunnelLayoutBuilder.Build(occupancy, terrainSkirtFloor);
-                var terrain = terrainMeshBuilder.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height,
-                    terrainSkirtFloor, tunnelLayout);
+
+                var terrain = terrainMeshBuilder.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height, terrainSkirtFloor, tunnelLayout);
+
+                var rideEntranceExitMeshBuilder = new RideEntranceExitMeshBuilder(snapshot.Width, snapshot.Height);
+
                 return (
                     Terrain: terrain,
                     Water: WaterMeshData.Combine(terrain.Water, tracks.Water),
@@ -128,14 +134,14 @@ internal sealed class ParkSceneController(
                         .Where(vehicle => RideVehicleDefinitions.Resolve(vehicle).ShouldRender(vehicle))
                         .Select(vehicle => RideVehicleDefinitions.Resolve(vehicle)).Distinct()
                         .Select(VehicleModel.Load).ToArray(),
-                    RideEntrances: rideEntranceExitMeshBuilder.Build(
-                        snapshot.RideEntranceData, snapshot.TrackData, snapshot.Width, snapshot.Height));
+                    RideEntrances: rideEntranceExitMeshBuilder.Build(snapshot.RideEntranceData, snapshot.TrackData),
+                    RideEntranceModels: rideEntranceModelBuilder.Build(snapshot.RideEntranceData, snapshot.Width, snapshot.Height));
             });
 
             return new ParkLoadResult(
                 parkPath, snapshot.Width, snapshot.Height,
                 meshData.Terrain.Terrain, meshData.Water, meshData.Paths, meshData.Navigation, meshData.PathAccessories,
-                meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, meshData.Trees, meshData.Tracks.TrackElements, snapshot.RideEntranceData,
+                meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, meshData.RideEntranceModels, meshData.Trees, meshData.Tracks.TrackElements, snapshot.RideEntranceData,
                 meshData.Tracks.Centerlines, snapshot.PaletteData, meshData.Vehicles);
         }
         catch (Exception ex) {
@@ -181,6 +187,7 @@ internal sealed class ParkSceneController(
                 resources.VehiclePathGraphicsResources!.UploadMesh(vehiclePathMesh);
                 DisposePathAccessoryResources();
                 DisposeTreeSceneryResources();
+                DisposeRideEntranceModelResources();
                 resources.DisposeVehicleResources();
                 vehicleRenderer.Clear();
                 resources.ModelTextureHeap!.ResetParkTextures();
@@ -201,6 +208,23 @@ internal sealed class ParkSceneController(
                     }
                     catch {
                         accessoryResources.Dispose();
+                        throw;
+                    }
+                }
+
+                foreach (var batch in result.RideEntranceModels) {
+                    var modelResources = new ModelGraphicsResources(resources.DeviceContext!, resources.DeferredTargets!.GBufferRenderPass,
+                        resources.UniformBufferResources!.DescriptorSetLayout, batch.Mesh.Material, resources.ModelTextureHeap!, createWireframePipeline: true);
+
+                    try {
+                        modelResources.CreatePipeline();
+                        modelResources.CreateTextureResources(resources.CommandPool);
+                        modelResources.UploadMesh(batch.Mesh);
+                        modelResources.UploadInstances(batch.Regions);
+                        resources.RideEntranceModelResources.Add(modelResources);
+                    }
+                    catch {
+                        modelResources.Dispose();
                         throw;
                     }
                 }
@@ -302,6 +326,7 @@ internal sealed class ParkSceneController(
 
                 DisposePathAccessoryResources();
                 DisposeTreeSceneryResources();
+                DisposeRideEntranceModelResources();
                 resources.DisposeVehicleResources();
                 vehicleRenderer.Clear();
                 resources.ModelTextureHeap!.ResetParkTextures();
@@ -395,6 +420,15 @@ internal sealed class ParkSceneController(
                 var region = GetOrCreateRenderRegion(range.Region);
                 region.RideEntrances = range;
                 region.IncludeStaticBounds(range.Bounds);
+            }
+        }
+
+        foreach (var modelResources in resources.RideEntranceModelResources) {
+            foreach (var batch in modelResources.RegionBatches) {
+                if (batch.InstanceCount == 0) continue;
+                var region = GetOrCreateRenderRegion(batch.Region);
+                region.RideEntranceModels.Add(new RenderRegionModelBatch(modelResources, batch));
+                region.IncludeStaticBounds(batch.Bounds);
             }
         }
 
@@ -533,6 +567,14 @@ internal sealed class ParkSceneController(
         resources.TreeSceneryGraphicsResources.Clear();
     }
 
+    private void DisposeRideEntranceModelResources()
+    {
+        foreach (var modelResources in resources.RideEntranceModelResources)
+            modelResources.Dispose();
+
+        resources.RideEntranceModelResources.Clear();
+    }
+
     public void Dispose()
     {
         if (isDisposed) return;
@@ -557,6 +599,7 @@ internal sealed class ParkSceneController(
     private sealed record ParkLoadResult(
         string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water, PathMeshData Paths,
         PathNavigation Navigation, PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks, RideSupportMeshData RideSupports,
-        RideEntranceExitMeshData RideEntrances, TreeSceneryBatch[] Trees, RCTTrackElementData[] TrackElements, RCTRideEntranceData[] RideEntranceData,
+        RideEntranceExitMeshData RideEntrances, RideEntranceModelBatch[] RideEntranceModels, TreeSceneryBatch[] Trees,
+        RCTTrackElementData[] TrackElements, RCTRideEntranceData[] RideEntranceData,
         TrackCenterlinePiece[] Centerlines, RCTPaletteEntry[] PaletteData, VehicleModel[] Vehicles);
 }

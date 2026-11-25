@@ -19,4 +19,5 @@ public struct RCTRideEntranceData
     public byte BaseHeight;
     public byte Direction;
     public byte ClearanceHeight;
+    public uint StationObjectIdHash;
 }

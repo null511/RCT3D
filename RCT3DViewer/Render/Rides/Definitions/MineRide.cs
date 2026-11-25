@@ -15,7 +15,6 @@ internal sealed class MineRide : RideDefinition
     {
         SmoothMovement = true;
         CenterlineHeightOffset = 0.5f;
-        //CarVerticalOffset = 0.5f;
 
         SupportStyle = RideSupportStyle.MetalFork;
 

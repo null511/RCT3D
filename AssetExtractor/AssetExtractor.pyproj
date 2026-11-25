@@ -10,7 +10,7 @@
     <ProjectTypeGuids>{888888a0-9f3d-457c-b088-3a5042f75d52}</ProjectTypeGuids>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
     <InterpreterId>MSBuild|.venv|$(MSBuildProjectFullPath)</InterpreterId>
-    <CommandLineArguments>--export-vehicle mine-cars</CommandLineArguments>
+    <CommandLineArguments>--export-vehicle &quot;C:\Program Files\OpenRCT2\data\object\rct1\ride\rct1.ride.mine_trains.parkobj&quot;</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'" />
@@ -25,9 +25,10 @@
     <Compile Include="configuration.py" />
     <Compile Include="exporter.py" />
     <Compile Include="main.py" />
-    <Compile Include="RideVehicles.py" />
+    <Compile Include="RideEntrances.py" />
     <Compile Include="square.py" />
     <Compile Include="Vegetation.py" />
+    <Compile Include="VehicleSprites.py" />
   </ItemGroup>
   <ItemGroup>
     <Folder Remove="bin\" />

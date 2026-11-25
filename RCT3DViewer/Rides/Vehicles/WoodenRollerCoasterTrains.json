@@ -2,7 +2,6 @@
   "cars": [
     {
       "model": "WoodenRollerCoasterTrains/mesh.glb",
-      "size": [ 1.40, 0.80, 1.90 ],
       "localOffset": 0.00,
       "cameraOffset": 1.10
     }

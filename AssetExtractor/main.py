@@ -130,14 +130,28 @@ def square_terrain_tile(idx, name):
 
 def main():
     parser = argparse.ArgumentParser(description="Extract and process game sprites.")
+    exports = parser.add_mutually_exclusive_group()
+    exports.add_argument(
+        "--export-vehicle", metavar="OBJECT_PATH",
+        help="Export the four primary flat-track views for every car in a ride object.",
+    )
+    exports.add_argument(
+        "--export-station", choices=("plain",),
+        help="Export plain ride entrance and exit sprite layers.",
+    )
     parser.add_argument(
-        "--export-vehicle", choices=("mine-cars",),
-        help="Export four empty, upright Mine Cars reference views only.",
+        "--vehicle-metadata", metavar="METADATA_PATH",
+        help="Ride object JSON metadata when the vehicle source is not a .parkobj file.",
     )
     args = parser.parse_args()
-    if args.export_vehicle == "mine-cars":
-        from RideVehicles import RideVehicles
-        return 0 if RideVehicles.export_mine_cars() else 1
+    if args.vehicle_metadata and not args.export_vehicle:
+        parser.error("--vehicle-metadata requires --export-vehicle")
+    if args.export_vehicle:
+        from VehicleSprites import VehicleSprites
+        return 0 if VehicleSprites.export_vehicle(args.export_vehicle, args.vehicle_metadata) else 1
+    if args.export_station == "plain":
+        from RideEntrances import RideEntrances
+        return 0 if RideEntrances.export_plain() else 1
 
     run()
     return 0

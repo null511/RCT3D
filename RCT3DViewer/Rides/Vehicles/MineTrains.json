@@ -1,12 +1,14 @@
 {
   "cars": [
     {
-      "size": [ 0.8, 0.65, 1.6 ],
-      "localOffset": 0.40
+      "model": "MineTrains/Car1.glb",
+      "localOffset": 0.0,
+      "cameraOffset": 1.0
     },
     {
-      "size": [ 0.8, 0.65, 1.6 ],
-      "localOffset": 0.40
+      "model": "MineTrains/Car2.glb",
+      "localOffset": 0.0,
+      "cameraOffset": 1.0
     }
   ]
 }

@@ -127,7 +127,7 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
         return transformed;
     }
 
-    private sealed class BatchBuilder(ImportedModelMesh mesh)
+    internal sealed class BatchBuilder(ImportedModelMesh mesh)
     {
         private readonly AxisAlignedBounds meshBounds = GetMeshBounds(mesh);
 
@@ -146,7 +146,7 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
         }
     }
 
-    private sealed class RegionBuilder
+    internal sealed class RegionBuilder
     {
         private bool hasBounds;
 

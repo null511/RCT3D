@@ -103,20 +103,30 @@ Model paths resolve relative to the application's `Assets\Models\Vehicle` direct
 
 Missing or null `model` uses the existing cube. A configured model that cannot load logs an error once per type per park and also uses the cube. `size` controls only that cube and is baked into its shared geometry; it does not resize imported models. Both model and cube instances carry only pose and dynamic primary vehicle color. The shader multiplies authored base-color RGB by the linearized per-instance color, preserving textures and opacity. Geometry/materials are shared by differently colored vehicles of the same type, and park-specific resources are released on unload/replacement.
 
-## Mine-car reference sprites
+## Vehicle reference sprites
 
-AssetExtractor can export four empty, upright Mine Cars views for the wooden wild mouse (`rct2.ride.wmmine`). Configure `GAME_PATH` and `OPENRCT2_BIN` in `AssetExtractor\configuration.py`: it requires your own game's `ObjData\WMMINE.DAT`, the OpenRCT2 executable, and its installed `data\object\rct2\ride\rct2.ride.wmmine.json` catalog entry.
+AssetExtractor exports four primary flat-track directions for every car type defined by a ride object's metadata. It reads metadata from a `.parkobj` file or, with `--vehicle-metadata`, from a separate JSON file for a DAT source. Configure `OPENRCT2_BIN` in `AssetExtractor\configuration.py`.
 
-Run from the AssetExtractor directory with its configured Python environment and dependencies:
+For example, to extract the Mine Train coaster:
 
 ```powershell
 Set-Location .\AssetExtractor
-.\.venv\Scripts\python.exe main.py --export-vehicle mine-cars
+.\.venv\Scripts\python.exe main.py --export-vehicle "C:\Program Files\OpenRCT2\data\object\rct1\ride\rct1.ride.mine_trains.parkobj"
 ```
 
-The full raw object sprite set and original drawing offsets are saved under `RAW_DIR\Vehicles\rct2.ride.wmmine\WMMINE`. Only four final PNGs are published under `OUTPUT_DIR\vehicles\mine-cars`: `view-00.png`, `view-08.png`, `view-16.png`, and `view-24.png`. These are quarter-turn isometric views of car type 0 on flat track with neutral swing, not orthographic views. Pixels, dimensions, transparency, and the original exported palette are preserved without colour remapping or passenger overlays. `reference_views.json` records the source indices (3, 27, 51, 75) and x/y drawing offsets.
+The full raw sprite set and original drawing offsets are saved under `RAW_DIR\Vehicles\<object-id>\<source-name>`. Primary views and `reference_views.json` are written under `OUTPUT_DIR\vehicles\<object-id>`, with one `car-<type>-view-<direction>.png` per car type and cardinal direction. The selected PNGs are copied unchanged, without color remapping or rider overlays; the sidecar records each source image index and drawing offset.
 
-Output paths follow `configuration.py` and resolve relative to the working directory when configured as relative paths. Reruns refresh the raw export and replace only the named final outputs. Missing files, incompatible metadata, or export failures report an error and return a nonzero exit code. Running without `--export-vehicle` keeps the existing extraction/processing workflow; the vehicle command does not process vegetation or deploy assets into the viewer.
+Output paths follow `configuration.py` and resolve relative to the working directory when configured as relative paths. Reruns replace only the named final outputs. Missing files, incompatible metadata, or export failures report an error and return a nonzero exit code. Running without `--export-vehicle` keeps the existing extraction/processing workflow; the vehicle command does not process vegetation or deploy assets into the viewer.
+
+## Plain ride entrance and exit sprites
+
+With `OPENRCT2_BIN` configured, run from the AssetExtractor directory:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --export-station plain
+```
+
+This requires the installed OpenRCT2 `data\object\rct2\station\rct2.station.plain.parkobj` and an RCT2 installation configured in OpenRCT2 so it can resolve the object's `g1.dat` images. It exports eight PNGs to `OUTPUT_DIR\station\plain`: `entrance-0.png` through `entrance-3.png` and `exit-0.png` through `exit-3.png`. Each combines the front and back layers at their original drawing offsets. `sprite_offsets.json` records composite offsets and source indices and offsets. Colours are not remapped; scrolling ride-name text and supports are drawn separately by OpenRCT2. Reruns replace only the named outputs. Missing data, incompatible object metadata, or export failures return a nonzero exit code.
 
 ## Controls
 

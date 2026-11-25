@@ -48,6 +48,7 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     public TreeSceneryAssetLibrary? TreeSceneryAssets { get; private set; }
     public List<(PathAccessoryBatch Batch, ModelGraphicsResources Resources)> PathAccessoryGraphicsResources { get; } = new();
     public List<(TreeSceneryBatch Batch, ModelGraphicsResources Resources)> TreeSceneryGraphicsResources { get; } = new();
+    public List<ModelGraphicsResources> RideEntranceModelResources { get; } = new();
     public PipelineLayout PipelineLayout => TerrainGraphicsResources?.PipelineLayout ?? default;
     //public Pipeline GraphicsPipeline => TerrainGraphicsResources?.Pipeline ?? default;
     public DescriptorSet TerrainDescriptorSet => TerrainGraphicsResources?.DescriptorSet ?? default;
@@ -387,6 +388,9 @@ internal sealed unsafe class ParkRenderResources : IDisposable
             resources.Dispose();
 
         TreeSceneryGraphicsResources.Clear();
+        foreach (var resources in RideEntranceModelResources)
+            resources.Dispose();
+        RideEntranceModelResources.Clear();
         DisposeVehicleResources();
         WaterGraphicsResources?.Dispose();
         WaterGraphicsResources = null;
