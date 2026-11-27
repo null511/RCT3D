@@ -3,10 +3,9 @@ using System.Numerics;
 
 namespace RCT3D.Render.Paths.Meshing;
 
-internal sealed class PathMeshGeometry
+internal sealed class PathMeshGeometry : IPathGeometryWriter
 {
     private readonly List<RenderRegionIndexRange> regions = new();
-    private readonly List<RenderRegionIndexRange> supportRegions = new();
     private readonly List<TerrainVertex> vertices = new();
     private readonly List<uint> indices = new();
 
@@ -22,15 +21,13 @@ internal sealed class PathMeshGeometry
         _firstIndex = indices.Count;
     }
 
-    public void EndRegion(bool supports = false)
+    public void EndRegion()
     {
         if (indices.Count > _firstIndex)
-            (supports ? supportRegions : regions).Add(RenderRegionMeshRanges.Create(_region, vertices, indices, firstVertex, _firstIndex));
+            regions.Add(RenderRegionMeshRanges.Create(_region, vertices, indices, firstVertex, _firstIndex));
     }
 
-    public PathMeshData Build() => new(vertices.ToArray(), indices.ToArray(), regions.ToArray()) {
-        SupportRegions = supportRegions.ToArray()
-    };
+    public PathMeshData Build() => new(vertices.ToArray(), indices.ToArray(), regions.ToArray());
 
     public uint AddIndexedVertex(Vector3 position, Vector3 normal, Vector2 uv, uint material)
     {

@@ -1,5 +1,6 @@
 using RCT3D.Interop.Models;
 using RCT3D.Render.Paths.Builders;
+using RCT3D.Render.Rides.Tracks;
 using RCT3D.Render.Terrain;
 using System.Numerics;
 
@@ -7,7 +8,7 @@ namespace RCT3D.Render.Paths.Meshing;
 
 internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 {
-    private const float SurfaceBias = 0.008f;
+    private const float SurfaceBias = 0.016f;
     private const float RailHeight = 0.62f;
     private const float RailThickness = 0.045f;
     private const float RailPostHalfWidth = 0.055f;
@@ -39,23 +40,33 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
     protected virtual uint GetRailingMaterial(RCTTilePathData path) => Materials.GetRailingLayer(path.RailingsIdHash);
 
+    protected virtual TrackRgba8 GetRailingColor(RCTTilePathData path) => TrackRgba8.White;
 
-    public void AddPath(RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry)
+    protected virtual TrackRgba8 GetSupportColor(RCTTilePathData path) => GetRailingColor(path);
+
+    public bool ShouldDrawSurface(RCTTilePathData path, RCTTileSurfaceData surface) =>
+        DrawSurfaceOverPlatform || !ShouldDrawSupports(path, surface);
+
+    public void AddPath(RCTTilePathData path, RCTTileSurfaceData surface, PathMeshGeometry geometry, PathSurfaceMeshGeometry surfaceGeometry, PathSurfaceMaterials surfaceMaterials)
     {
-        var drawPlatform = ShouldDrawSupports(path, surface);
-        if (!drawPlatform || DrawSurfaceOverPlatform)
-            AddSurface(path, geometry);
+        if (ShouldDrawSurface(path, surface))
+            AddSurface(path, surfaceGeometry, surfaceMaterials.GetMaterial(path));
 
-        if (drawPlatform)
+        if (ShouldDrawSupports(path, surface))
             AddElevatedPlatformSlab(path, geometry);
     }
 
-    public void AddPathSupports(RCTTilePathData path, RCTTileSurfaceData surface, MapOccupancyMap occupancy, PathMeshGeometry geometry, PathSupportStationRegistry supportStations)
+    public void AddPathRailings(RCTTilePathData path, RCTTileSurfaceData surface, PathRailingMeshGeometry geometry)
     {
-        if (Materials.HasVisibleRailings(path.RailingsIdHash) && (path.IsQueue || path.IsSloped || path.BaseZ != surface.BaseZ || surface.SlopeFlags != 0)) {
-            AddRailings(path, geometry);
-        }
+        if (!Materials.HasVisibleRailings(path.RailingsIdHash)
+            || !(path.IsQueue || path.IsSloped || path.BaseZ != surface.BaseZ || surface.SlopeFlags != 0)) return;
 
+        geometry.Color = GetRailingColor(path);
+        AddRailings(path, geometry);
+    }
+
+    public void AddPathSupports(RCTTilePathData path, RCTTileSurfaceData surface, MapOccupancyMap occupancy, PathRailingMeshGeometry geometry, PathSupportStationRegistry supportStations)
+    {
         if (!ShouldDrawSupports(path, surface)) return;
 
         var bottom = surface.BaseZ * WorldUnits.HeightPerBaseUnit
@@ -70,32 +81,32 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
             supportBaseHeight = highestObstacleTop;
         }
 
-        AddSupports(path, surface, GetRailingMaterial(path), geometry, supportStations, supportBaseHeight);
+        geometry.Color = GetSupportColor(path);
+        AddSupports(path, surface, geometry, supportStations, supportBaseHeight);
     }
 
-    private void AddRailings(RCTTilePathData path, PathMeshGeometry geometry)
+    private void AddRailings(RCTTilePathData path, PathRailingMeshGeometry geometry)
     {
         var west = path.TileX * WorldUnits.TileSize;
         var east = (path.TileX + 1) * WorldUnits.TileSize;
         var south = path.TileY * WorldUnits.TileSize;
         var north = (path.TileY + 1) * WorldUnits.TileSize;
         var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit;
-        var material = GetRailingMaterial(path);
 
         if (path.IsSloped) {
             if (path.SlopeDirection is DirectionWest or DirectionEast) {
                 if ((path.Edges & (1 << DirectionNorth)) == 0)
-                    AddRailingEdge(path, DirectionNorth, new Vector3(west, 0, north), new Vector3(east, 0, north), baseHeight, material, geometry);
-                
+                    AddRailingEdge(path, DirectionNorth, new Vector3(west, 0, north), new Vector3(east, 0, north), baseHeight, geometry);
+
                 if ((path.Edges & (1 << DirectionSouth)) == 0)
-                    AddRailingEdge(path, DirectionSouth, new Vector3(west, 0, south), new Vector3(east, 0, south), baseHeight, material, geometry);
+                    AddRailingEdge(path, DirectionSouth, new Vector3(west, 0, south), new Vector3(east, 0, south), baseHeight, geometry);
             }
             else {
                 if ((path.Edges & (1 << DirectionWest)) == 0)
-                    AddRailingEdge(path, DirectionWest, new Vector3(west, 0, south), new Vector3(west, 0, north), baseHeight, material, geometry);
+                    AddRailingEdge(path, DirectionWest, new Vector3(west, 0, south), new Vector3(west, 0, north), baseHeight, geometry);
 
                 if ((path.Edges & (1 << DirectionEast)) == 0)
-                    AddRailingEdge(path, DirectionEast, new Vector3(east, 0, south), new Vector3(east, 0, north), baseHeight, material, geometry);
+                    AddRailingEdge(path, DirectionEast, new Vector3(east, 0, south), new Vector3(east, 0, north), baseHeight, geometry);
             }
 
             return;
@@ -106,26 +117,26 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
 
             switch (direction) {
                 case DirectionWest:
-                    AddRailingEdge(path, direction, new Vector3(west, 0, south), new Vector3(west, 0, north), baseHeight, material, geometry);
+                    AddRailingEdge(path, direction, new Vector3(west, 0, south), new Vector3(west, 0, north), baseHeight, geometry);
                     break;
                 case DirectionNorth:
-                    AddRailingEdge(path, direction, new Vector3(west, 0, north), new Vector3(east, 0, north), baseHeight, material, geometry);
+                    AddRailingEdge(path, direction, new Vector3(west, 0, north), new Vector3(east, 0, north), baseHeight, geometry);
                     break;
                 case DirectionEast:
-                    AddRailingEdge(path, direction, new Vector3(east, 0, south), new Vector3(east, 0, north), baseHeight, material, geometry);
+                    AddRailingEdge(path, direction, new Vector3(east, 0, south), new Vector3(east, 0, north), baseHeight, geometry);
                     break;
                 case DirectionSouth:
-                    AddRailingEdge(path, direction, new Vector3(west, 0, south), new Vector3(east, 0, south), baseHeight, material, geometry);
+                    AddRailingEdge(path, direction, new Vector3(west, 0, south), new Vector3(east, 0, south), baseHeight, geometry);
                     break;
             }
         }
     }
 
     protected abstract void AddSupports(
-        RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry,
+        RCTTilePathData path, RCTTileSurfaceData surface, PathRailingMeshGeometry geometry,
         PathSupportStationRegistry supportStations, float? supportBaseHeight);
 
-    protected void AddSurface(RCTTilePathData path, PathMeshGeometry geometry)
+    private void AddSurface(RCTTilePathData path, PathSurfaceMeshGeometry geometry, PathSurfaceMaterial material)
     {
         var west = path.TileX * WorldUnits.TileSize;
         var east = (path.TileX + 1) * WorldUnits.TileSize;
@@ -138,8 +149,6 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         var southEast = new Vector3(east, GetPathCornerHeight(path, false, false, baseHeight) + SurfaceBias, south);
         var northEast = new Vector3(east, GetPathCornerHeight(path, false, true, baseHeight) + SurfaceBias, north);
         var northWest = new Vector3(west, GetPathCornerHeight(path, true, true, baseHeight) + SurfaceBias, north);
-
-        var material = Materials.GetSurfaceLayer(path.SurfaceIdHash);
 
         geometry.AddTriangle(northEast, new Vector2(1, 1), southEast, new Vector2(1, 0), northWest, new Vector2(0, 1), material);
         geometry.AddTriangle(southEast, new Vector2(1, 0), southWest, new Vector2(0, 0), northWest, new Vector2(0, 1), material);
@@ -178,19 +187,19 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         geometry.AddPrismFace(topNorthWest, topNorthEast, bottomNorthEast, bottomNorthWest, center, material);
     }
 
-    protected abstract void AddRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, uint material, PathMeshGeometry geometry);
+    protected abstract void AddRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, PathRailingMeshGeometry geometry);
 
-    protected static void BuildRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, uint material, int postCount, PathMeshGeometry geometry)
+    protected static void BuildRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, int postCount, PathRailingMeshGeometry geometry)
     {
         if (!PrepareRailingEdge(path, direction, ref start, ref end, baseHeight)) return;
 
         for (var index = 0; index < postCount; index++) {
             var ratio = postCount == 1 ? 0.5f : (float)index / (postCount - 1);
             var post = Vector3.Lerp(start, end, ratio);
-            AddVerticalBeam(post, RailPostHalfWidth, post.Y, post.Y + RailHeight, material, geometry);
+            AddVerticalBeam(post, RailPostHalfWidth, post.Y, post.Y + RailHeight, geometry);
         }
 
-        AddRailBeam(start, end, RailHeight, material, geometry);
+        AddRailBeam(start, end, RailHeight, geometry);
     }
 
     protected static bool PrepareRailingEdge(RCTTilePathData path, byte direction, ref Vector3 start, ref Vector3 end, float baseHeight)
@@ -243,14 +252,14 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         };
     }
 
-    private static void AddRailBeam(Vector3 start, Vector3 end, float height, uint material, PathMeshGeometry geometry)
+    private static void AddRailBeam(Vector3 start, Vector3 end, float height, IPathGeometryWriter geometry)
     {
         start.Y += height;
         end.Y += height;
-        AddBeam(start, end, RailThickness, material, geometry);
+        AddBeam(start, end, RailThickness, 0, geometry);
     }
 
-    protected static void AddBeam(Vector3 start, Vector3 end, float halfWidth, uint material, PathMeshGeometry geometry)
+    protected static void AddBeam(Vector3 start, Vector3 end, float halfWidth, uint material, IPathGeometryWriter geometry)
     {
         var axis = end - start;
         if (axis.LengthSquared() < 0.0001f) {
@@ -287,12 +296,12 @@ internal abstract class PathTypeGeometryBuilder(PathMaterialLibrary materials)
         geometry.AddPrismFace(points[4], points[5], points[6], points[7], centerPoint, material);
     }
 
-    private static void AddVerticalBeam(Vector3 center, float halfWidth, float bottom, float top, uint material, PathMeshGeometry geometry)
+    private static void AddVerticalBeam(Vector3 center, float halfWidth, float bottom, float top, IPathGeometryWriter geometry)
     {
-        AddBox(new Vector3(center.X, bottom, center.Z), halfWidth, top, material, geometry);
+        AddBox(new Vector3(center.X, bottom, center.Z), halfWidth, top, 0, geometry);
     }
 
-    protected static void AddBox(Vector3 centerAtBottom, float halfWidth, float top, uint material, PathMeshGeometry geometry)
+    protected static void AddBox(Vector3 centerAtBottom, float halfWidth, float top, uint material, IPathGeometryWriter geometry)
     {
         var bottom = centerAtBottom.Y;
         if (top <= bottom + HeightEpsilon) return;

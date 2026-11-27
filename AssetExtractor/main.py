@@ -1,36 +1,26 @@
 import argparse
+import configuration
 import os
 import sys
-import zipfile
-import configuration
 
-from PIL import Image
-from Vegetation import Vegetation
+from exporters.Paths import Paths
+from exporters.RideStations import RideStations
+from exporters.Terrain import Terrain
+from exporters.Vegetation import Vegetation
+from exporters.Vehicles import Vehicles
 from exporter import Exporter
-from square import isometric_to_square
 
 
-def run():
+def extract_all():
     # Extract game sprites
     print("Extracting sprites...")
 
     if not os.path.exists(configuration.RAW_DIR):
         os.makedirs(configuration.RAW_DIR)
 
-    # extract_g1()
-    # extract_paths()
-    # Vegetation.extract()
+    extract_g1()
 
     print("\nExtraction complete.")
-    print("\nProcessing sprites...")
-
-    # Convert isometric sprites to square textures
-    # square_terrain()
-
-    Vegetation.process()
-
-    print("\nProcessing complete!")
-
 
 def extract_g1():
     GAME_G1_PATH = os.path.join(configuration.GAME_PATH, "Data", "g1.dat")
@@ -49,111 +39,81 @@ def extract_g1():
 
         if not os.path.exists(raw_png):
             Exporter.export_index(GAME_G1_PATH, idx, raw_png)
-    
-
-def extract_paths():
-    extract_path("rct1.footpath_surface.dirt.parkobj", "Dirt")
-
-
-def extract_path(obj_name, raw_name):
-    # GAME_OBJ_PATH = os.path.join(GAME_PATH, "ObjData", obj_name)
-    GAME_OBJ_PATH = os.path.join("C:\\Program Files\\OpenRCT2\\data\\object\\rct1\\footpath_surface", obj_name)
-    RAW_DIR_PATH = os.path.join(configuration.RAW_DIR, "Paths", raw_name)
-
-    print(f"\nExtracting sprites from {obj_name}...")
-
-    if not os.path.exists(RAW_DIR_PATH):
-        os.makedirs(RAW_DIR_PATH)
-
-    with zipfile.ZipFile(GAME_OBJ_PATH, 'r') as archive:
-        archive.extract("images.dat", RAW_DIR_PATH)
-
-    tmp = os.path.join(RAW_DIR_PATH, "images.dat")
-    Exporter.unpack_all(tmp, RAW_DIR_PATH)
-    
-
-# def extract_range(game_path, raw_dir, start_index, end_index):
-#     print(f"\nExtracting sprites from {game_path} across indices {start_index} to {end_index}...")
-
-#     if not os.path.exists(raw_dir):
-#         os.makedirs(raw_dir)
-
-#     for idx in range(start_index, end_index + 1):
-#         raw_png = os.path.join(raw_dir, f"sprite_{idx}.png")
-
-#         if not os.path.exists(raw_png):
-#             Exporter.export_sprite(game_path, idx, raw_png)
-
-#     print("\nExtraction complete.")
-
-
-def square_terrain():
-    OUTPUT_DIR_TERRAIN = os.path.join(configuration.OUTPUT_DIR, "terrain")
-    if not os.path.exists(OUTPUT_DIR_TERRAIN):
-        os.makedirs(OUTPUT_DIR_TERRAIN)
-
-    print(f"Scanning raw images for 64x63 isometric floor tiles...")
-
-    square_terrain_tile(1987, "sand_brown")
-    square_terrain_tile(2044, "sand_red")
-    square_terrain_tile(2101, "sand")
-    square_terrain_tile(2158, "ice")
-    square_terrain_tile(2215, "grass_clumps")
-    square_terrain_tile(2329, "martian")
-    square_terrain_tile(2386, "chequerboard")
-    square_terrain_tile(2500, "dirt")
-    square_terrain_tile(2557, "rock")
-    square_terrain_tile(2716, "grass_0")
-    square_terrain_tile(2754, "grass_1a")
-    square_terrain_tile(2792, "grass_1b")
-    square_terrain_tile(2830, "grass_1c")
-    square_terrain_tile(2868, "grass_1d")
-    square_terrain_tile(2906, "grass_2a")
-    square_terrain_tile(2944, "grass_2b")
-    square_terrain_tile(2982, "grass_2c")
-    square_terrain_tile(3020, "grass_2d")
-
-    print("\nAll flattened terrain tiles are saved.")
-
-
-def square_terrain_tile(idx, name):
-    raw_png = os.path.join(configuration.RAW_DIR, "g1", f"sprite_{idx}.png")
-    final_png = os.path.join(configuration.OUTPUT_DIR, "terrain", f"{name}.png")
-
-    try:
-        with Image.open(raw_png) as iso_img:
-            isometric_to_square(iso_img, final_png);
-
-    except Exception as e:
-        print(f" [!] Processing failed on asset index #{idx}: {e}")
-
-
+        
 def main():
     parser = argparse.ArgumentParser(description="Extract and process game sprites.")
     exports = parser.add_mutually_exclusive_group()
+
+    exports.add_argument(
+        "--extract-all",
+        help="Extract all assets",
+    )
+
+    exports.add_argument(
+        "--export-terrain",
+        action="store_true",
+        help="Export terrain surfaces",
+    )
+
+    exports.add_argument(
+        "--export-terrain-sides",
+        action="store_true",
+        help="Export terrain sides",
+    )
+
+    exports.add_argument(
+        "--export-paths",
+        action="store_true",
+        help="Export raw and square footpath surface sprites.",
+    )
+
+    exports.add_argument(
+        "--export-vegetation",
+        help="Export vegetation",
+    )
+
     exports.add_argument(
         "--export-vehicle", metavar="OBJECT_PATH",
         help="Export the four primary flat-track views for every car in a ride object.",
     )
+
     exports.add_argument(
         "--export-station", choices=("plain",),
         help="Export plain ride entrance and exit sprite layers.",
     )
+
     parser.add_argument(
         "--vehicle-metadata", metavar="METADATA_PATH",
         help="Ride object JSON metadata when the vehicle source is not a .parkobj file.",
     )
+
     args = parser.parse_args()
+
     if args.vehicle_metadata and not args.export_vehicle:
         parser.error("--vehicle-metadata requires --export-vehicle")
-    if args.export_vehicle:
-        from VehicleSprites import VehicleSprites
-        return 0 if VehicleSprites.export_vehicle(args.export_vehicle, args.vehicle_metadata) else 1
-    if args.export_station == "plain":
-        from RideEntrances import RideEntrances
-        return 0 if RideEntrances.export_plain() else 1
 
-    run()
+    if args.extract_all:
+        return 0 if extract_all() else 1
+
+    if args.export_terrain_sides:
+        return 0 if Terrain.export_all_sides() else 1
+
+    if args.export_terrain:
+        return 0 if Terrain.export_all() else 1
+
+    if args.export_paths:
+        return 0 if Paths.export_all() else 1
+
+    if args.export_vegetation:
+        return 0 if Vegetation.run() else 1
+
+    if args.export_vehicle:
+        return 0 if Vehicles.export_vehicle(args.export_vehicle, args.vehicle_metadata) else 1
+
+    if args.export_station == "plain":
+        return 0 if RideStations.export_plain() else 1
+
+    print("\nHello World!")
     return 0
 
 

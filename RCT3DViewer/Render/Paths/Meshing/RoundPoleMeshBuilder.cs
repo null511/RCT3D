@@ -4,7 +4,7 @@ namespace RCT3D.Render.Paths.Meshing;
 
 internal static class RoundPoleMeshBuilder
 {
-    public static void Build(Vector3 start, Vector3 end, float radius, int radialSegments, uint material, PathMeshGeometry geometry)
+    public static void Build(Vector3 start, Vector3 end, float radius, int radialSegments, uint material, IPathGeometryWriter geometry)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(radialSegments, 3);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);

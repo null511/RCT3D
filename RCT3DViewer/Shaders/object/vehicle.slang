@@ -6,7 +6,7 @@ import lib.octohedral;
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUniforms> cameraUniforms;
 [[vk::binding(2, 0)]] ConstantBuffer<SceneUniforms> sceneUniforms;
 
-[[vk::binding(0, 1)]] Texture2D<float4> modelTextures[256];
+[[vk::binding(0, 1)]] Texture2D<float4> modelTextures[1024];
 [[vk::binding(0, 2)]] SamplerState modelSampler;
 
 struct ModelMaterialPushConstants

@@ -31,3 +31,33 @@ def isometric_to_square(iso_img: ImageFile, output_path, target_dim = 32):
     # Save finalized square asset
     output_img.save(output_path)
     print(f" [+] Generated square texture asset: {output_path}")
+
+
+def flat_path_to_square(iso_img: Image.Image, x_offset: int, y_offset: int):
+    source = iso_img.convert("RGBA")
+    output = Image.new("RGBA", (32, 32))
+    for u in range(32):
+        for v in range(32):
+            # Sample pixel centers in the shared 64x31 flat-tile footprint.
+            x = v - u - x_offset
+            y = ((u + v + 1) * 31 // 64) - y_offset
+            if 0 <= x < source.width and 0 <= y < source.height:
+                output.putpixel((u, v), source.getpixel((x, y)))
+    return output
+
+
+def isometric_side_to_square(iso_img: Image.Image, output_path):
+    if iso_img.size != (32, 31):
+        raise ValueError(f"Expected a 32x31 terrain side sprite, got {iso_img.size}")
+
+    source = iso_img.convert("RGBA")
+    staging = Image.new("RGBA", (32, 16))
+    for x in range(32):
+        top = 15 - x // 2
+        staging.paste(source.crop((x, top, x + 1, top + 16)), (x, 0))
+
+    output_img = Image.new("RGBA", (32, 32))
+    output_img.paste(staging, (0, 0))
+    output_img.paste(staging, (0, 16))
+    output_img.save(output_path)
+    print(f" [+] Generated square texture asset: {output_path}")

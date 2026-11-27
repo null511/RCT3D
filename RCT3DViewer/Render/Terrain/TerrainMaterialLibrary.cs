@@ -92,7 +92,7 @@ public sealed class TerrainMaterialLibrary : IMaterialLibrary
         var manifestPath = Path.Combine(sideDirectory, "materials.json");
 
         using var manifestStream = File.OpenRead(manifestPath);
-        using var manifest = JsonDocument.Parse(manifestStream);
+        using var manifest = JsonDocument.Parse(manifestStream, jsonOptions);
 
         foreach (var entry in manifest.RootElement.EnumerateObject()) {
             var objectId = entry.Name;

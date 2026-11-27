@@ -7,12 +7,12 @@ namespace RCT3D.Render.Paths.Builders;
 
 internal sealed class ConcretePathGeometryBuilder(PathMaterialLibrary materials) : PathTypeGeometryBuilder(materials)
 {
-    protected override void AddRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, uint material, PathMeshGeometry geometry)
+    protected override void AddRailingEdge(RCTTilePathData path, byte direction, Vector3 start, Vector3 end, float baseHeight, PathRailingMeshGeometry geometry)
     {
-        BuildRailingEdge(path, direction, start, end, baseHeight, material, 12, geometry);
+        BuildRailingEdge(path, direction, start, end, baseHeight, 12, geometry);
     }
 
-    protected override void AddSupports(RCTTilePathData path, RCTTileSurfaceData surface, uint material, PathMeshGeometry geometry, PathSupportStationRegistry supportStations, float? supportBaseHeight)
+    protected override void AddSupports(RCTTilePathData path, RCTTileSurfaceData surface, PathRailingMeshGeometry geometry, PathSupportStationRegistry supportStations, float? supportBaseHeight)
     {
         var x = (path.TileX + 0.5f) * WorldUnits.TileSize;
         var z = (path.TileY + 0.5f) * WorldUnits.TileSize;
@@ -23,10 +23,10 @@ internal sealed class ConcretePathGeometryBuilder(PathMaterialLibrary materials)
         if (top <= bottom + HeightEpsilon) return;
 
         var baseTop = MathF.Min(bottom + SupportBaseHeight, top);
-        AddBox(new Vector3(x, bottom, z), SupportBaseHalfWidth, baseTop, material, geometry);
+        AddBox(new Vector3(x, bottom, z), SupportBaseHalfWidth, baseTop, 0, geometry);
 
         if (top > baseTop + HeightEpsilon)
-            AddBox(new Vector3(x, baseTop, z), SupportHalfWidth, top, material, geometry);
+            AddBox(new Vector3(x, baseTop, z), SupportHalfWidth, top, 0, geometry);
     }
 
     protected override void AddElevatedPlatformSlab(RCTTilePathData path, PathMeshGeometry geometry)

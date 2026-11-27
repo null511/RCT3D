@@ -10,7 +10,7 @@ namespace RCT3D.Render;
 
 internal sealed unsafe class VulkanDeviceContext : IDisposable
 {
-    public const uint ModelTextureDescriptorCapacity = 256;
+    public const uint ModelTextureDescriptorCapacity = 1024;
 #if DEBUG
     private static readonly DebugUtilsMessengerCallbackFunctionEXT ValidationCallback = DebugCallback;
     private ExtDebugUtils? _debugUtils;
@@ -30,6 +30,7 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
     public KhrSwapchain? SwapchainExtension { get; private set; }
     public bool SupportsWireframe { get; private set; }
     public bool SupportsModelTextureIndexing { get; private set; }
+    public bool SupportsPathTextureNonUniformIndexing { get; private set; }
 
 
     private VulkanDeviceContext(Vk vk)
@@ -254,8 +255,12 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
             Api.GetPhysicalDeviceFeatures(PhysicalDevice, out PhysicalDeviceFeatures supportedFeatures);
             SupportsWireframe = supportedFeatures.FillModeNonSolid;
 
+            PhysicalDeviceVulkan12Features supportedVulkan12Features = new() {
+                SType = StructureType.PhysicalDeviceVulkan12Features
+            };
             PhysicalDeviceVulkan11Features supportedVulkan11Features = new() {
-                SType = StructureType.PhysicalDeviceVulkan11Features
+                SType = StructureType.PhysicalDeviceVulkan11Features,
+                PNext = &supportedVulkan12Features
             };
 
             PhysicalDeviceFeatures2 supportedFeatures2 = new() {
@@ -266,6 +271,7 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
             Api.GetPhysicalDeviceFeatures2(PhysicalDevice, &supportedFeatures2);
             if (!supportedVulkan11Features.ShaderDrawParameters)
                 throw new NotSupportedException("The tonemap shader requires Vulkan 1.1 shaderDrawParameters support.");
+            SupportsPathTextureNonUniformIndexing = supportedVulkan12Features.ShaderSampledImageArrayNonUniformIndexing;
 
             PhysicalDeviceFeatures deviceFeatures = new() {
                 SamplerAnisotropy = supportedFeatures.SamplerAnisotropy,
@@ -274,8 +280,13 @@ internal sealed unsafe class VulkanDeviceContext : IDisposable
                 ShaderSampledImageArrayDynamicIndexing = true,
             };
 
+            PhysicalDeviceVulkan12Features enabledVulkan12Features = new() {
+                SType = StructureType.PhysicalDeviceVulkan12Features,
+                ShaderSampledImageArrayNonUniformIndexing = supportedVulkan12Features.ShaderSampledImageArrayNonUniformIndexing
+            };
             PhysicalDeviceVulkan11Features enabledVulkan11Features = new() {
                 SType = StructureType.PhysicalDeviceVulkan11Features,
+                PNext = &enabledVulkan12Features,
                 ShaderDrawParameters = 1
             };
 

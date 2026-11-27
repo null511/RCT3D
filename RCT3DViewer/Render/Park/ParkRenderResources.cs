@@ -36,6 +36,9 @@ internal sealed unsafe class ParkRenderResources : IDisposable
     public UniformBufferResources? UniformBufferResources { get; private set; }
     public TerrainGraphicsResources? TerrainGraphicsResources { get; private set; }
     public TerrainGraphicsResources? PathGraphicsResources { get; private set; }
+    public PathSurfaceGraphicsResources? PathSurfaceGraphicsResources { get; private set; }
+    public TerrainGraphicsResources? PathRailingGraphicsResources { get; private set; }
+    public TerrainGraphicsResources? PathSupportGraphicsResources { get; private set; }
     public TerrainGraphicsResources? TrackGraphicsResources { get; private set; }
     public TerrainGraphicsResources? VehiclePathGraphicsResources { get; private set; }
     public TerrainGraphicsResources? RideSupportGraphicsResources { get; private set; }
@@ -99,6 +102,14 @@ internal sealed unsafe class ParkRenderResources : IDisposable
         PathGraphicsResources = new TerrainGraphicsResources(DeviceContext!, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout, MaterialTextureArrayData.From(PathMaterials),
             shaderNameOverride: Path.Combine("object", "terrain"), createWireframePipeline: true, colorAttachmentCount: 3);
         PathGraphicsResources.CreatePipeline();
+        PathRailingGraphicsResources = new TerrainGraphicsResources(DeviceContext!, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout,
+            MaterialTextureArrayData.From(PathMaterials), shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true,
+            colorAttachmentCount: 3, useTrackVertexColor: true);
+        PathRailingGraphicsResources.CreatePipeline();
+        PathSupportGraphicsResources = new TerrainGraphicsResources(DeviceContext!, DeferredTargets.GBufferRenderPass, UniformBufferResources.DescriptorSetLayout,
+            MaterialTextureArrayData.From(PathMaterials), shaderNameOverride: Path.Combine("object", "track"), createWireframePipeline: true,
+            colorAttachmentCount: 3, useTrackVertexColor: true);
+        PathSupportGraphicsResources.CreatePipeline();
         WaterGraphicsResources = new WaterGraphicsResources(DeviceContext!, DeferredTargets.WaterRenderPass, UniformBufferResources.DescriptorSetLayout, SkyTargets, DeferredTargets.ShadowTargets!);
         WaterGraphicsResources.CreatePipeline();
         ModelTextureHeap = new ModelTextureHeap(DeviceContext!, CommandPool);
@@ -108,6 +119,27 @@ internal sealed unsafe class ParkRenderResources : IDisposable
         TerrainGraphicsResources.CreateTextureResources(CommandPool);
         PathGraphicsResources.CreateTextureResources(CommandPool);
         ModelTextureHeap.SetParkTextureStartIndex();
+    }
+
+    public void CreatePathSurfaceGraphicsResources(PathSurfaceMaterials materials, PathSurfaceMeshData mesh)
+    {
+        ClearPathSurfaceGraphicsResources();
+        var surfaceResources = new PathSurfaceGraphicsResources(materials, DeviceContext!, DeferredTargets!.GBufferRenderPass,
+            DeferredTargets.ShadowTargets!.RenderPass, UniformBufferResources!.DescriptorSetLayout, CommandPool);
+        try {
+            surfaceResources.UploadMesh(mesh.Vertices, mesh.Indices);
+            PathSurfaceGraphicsResources = surfaceResources;
+        }
+        catch {
+            surfaceResources.Dispose();
+            throw;
+        }
+    }
+
+    public void ClearPathSurfaceGraphicsResources()
+    {
+        PathSurfaceGraphicsResources?.Dispose();
+        PathSurfaceGraphicsResources = null;
     }
 
     public void CreateRideSupportGraphicsResources()
@@ -402,6 +434,11 @@ internal sealed unsafe class ParkRenderResources : IDisposable
         RideSupportGraphicsResources = null;
         RideEntranceGraphicsResources?.Dispose();
         RideEntranceGraphicsResources = null;
+        PathSupportGraphicsResources?.Dispose();
+        PathSupportGraphicsResources = null;
+        PathRailingGraphicsResources?.Dispose();
+        PathRailingGraphicsResources = null;
+        ClearPathSurfaceGraphicsResources();
         PathGraphicsResources?.Dispose();
         PathGraphicsResources = null;
         TerrainGraphicsResources?.Dispose();

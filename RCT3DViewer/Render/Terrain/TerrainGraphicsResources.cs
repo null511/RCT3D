@@ -218,7 +218,7 @@ internal sealed unsafe class TerrainGraphicsResources(
             SType = StructureType.PipelineDepthStencilStateCreateInfo,
             DepthTestEnable = true,
             DepthWriteEnable = true,
-            DepthCompareOp = CompareOp.Less,
+            DepthCompareOp = CompareOp.LessOrEqual,
             MinDepthBounds = 0.0f,
             MaxDepthBounds = 1.0f
         };
@@ -558,6 +558,11 @@ internal sealed unsafe class TerrainGraphicsResources(
     }
 
     public void UploadMesh(PathMeshData mesh)
+    {
+        UploadMesh(mesh.Vertices, mesh.Indices);
+    }
+
+    public void UploadMesh(PathRailingMeshData mesh)
     {
         UploadMesh(mesh.Vertices, mesh.Indices);
     }

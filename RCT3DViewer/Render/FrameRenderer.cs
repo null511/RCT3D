@@ -319,12 +319,13 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
             }
         }
 
+        var modelDescriptorsBound = false;
         foreach (var region in parkRegions) {
             if (!region.CameraVisible || !region.RidesInRange) continue;
             foreach (var vehicleBatch in region.Vehicles)
-                vehicleBatch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, vehicleBatch.Batch);
+                vehicleBatch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, vehicleBatch.Batch, ref modelDescriptorsBound);
             foreach (var batch in region.RideEntranceModels)
-                batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch, ui.WireframeEnabled);
+                batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch, ref modelDescriptorsBound, ui.WireframeEnabled);
         }
 
         if (pathMesh is { Vertices.Length: > 0, Indices.Length: > 0 } && resources.PathGraphicsResources is { IndexCount: > 0 } pathResources) {
@@ -336,7 +337,8 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
             pathDescriptorSets[0] = uniformDescriptorSet;
             pathDescriptorSets[1] = pathDescriptorSet;
             Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pathResources.PipelineLayout, 0, 2, pathDescriptorSets, 0, null);
-            
+            modelDescriptorsBound = false;
+
             var pathVertexBuffer = pathResources.VertexBuffer;
             Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in pathVertexBuffer, in offset);
             Vk.CmdBindIndexBuffer(commandBuffer, pathResources.IndexBuffer, 0, IndexType.Uint32);
@@ -344,8 +346,55 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
             foreach (var region in parkRegions) {
                 if (region.Paths is { } range && region.CameraVisible)
                     Vk.CmdDrawIndexed(commandBuffer, range.IndexCount, 1, range.FirstIndex, 0, 0);
-                if (region.PathSupports is { } supportRange && region.CameraVisible && region.SupportsInRange)
-                    Vk.CmdDrawIndexed(commandBuffer, supportRange.IndexCount, 1, supportRange.FirstIndex, 0, 0);
+            }
+        }
+
+        if (pathMesh is { } pathsWithSurfaces
+            && pathsWithSurfaces.Surfaces is { Vertices.Length: > 0, Indices.Length: > 0 }
+            && resources.PathSurfaceGraphicsResources is { IndexCount: > 0 } surfaceResources) {
+            surfaceResources.BindVisible(commandBuffer, uniformDescriptorSet, ui.WireframeEnabled);
+            modelDescriptorsBound = false;
+            foreach (var region in parkRegions) {
+                if (region.PathSurfaces is { } range && region.CameraVisible)
+                    surfaceResources.DrawRange(commandBuffer, range.FirstIndex, range.IndexCount);
+            }
+        }
+
+        if (pathMesh is { } pathsWithSupports
+            && pathsWithSupports.Supports is { Vertices.Length: > 0, Indices.Length: > 0 }
+            && resources.PathSupportGraphicsResources is { IndexCount: > 0 } pathSupportResources) {
+            var supportPipeline = ui.WireframeEnabled ? pathSupportResources.WireframePipeline : pathSupportResources.Pipeline;
+            Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, supportPipeline);
+            Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pathSupportResources.PipelineLayout,
+                0, 1, in uniformDescriptorSet, 0, null);
+            modelDescriptorsBound = false;
+
+            var supportVertexBuffer = pathSupportResources.VertexBuffer;
+            Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in supportVertexBuffer, in offset);
+            Vk.CmdBindIndexBuffer(commandBuffer, pathSupportResources.IndexBuffer, 0, IndexType.Uint32);
+
+            foreach (var region in parkRegions) {
+                if (region.PathSupports is { } range && region.CameraVisible && region.SupportsInRange)
+                    Vk.CmdDrawIndexed(commandBuffer, range.IndexCount, 1, range.FirstIndex, 0, 0);
+            }
+        }
+
+        if (pathMesh is { } pathsWithRailings
+            && pathsWithRailings.Railings is { Vertices.Length: > 0, Indices.Length: > 0 }
+            && resources.PathRailingGraphicsResources is { IndexCount: > 0 } railingResources) {
+            var railingPipeline = ui.WireframeEnabled ? railingResources.WireframePipeline : railingResources.Pipeline;
+            Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, railingPipeline);
+            Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, railingResources.PipelineLayout,
+                0, 1, in uniformDescriptorSet, 0, null);
+            modelDescriptorsBound = false;
+
+            var railingVertexBuffer = railingResources.VertexBuffer;
+            Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, in railingVertexBuffer, in offset);
+            Vk.CmdBindIndexBuffer(commandBuffer, railingResources.IndexBuffer, 0, IndexType.Uint32);
+
+            foreach (var region in parkRegions) {
+                if (region.PathRailings is { } range && region.CameraVisible && region.SupportsInRange)
+                    Vk.CmdDrawIndexed(commandBuffer, range.IndexCount, 1, range.FirstIndex, 0, 0);
             }
         }
 
@@ -353,10 +402,10 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
             if (!region.CameraVisible || !region.SceneryInRange) continue;
 
             foreach (var batch in region.PathAccessories)
-                batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch);
+                batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch, ref modelDescriptorsBound);
 
             foreach (var batch in region.Trees)
-                batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch, ui.WireframeEnabled);
+                batch.Resources.DrawInstanced(commandBuffer, uniformDescriptorSet, batch.Batch, ref modelDescriptorsBound, ui.WireframeEnabled);
         }
 
         if (ui.DebugTrackPaths && resources.VehiclePathGraphicsResources is { IndexCount: > 0 } lineResources) {
@@ -644,9 +693,19 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
         if (pathMesh is { Vertices.Length: > 0, Indices.Length: > 0 } && resources.PathGraphicsResources is { IndexCount: > 0 } pathResources) {
             DrawShadowRegions(commandBuffer, shadowResources.TerrainPipeline, pathResources.VertexBuffer, pathResources.IndexBuffer,
                 parkRegions, ShadowRegionCategory.Paths);
-            DrawShadowRegions(commandBuffer, shadowResources.TerrainPipeline, pathResources.VertexBuffer, pathResources.IndexBuffer,
-                parkRegions, ShadowRegionCategory.PathSupports);
         }
+
+        if (pathMesh is { } pathsWithSupports
+            && pathsWithSupports.Supports is { Vertices.Length: > 0, Indices.Length: > 0 }
+            && resources.PathSupportGraphicsResources is { IndexCount: > 0 } pathSupportResources)
+            DrawShadowRegions(commandBuffer, shadowResources.TrackPipeline, pathSupportResources.VertexBuffer, pathSupportResources.IndexBuffer,
+                parkRegions, ShadowRegionCategory.PathSupports);
+
+        if (pathMesh is { } pathsWithRailings
+            && pathsWithRailings.Railings is { Vertices.Length: > 0, Indices.Length: > 0 }
+            && resources.PathRailingGraphicsResources is { IndexCount: > 0 } railingResources)
+            DrawShadowRegions(commandBuffer, shadowResources.TrackPipeline, railingResources.VertexBuffer, railingResources.IndexBuffer,
+                parkRegions, ShadowRegionCategory.PathRailings);
 
         if (trackMesh is { Vertices.Length: > 0, Indices.Length: > 0 } && resources.TrackGraphicsResources is { IndexCount: > 0 } trackResources)
             DrawShadowRegions(commandBuffer, shadowResources.TrackPipeline, trackResources.VertexBuffer, trackResources.IndexBuffer,
@@ -673,6 +732,16 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
 
         foreach (var (_, modelResources) in resources.TreeSceneryGraphicsResources)
             DrawShadowModels(commandBuffer, shadowResources.ModelPipeline, shadowResources.PipelineLayout, modelResources, regionsByCoordinate, (uint)cascade, ShadowRegionCategory.Scenery);
+
+        if (pathMesh is { } pathsWithSurfaces
+            && pathsWithSurfaces.Surfaces is { Vertices.Length: > 0, Indices.Length: > 0 }
+            && resources.PathSurfaceGraphicsResources is { IndexCount: > 0 } surfaceResources) {
+            surfaceResources.BindShadow(commandBuffer, uniformDescriptorSet, cascadeIndex);
+            foreach (var region in parkRegions) {
+                if (region.PathSurfaces is { } range && region.ShadowVisible)
+                    surfaceResources.DrawRange(commandBuffer, range.FirstIndex, range.IndexCount);
+            }
+        }
 
         Vk.CmdEndRenderPass(commandBuffer);
     }
@@ -721,7 +790,7 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
 
     private static bool IsShadowCategoryInRange(ParkRenderRegion region, ShadowRegionCategory category) => category switch {
         ShadowRegionCategory.Tracks or ShadowRegionCategory.RideEntrances or ShadowRegionCategory.Vehicles => region.RidesInRange,
-        ShadowRegionCategory.RideSupports or ShadowRegionCategory.PathSupports => region.SupportsInRange,
+        ShadowRegionCategory.RideSupports or ShadowRegionCategory.PathSupports or ShadowRegionCategory.PathRailings => region.SupportsInRange,
         ShadowRegionCategory.Scenery => region.SceneryInRange,
         _ => true
     };
@@ -730,6 +799,7 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
         ShadowRegionCategory.Terrain => region.Terrain,
         ShadowRegionCategory.Paths => region.Paths,
         ShadowRegionCategory.PathSupports => region.PathSupports,
+        ShadowRegionCategory.PathRailings => region.PathRailings,
         ShadowRegionCategory.Tracks => region.Tracks,
         ShadowRegionCategory.RideSupports => region.RideSupports,
         ShadowRegionCategory.RideEntrances => region.RideEntrances,
@@ -752,6 +822,7 @@ internal sealed unsafe class FrameRenderer(ParkRenderResources resources, Viewer
         Terrain,
         Paths,
         PathSupports,
+        PathRailings,
         Tracks,
         RideSupports,
         RideEntrances,

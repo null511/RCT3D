@@ -1,3 +1,17 @@
 {
+  "rct1.terrain_edge.brick": "brick.png",
+  "rct1.terrain_edge.iron": "iron.png",
+  "rct1aa.terrain_edge.grey": "grey.png",
+  "rct1aa.terrain_edge.yellow": "yellow.png",
+  "rct1aa.terrain_edge.red": "red.png",
+  "rct1ll.terrain_edge.purple": "purple.png",
+  "rct1ll.terrain_edge.green": "green.png",
+  "rct1ll.terrain_edge.stone_brown": "stone_brown.png",
+  "rct1ll.terrain_edge.stone_grey": "stone_grey.png",
+  "rct1ll.terrain_edge.skyscraper_a": "skyscraper_a.png",
+  "rct1ll.terrain_edge.skyscraper_b": "skyscraper_b.png",
+  "rct2.terrain_edge.ice": "ice.png",
+  "rct2.terrain_edge.rock": "rock.png",
+  "rct2.terrain_edge.wood_black": "wood_black.png",
   "rct2.terrain_edge.wood_red": "wood_red.png"
 }

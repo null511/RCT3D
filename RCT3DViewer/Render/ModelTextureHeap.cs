@@ -29,6 +29,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
     {
         _context = context;
         _commandPool = commandPool;
+
         try {
             CreateDescriptorResources();
             Initialize();
@@ -42,6 +43,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
     public void SetCommandPool(CommandPool commandPool)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
         if (commandPool.Handle == 0)
             throw new ArgumentException("A valid Vulkan command pool is required.", nameof(commandPool));
 
@@ -58,6 +60,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             CreateFallback(128, 128, 255, 255),
             CreateFallback(255, 0, 0, 0)
         };
+
         var imageInfos = new DescriptorImageInfo[VulkanDeviceContext.ModelTextureDescriptorCapacity];
         for (var index = 0; index < imageInfos.Length; index++)
             imageInfos[index] = new DescriptorImageInfo { ImageView = fallbackViews[index % fallbackViews.Length], ImageLayout = ImageLayout.ShaderReadOnlyOptimal };
@@ -69,10 +72,12 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             DescriptorCount = VulkanDeviceContext.ModelTextureDescriptorCapacity,
             DescriptorType = DescriptorType.SampledImage
         };
+
         fixed (DescriptorImageInfo* imagePointer = imageInfos) {
             imageWrite.PImageInfo = imagePointer;
             _context.Api.UpdateDescriptorSets(_context.LogicalDevice, 1, &imageWrite, 0, null);
         }
+
         _nextTextureIndex = FallbackTextureCount;
         _initialized = true;
     }
@@ -80,8 +85,10 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
     public uint AddMaterial(ModelMaterialLibrary material)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
         if (!_initialized)
             throw new InvalidOperationException("Model texture heap has not been initialized.");
+
         if (_nextTextureIndex > VulkanDeviceContext.ModelTextureDescriptorCapacity - TexturesPerMaterial)
             throw new InvalidOperationException($"Model texture heap capacity of {VulkanDeviceContext.ModelTextureDescriptorCapacity} images was exceeded.");
 
@@ -130,6 +137,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
     public void ResetParkTextures()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
         if (!_initialized)
             throw new InvalidOperationException("Model texture heap has not been initialized.");
 
@@ -138,9 +146,11 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
         var fallbackViews = _textures.Take(checked((int)_parkTextureStartIndex))
             .Select(texture => new DescriptorImageInfo { ImageView = texture.View, ImageLayout = ImageLayout.ShaderReadOnlyOptimal })
             .ToArray();
+
         var descriptorInfos = new DescriptorImageInfo[VulkanDeviceContext.ModelTextureDescriptorCapacity];
         for (var index = 0; index < descriptorInfos.Length; index++)
             descriptorInfos[index] = index < fallbackViews.Length ? fallbackViews[index] : fallbackViews[index % FallbackTextureCount];
+        
         var imageWrite = new WriteDescriptorSet {
             SType = StructureType.WriteDescriptorSet,
             DstSet = DescriptorSet,
@@ -148,6 +158,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             DescriptorCount = VulkanDeviceContext.ModelTextureDescriptorCapacity,
             DescriptorType = DescriptorType.SampledImage
         };
+
         fixed (DescriptorImageInfo* descriptorPointer = descriptorInfos) {
             imageWrite.PImageInfo = descriptorPointer;
             vk.UpdateDescriptorSets(device, 1, &imageWrite, 0, null);
@@ -167,8 +178,10 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
     public void SetParkTextureStartIndex()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
         if (!_initialized)
             throw new InvalidOperationException("Model texture heap has not been initialized.");
+
         _parkTextureStartIndex = _nextTextureIndex;
     }
 
@@ -182,11 +195,13 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             DescriptorCount = VulkanDeviceContext.ModelTextureDescriptorCapacity,
             StageFlags = ShaderStageFlags.FragmentBit
         };
+
         var imageLayoutInfo = new DescriptorSetLayoutCreateInfo {
             SType = StructureType.DescriptorSetLayoutCreateInfo,
             BindingCount = 1,
             PBindings = &imageBinding
         };
+
         Check(vk.CreateDescriptorSetLayout(device, in imageLayoutInfo, null, out var imageLayout), "model texture heap descriptor-set layout");
         DescriptorSetLayout = imageLayout;
 
@@ -196,11 +211,13 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             DescriptorCount = 1,
             StageFlags = ShaderStageFlags.FragmentBit
         };
+
         var samplerLayoutInfo = new DescriptorSetLayoutCreateInfo {
             SType = StructureType.DescriptorSetLayoutCreateInfo,
             BindingCount = 1,
             PBindings = &samplerBinding
         };
+
         Check(vk.CreateDescriptorSetLayout(device, in samplerLayoutInfo, null, out var samplerLayout), "model sampler descriptor-set layout");
         SamplerDescriptorSetLayout = samplerLayout;
 
@@ -211,6 +228,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             PoolSizeCount = 1,
             PPoolSizes = &imagePoolSize
         };
+
         Check(vk.CreateDescriptorPool(device, in imagePoolInfo, null, out var imagePool), "model texture heap descriptor pool");
         DescriptorPool = imagePool;
         var imageLayoutHandle = DescriptorSetLayout;
@@ -220,6 +238,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             DescriptorSetCount = 1,
             PSetLayouts = &imageLayoutHandle
         };
+
         Check(vk.AllocateDescriptorSets(device, in imageAllocateInfo, out var imageSet), "model texture heap descriptor set");
         DescriptorSet = imageSet;
 
@@ -230,6 +249,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             PoolSizeCount = 1,
             PPoolSizes = &samplerPoolSize
         };
+
         Check(vk.CreateDescriptorPool(device, in samplerPoolInfo, null, out var samplerPool), "model sampler descriptor pool");
         SamplerDescriptorPool = samplerPool;
         var samplerLayoutHandle = SamplerDescriptorSetLayout;
@@ -239,6 +259,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             DescriptorSetCount = 1,
             PSetLayouts = &samplerLayoutHandle
         };
+
         Check(vk.AllocateDescriptorSets(device, in samplerAllocateInfo, out var samplerSet), "model sampler descriptor set");
         SamplerDescriptorSet = samplerSet;
 
@@ -255,6 +276,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             MaxLod = 16.0f,
             BorderColor = BorderColor.IntOpaqueBlack
         };
+
         Check(vk.CreateSampler(device, in samplerInfo, null, out var sampler), "model texture heap sampler");
         Sampler = sampler;
         var samplerInfoDescriptor = new DescriptorImageInfo { Sampler = Sampler };
@@ -266,6 +288,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             DescriptorType = DescriptorType.Sampler,
             PImageInfo = &samplerInfoDescriptor
         };
+
         vk.UpdateDescriptorSets(device, 1, &samplerWrite, 0, null);
     }
 
@@ -286,8 +309,10 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
         var mipLevels = checked((uint)BitOperations.Log2((uint)Math.Max(width, height)) + 1);
         vk.GetPhysicalDeviceFormatProperties(_context.PhysicalDevice, format, out var formatProperties);
         var requiredFeatures = FormatFeatureFlags.SampledImageBit;
+        
         if (mipLevels > 1)
             requiredFeatures |= FormatFeatureFlags.BlitSrcBit | FormatFeatureFlags.BlitDstBit | FormatFeatureFlags.SampledImageFilterLinearBit;
+        
         if ((formatProperties.OptimalTilingFeatures & requiredFeatures) != requiredFeatures)
             throw new NotSupportedException($"The Vulkan device cannot sample and generate filtered mipmaps for model texture format {format}.");
 
@@ -317,6 +342,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
                 SharingMode = SharingMode.Exclusive,
                 InitialLayout = ImageLayout.Undefined
             };
+
             Check(vk.CreateImage(device, in imageInfo, null, out image), "model texture image");
             vk.GetImageMemoryRequirements(device, image, out var requirements);
             var memoryInfo = new MemoryAllocateInfo {
@@ -324,6 +350,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
                 AllocationSize = requirements.Size,
                 MemoryTypeIndex = _context.FindMemoryType(requirements.MemoryTypeBits, MemoryPropertyFlags.DeviceLocalBit)
             };
+
             Check(vk.AllocateMemory(device, in memoryInfo, null, out memory), "model texture image memory");
             Check(vk.BindImageMemory(device, image, memory, 0), "bind model texture image memory");
             UploadTexture(image, stagingBuffer, width, height, mipLevels);
@@ -360,12 +387,14 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             Level = CommandBufferLevel.Primary,
             CommandBufferCount = 1
         };
+
         Check(vk.AllocateCommandBuffers(device, in allocationInfo, out var commandBuffer), "model texture upload command buffer");
         try {
             var beginInfo = new CommandBufferBeginInfo {
                 SType = StructureType.CommandBufferBeginInfo,
                 Flags = CommandBufferUsageFlags.OneTimeSubmitBit
             };
+
             Check(vk.BeginCommandBuffer(commandBuffer, in beginInfo), "begin model texture upload command buffer");
             var toTransfer = new ImageMemoryBarrier {
                 SType = StructureType.ImageMemoryBarrier,
@@ -377,11 +406,13 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
                 SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, mipLevels, 0, 1),
                 DstAccessMask = AccessFlags.TransferWriteBit
             };
+
             vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TopOfPipeBit, PipelineStageFlags.TransferBit, 0, 0, null, 0, null, 1, &toTransfer);
             var copy = new BufferImageCopy {
                 ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
                 ImageExtent = new Extent3D((uint)width, (uint)height, 1)
             };
+
             vk.CmdCopyBufferToImage(commandBuffer, stagingBuffer, image, ImageLayout.TransferDstOptimal, 1, &copy);
             for (uint level = 1; level < mipLevels; level++) {
                 var previous = level - 1;
@@ -400,11 +431,13 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
                     SrcAccessMask = AccessFlags.TransferWriteBit,
                     DstAccessMask = AccessFlags.TransferReadBit
                 };
+
                 vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.TransferBit, 0, 0, null, 0, null, 1, &sourceBarrier);
                 var blit = new ImageBlit {
                     SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, previous, 0, 1),
                     DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, level, 0, 1)
                 };
+
                 blit.SrcOffsets[1] = new Offset3D(sourceWidth, sourceHeight, 1);
                 blit.DstOffsets[1] = new Offset3D(destinationWidth, destinationHeight, 1);
                 vk.CmdBlitImage(commandBuffer, image, ImageLayout.TransferSrcOptimal, image, ImageLayout.TransferDstOptimal, 1, &blit, Filter.Linear);
@@ -419,6 +452,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
                     SrcAccessMask = AccessFlags.TransferReadBit,
                     DstAccessMask = AccessFlags.ShaderReadBit
                 };
+
                 vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit, 0, 0, null, 0, null, 1, &shaderBarrier);
             }
             var lastBarrier = new ImageMemoryBarrier {
@@ -432,6 +466,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
                 SrcAccessMask = AccessFlags.TransferWriteBit,
                 DstAccessMask = AccessFlags.ShaderReadBit
             };
+
             vk.CmdPipelineBarrier(commandBuffer, PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit, 0, 0, null, 0, null, 1, &lastBarrier);
             Check(vk.EndCommandBuffer(commandBuffer), "end model texture upload command buffer");
             var submit = new SubmitInfo { SType = StructureType.SubmitInfo, CommandBufferCount = 1, PCommandBuffers = &commandBuffer };
@@ -455,6 +490,7 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
             AllocationSize = requirements.Size,
             MemoryTypeIndex = _context.FindMemoryType(requirements.MemoryTypeBits, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit)
         };
+
         Check(vk.AllocateMemory(device, in allocationInfo, null, out memory), "model texture staging memory");
         Check(vk.BindBufferMemory(device, buffer, memory, 0), "bind model texture staging memory");
     }
@@ -469,15 +505,18 @@ internal sealed unsafe class ModelTextureHeap : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+
         var vk = _context.Api;
         var device = _context.LogicalDevice;
         if (SamplerDescriptorPool.Handle != 0) vk.DestroyDescriptorPool(device, SamplerDescriptorPool, null);
         if (DescriptorPool.Handle != 0) vk.DestroyDescriptorPool(device, DescriptorPool, null);
+
         foreach (var texture in _textures) {
             if (texture.View.Handle != 0) vk.DestroyImageView(device, texture.View, null);
             if (texture.Image.Handle != 0) vk.DestroyImage(device, texture.Image, null);
             if (texture.Memory.Handle != 0) vk.FreeMemory(device, texture.Memory, null);
         }
+
         if (Sampler.Handle != 0) vk.DestroySampler(device, Sampler, null);
         if (SamplerDescriptorSetLayout.Handle != 0) vk.DestroyDescriptorSetLayout(device, SamplerDescriptorSetLayout, null);
         if (DescriptorSetLayout.Handle != 0) vk.DestroyDescriptorSetLayout(device, DescriptorSetLayout, null);

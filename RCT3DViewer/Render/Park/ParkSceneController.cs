@@ -22,7 +22,6 @@ internal sealed class ParkSceneController(
     FrameRenderer frameRenderer) : IDisposable
 {
     private readonly TerrainMeshBuilder terrainMeshBuilder = new(resources.TerrainMaterials!);
-    private readonly PathMeshBuilder pathMeshBuilder = new(resources.PathMaterials!);
     private readonly PathAccessoryMeshBuilder pathAccessoryMeshBuilder = new(resources.PathAccessoryAssets!);
     private readonly TreeSceneryMeshBuilder treeSceneryMeshBuilder = new(resources.TreeSceneryAssets!);
     private readonly TrackMeshBuilder trackMeshBuilder = new();
@@ -121,10 +120,14 @@ internal sealed class ParkSceneController(
                 var terrain = terrainMeshBuilder.Build(snapshot.SurfaceData, snapshot.Width, snapshot.Height, terrainSkirtFloor, tunnelLayout);
 
                 var rideEntranceExitMeshBuilder = new RideEntranceExitMeshBuilder(snapshot.Width, snapshot.Height);
+                var visiblePathSurfaces = PathMeshBuilder.GetVisibleSurfaces(resources.PathMaterials!, snapshot.PathData, snapshot.SurfaceData, snapshot.Width, snapshot.Height);
+                var pathSurfaceMaterials = PathSurfaceMaterials.Load(Path.Combine(AppContext.BaseDirectory, "Assets", "Textures"), visiblePathSurfaces);
+                var pathMeshBuilder = new PathMeshBuilder(resources.PathMaterials!, pathSurfaceMaterials);
 
                 return (
                     Terrain: terrain,
                     Water: WaterMeshData.Combine(terrain.Water, tracks.Water),
+                    PathSurfaceMaterials: pathSurfaceMaterials,
                     Paths: pathMeshBuilder.Build(snapshot.PathData, snapshot.SurfaceData, occupancy, snapshot.Width, snapshot.Height),
                     Navigation: new PathNavigation(snapshot.PathData),
                     PathAccessories: pathAccessoryMeshBuilder.Build(snapshot.PathData, snapshot.Width, snapshot.Height),
@@ -140,7 +143,7 @@ internal sealed class ParkSceneController(
 
             return new ParkLoadResult(
                 parkPath, snapshot.Width, snapshot.Height,
-                meshData.Terrain.Terrain, meshData.Water, meshData.Paths, meshData.Navigation, meshData.PathAccessories,
+                meshData.Terrain.Terrain, meshData.Water, meshData.Paths, meshData.PathSurfaceMaterials, meshData.Navigation, meshData.PathAccessories,
                 meshData.Tracks.Tracks, meshData.Tracks.RideSupports, meshData.RideEntrances, meshData.RideEntranceModels, meshData.Trees, meshData.Tracks.TrackElements, snapshot.RideEntranceData,
                 meshData.Tracks.Centerlines, snapshot.PaletteData, meshData.Vehicles);
         }
@@ -175,6 +178,11 @@ internal sealed class ParkSceneController(
                 resources.TerrainGraphicsResources.UploadMesh(result.Terrain);
                 resources.PathGraphicsResources!.ClearMesh();
                 resources.PathGraphicsResources.UploadMesh(result.Paths);
+                resources.CreatePathSurfaceGraphicsResources(result.PathSurfaceMaterials, result.Paths.Surfaces);
+                resources.PathRailingGraphicsResources!.ClearMesh();
+                resources.PathRailingGraphicsResources.UploadMesh(result.Paths.Railings);
+                resources.PathSupportGraphicsResources!.ClearMesh();
+                resources.PathSupportGraphicsResources.UploadMesh(result.Paths.Supports);
                 resources.WaterGraphicsResources!.UploadMesh(result.Water);
                 resources.CreateTrackGraphicsResources();
                 resources.TrackGraphicsResources!.UploadMesh(result.Tracks);
@@ -332,6 +340,9 @@ internal sealed class ParkSceneController(
                 resources.ModelTextureHeap!.ResetParkTextures();
                 resources.TerrainGraphicsResources?.ClearMesh();
                 resources.PathGraphicsResources?.ClearMesh();
+                resources.ClearPathSurfaceGraphicsResources();
+                resources.PathRailingGraphicsResources?.ClearMesh();
+                resources.PathSupportGraphicsResources?.ClearMesh();
                 resources.WaterGraphicsResources?.ClearMesh();
                 resources.TrackGraphicsResources?.ClearMesh();
                 resources.VehiclePathGraphicsResources?.ClearMesh();
@@ -379,10 +390,24 @@ internal sealed class ParkSceneController(
                 region.IncludeStaticBounds(range.Bounds);
             }
 
-            foreach (var range in paths.SupportRegions) {
+            foreach (var range in paths.Surfaces.Regions) {
+                if (range.IsEmpty) continue;
+                var region = GetOrCreateRenderRegion(range.Region);
+                region.PathSurfaces = range;
+                region.IncludeStaticBounds(range.Bounds);
+            }
+
+            foreach (var range in paths.Supports.Regions) {
                 if (range.IsEmpty) continue;
                 var region = GetOrCreateRenderRegion(range.Region);
                 region.PathSupports = range;
+                region.IncludeStaticBounds(range.Bounds);
+            }
+
+            foreach (var range in paths.Railings.Regions) {
+                if (range.IsEmpty) continue;
+                var region = GetOrCreateRenderRegion(range.Region);
+                region.PathRailings = range;
                 region.IncludeStaticBounds(range.Bounds);
             }
         }
@@ -598,7 +623,7 @@ internal sealed class ParkSceneController(
 
     private sealed record ParkLoadResult(
         string ParkPath, int Width, int Height, TerrainMeshData Terrain, WaterMeshData Water, PathMeshData Paths,
-        PathNavigation Navigation, PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks, RideSupportMeshData RideSupports,
+        PathSurfaceMaterials PathSurfaceMaterials, PathNavigation Navigation, PathAccessoryBatch[] PathAccessories, TrackMeshData Tracks, RideSupportMeshData RideSupports,
         RideEntranceExitMeshData RideEntrances, RideEntranceModelBatch[] RideEntranceModels, TreeSceneryBatch[] Trees,
         RCTTrackElementData[] TrackElements, RCTRideEntranceData[] RideEntranceData,
         TrackCenterlinePiece[] Centerlines, RCTPaletteEntry[] PaletteData, VehicleModel[] Vehicles);

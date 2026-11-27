@@ -1,0 +1,14 @@
+{
+  "cars": [
+    {
+      "model": "RollerCoasterTrains/car1.glb",
+      "localOffset": 0.00,
+      "cameraOffset": 1.10
+    },
+    {
+      "model": "RollerCoasterTrains/car2.glb",
+      "localOffset": 0.00,
+      "cameraOffset": 1.10
+    }
+  ]
+}

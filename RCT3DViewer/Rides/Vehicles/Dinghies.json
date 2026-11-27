@@ -1,9 +1,9 @@
 {
   "cars": [
     {
-      "size": [ 0.86, 0.42, 1.8 ],
-      "worldOffset": 1.0,
-      "localOffset": -0.9
+      "model": "Dinghies/model.glb",
+      "localOffset": -1.1,
+      "cameraOffset": 0.8
     }
   ]
 }

@@ -118,6 +118,46 @@ The full raw sprite set and original drawing offsets are saved under `RAW_DIR\Ve
 
 Output paths follow `configuration.py` and resolve relative to the working directory when configured as relative paths. Reruns replace only the named final outputs. Missing files, incompatible metadata, or export failures report an error and return a nonzero exit code. Running without `--export-vehicle` keeps the existing extraction/processing workflow; the vehicle command does not process vegetation or deploy assets into the viewer.
 
+## Path sprites and textures
+
+From the `AssetExtractor` directory, run:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --export-paths
+```
+
+Configure `OPENRCT2_BIN` in `configuration.py`. The command discovers `.parkobj` and `.json` footpath surface objects in the installed OpenRCT2 object groups, excluding invisible path and queue surfaces. It exports each complete sprite set to `RAW_DIR\Paths\<object-id>`, with original drawing offsets in `sprite_offsets.json`. Raw exports include preview and slope sprites. OpenRCT2 resolves referenced game sprites using its own data configuration and may use an object's RCT2 fallback images when RCT1 CSG data is unavailable; the appropriate game data must be configured in OpenRCT2.
+
+Square 32x32 RGBA textures are written to `OUTPUT_DIR\path\<object-id>`. Ordinary paths export the 47 flat indices `01`–`16` and `21`–`51`; queues export 11 flat variants, excluding three- and four-way junction indices `08`, `12`, `14`, `15`, and `16`. The raw export still contains all source sprites. Original offsets align cropped sprites to the same tile footprint; preview and slope sprites are not converted. Each object's textures are staged before replacement; previously exported excluded files are not automatically deleted. Errors are reported, other objects are still attempted, and any failure returns a nonzero exit code. Textures are not deployed to the viewer.
+
+Copy the desired object directories to `RCT3DViewer\Assets\Textures\path`. The viewer selects the flat sprite index from the path's connections and corners, including on slopes, and loads only variants used by the park's visible path surfaces. Each base `NN.png` is RGBA albedo and opacity; optional 32x32 `NN_n.png` maps store normal X/Y in R/G and ambient occlusion in B, and `NN_s.png` maps store roughness, metalness and scalar subsurface scattering in R/G/B. Missing companion maps use solid defaults. Missing surface variants and unsupported queue junctions use `path\missing.png` and are logged. Surface opacity is cut out in the visible and shadow passes; platform slabs remain textured, while path supports use builder-supplied solid colors.
+
+## Terrain surface textures
+
+From the `AssetExtractor` directory, run:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --export-terrain
+```
+
+Configure `GAME_PATH` for RCT2, `RCT1_PATH` for RCT1 Loopy Landscapes, and `OPENRCT2_BIN` for the installed OpenRCT2 executable in `configuration.py`. The command extracts only the required sprites from `GAME_PATH\Data\g1.dat`, RCT1's CSG files, and OpenRCT2's bundled terrain surface objects. It does not require `--extract-all` or pre-exported G1 PNGs. RCT1 requires `Data\CSG1I.DAT` and `Data\CSG1.DAT` (or `CSG1.1`), with the alternate index location `RCTdeluxe_install\Data\CSG1I.DAT` also supported. RCT1 surface objects and the official wildflowers object must be installed with OpenRCT2. Incompatible object layouts are reported rather than silently using fallback images.
+
+Outputs are 32x32 PNGs in `OUTPUT_DIR\terrain`, including the existing RCT2 and grass textures and `roof_red`, `roof_grey`, `rust`, `wood`, and `wildflowers`. The viewer includes mappings for these five non-recolourable official surfaces. Recolourable grid, designer grid, and void surfaces remain unsupported. Exports are staged and replace only named outputs; independent assets are attempted after errors, and a partial failure returns a nonzero exit code. Paths follow `configuration.py` and resolve relative to the working directory when configured as relative paths. The command does not deploy outputs to the viewer; copy intended new textures into `RCT3DViewer\Assets\Textures\terrain` when updating packaged assets.
+
+## Terrain side textures
+
+From the `AssetExtractor` directory, run:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --export-terrain-sides
+```
+
+Configure `RCT1_PATH` in `AssetExtractor\configuration.py` to a RollerCoaster Tycoon 1 Loopy Landscapes installation and `OPENRCT2_BIN` to the installed OpenRCT2 executable. RCT1's `Data\CSG1I.DAT` and `Data\CSG1.DAT` (or `CSG1.1`), OpenRCT2's terrain edge objects under `data\object\rct1\terrain_edge`, and its `data\palettes.dat` are required for the additional sides. The command extracts only the needed RCT1 sprites into temporary files; it never substitutes RCT2 fallback sprites. The existing RCT2 sides still require previously extracted 32x31 sprites under `RAW_DIR\g1`: `sprite_1594.png` (rock), `sprite_1668.png` (wood_black), `sprite_1752.png` (wood_red), and `sprite_1836.png` (ice). Paths follow `configuration.py` and resolve relative to the working directory when configured as relative paths.
+
+Each sprite is straightened into a 32x16 strip by moving the source window upward one pixel every two columns, then repeated vertically to produce a 32x32 RGBA texture without resampling. Outputs under `OUTPUT_DIR\terrain_side` are `rock.png`, `wood_black.png`, `wood_red.png`, `ice.png`, `brick.png`, `iron.png`, `grey.png`, `yellow.png`, `red.png`, `purple.png`, `green.png`, `stone_brown.png`, `stone_grey.png`, `skyscraper_a.png`, and `skyscraper_b.png`. `stone_grey.png` bakes OpenRCT2's default grey palette; it does not represent per-tile colour changes.
+
+Reruns replace the named outputs; RCT1 outputs are staged before replacement. Missing/corrupt data, unsupported layouts, and output errors are reported and return a nonzero exit code; independent assets are still attempted. All RCT1 inputs are required for complete success. The command does not extract the existing RCT2 sprites or deploy textures into the viewer.
+
 ## Plain ride entrance and exit sprites
 
 With `OPENRCT2_BIN` configured, run from the AssetExtractor directory:

@@ -98,7 +98,7 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
 
     public void ClearInstances() => regionBatchCount = 0;
 
-    public void DrawInstanced(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, ModelRegionRange region, bool wireframe = false)
+    public void DrawInstanced(CommandBuffer commandBuffer, DescriptorSet uniformDescriptorSet, ModelRegionRange region, ref bool descriptorsBound, bool wireframe = false)
     {
         if (IndexCount == 0 || region.InstanceCount == 0)
             return;
@@ -106,11 +106,14 @@ internal sealed unsafe class ModelGraphicsResources : IDisposable
         var vk = _context.Api;
         var pipeline = wireframe && WireframePipeline.Handle != 0 ? WireframePipeline : Pipeline;
         vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, pipeline);
-        var descriptorSets = stackalloc DescriptorSet[3];
-        descriptorSets[0] = uniformDescriptorSet;
-        descriptorSets[1] = _textureHeap.DescriptorSet;
-        descriptorSets[2] = _textureHeap.SamplerDescriptorSet;
-        vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, PipelineLayout, 0, 3, descriptorSets, 0, null);
+        if (!descriptorsBound) {
+            var descriptorSets = stackalloc DescriptorSet[3];
+            descriptorSets[0] = uniformDescriptorSet;
+            descriptorSets[1] = _textureHeap.DescriptorSet;
+            descriptorSets[2] = _textureHeap.SamplerDescriptorSet;
+            vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, PipelineLayout, 0, 3, descriptorSets, 0, null);
+            descriptorsBound = true;
+        }
         var baseTextureIndex = _baseTextureIndex;
         vk.CmdPushConstants(commandBuffer, PipelineLayout, ShaderStageFlags.FragmentBit, 0, sizeof(uint), &baseTextureIndex);
 

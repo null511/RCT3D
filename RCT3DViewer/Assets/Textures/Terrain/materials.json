@@ -1,4 +1,9 @@
 {
+  "rct1aa.terrain_surface.roof_red": "roof_red.png",
+  "rct1ll.terrain_surface.roof_grey": "roof_grey.png",
+  "rct1ll.terrain_surface.rust": "rust.png",
+  "rct1ll.terrain_surface.wood": "wood.png",
+  "rct1beta.terrain_surface.wildflowers": "wildflowers.png",
   "rct2.terrain_surface.chequerboard": "chequerboard.png",
   "rct2.terrain_surface.dirt": "dirt.png",
   "rct2.terrain_surface.grass": "grass_0.png",
