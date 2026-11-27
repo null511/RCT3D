@@ -36,13 +36,17 @@ def isometric_to_square(iso_img: ImageFile, output_path, target_dim = 32):
 def flat_path_to_square(iso_img: Image.Image, x_offset: int, y_offset: int):
     source = iso_img.convert("RGBA")
     output = Image.new("RGBA", (32, 32))
+
     for u in range(32):
         for v in range(32):
-            # Sample pixel centers in the shared 64x31 flat-tile footprint.
-            x = v - u - x_offset
-            y = ((u + v + 1) * 31 // 64) - y_offset
+            # Match OpenRCT2's 1:2 projection and align alternating output columns.
+            sample_v = max(0, v - (u % 2))
+            x = sample_v - u - x_offset
+            y = (u + sample_v) // 2 - y_offset
+
             if 0 <= x < source.width and 0 <= y < source.height:
                 output.putpixel((u, v), source.getpixel((x, y)))
+
     return output
 
 

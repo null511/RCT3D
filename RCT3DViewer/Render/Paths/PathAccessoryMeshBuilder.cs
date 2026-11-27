@@ -1,4 +1,5 @@
 using RCT3D.Interop.Models;
+using Serilog;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
@@ -6,15 +7,13 @@ namespace RCT3D.Render.Paths;
 
 internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
 {
-    private const float TileSize = 3.0f;
-    private const float BaseHeightScale = 0.75f;
-    private const float SlopedPathHeightOffset = 0.75f;
     private const byte EdgeNorthEast = 0;
     private const byte EdgeSouthEast = 1;
     private const byte EdgeSouthWest = 2;
     private const byte EdgeNorthWest = 3;
 
     private readonly Dictionary<(PathAccessoryModel Model, int MeshIndex), BatchBuilder> _batches = new();
+    private readonly HashSet<uint> _missingModelsLogged = new();
 
 
     public PathAccessoryBatch[] Build(ReadOnlySpan<RCTTilePathData> paths, int mapWidth, int mapHeight)
@@ -23,18 +22,23 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
         var loadedModels = new Dictionary<PathAccessoryModelDefinition, PathAccessoryModel>();
 
         foreach (var path in paths) {
-            if (path is { IsLampAddition: false, IsBenchAddition: false }) continue;
+            if (path is { IsLampAddition: false, IsBenchAddition: false, IsBinAddition: false }) continue;
 
             if ((uint)path.TileX >= (uint)mapWidth || (uint)path.TileY >= (uint)mapHeight)
                 throw new InvalidDataException($"OpenRCT2 returned a path accessory outside the {mapWidth}x{mapHeight} map.");
 
-            var isBench = path.IsBenchAddition;
-            var modelDefinition = isBench ? assets.GetBenchModel(path.AdditionIdHash) : assets.GetLampModel(path.AdditionIdHash);
+            if (!assets.TryGetModel(path.AdditionIdHash, out var modelDefinition)) {
+                if (_missingModelsLogged.Add(path.AdditionIdHash))
+                    Log.Warning("Missing path accessory model for object ID hash {ObjectIdHash:X8}; add Assets\\Models\\Path\\<object-id>\\model.glb to render it", path.AdditionIdHash);
+                continue;
+            }
+
             if (!loadedModels.TryGetValue(modelDefinition, out var model)) {
                 model = assets.LoadModel(modelDefinition);
                 loadedModels.Add(modelDefinition, model);
             }
-            var baseHeight = path.BaseZ * BaseHeightScale + (path.IsSloped ? SlopedPathHeightOffset : 0.0f);
+
+            var baseHeight = path.BaseZ * WorldUnits.HeightPerBaseUnit + (path.IsSloped ? WorldUnits.HeightPerBaseUnit : 0.0f);
 
             var region = new RenderRegionCoordinate(
                 path.TileX / RenderRegionLayout.RegionSizeInTiles,
@@ -43,9 +47,9 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
             for (byte edge = 0; edge < 4; edge++) {
                 if ((path.Edges & (1 << edge)) != 0) continue;
 
-                var (localX, localZ, edgeYaw) = isBench ? GetBenchEdgePlacement(edge) : GetLampEdgePlacement(edge);
-                var position = new Vector3(path.TileX * TileSize + localX, baseHeight, path.TileY * TileSize + localZ);
-                var yaw = (model.YawDegrees + edgeYaw) * (MathF.PI / 180.0f);
+                var (localX, localZ, edgeYaw) = path.IsBinAddition ? GetBinEdgePlacement(edge) : GetLampEdgePlacement(edge);
+                var position = new Vector3(path.TileX * WorldUnits.TileSize + localX, baseHeight, path.TileY * WorldUnits.TileSize + localZ);
+                var yaw = edgeYaw * (MathF.PI / 180.0f);
                 var rotation = Matrix4x4.CreateRotationY(yaw);
                 var transform = rotation * Matrix4x4.CreateTranslation(position);
 
@@ -77,7 +81,7 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
 
     private static (float X, float Z, float YawDegrees) GetLampEdgePlacement(byte edge)
     {
-        var unit = TileSize / 32.0f;
+        var unit = WorldUnits.TileSize / 32.0f;
 
         return edge switch {
             EdgeNorthEast => (2.0f * unit, 16.0f * unit, 90.0f),
@@ -88,15 +92,18 @@ internal sealed class PathAccessoryMeshBuilder(PathAccessoryAssetLibrary assets)
         };
     }
 
-    private static (float X, float Z, float YawDegrees) GetBenchEdgePlacement(byte edge)
+    private static (float X, float Z, float YawDegrees) GetBinEdgePlacement(byte edge)
     {
-        var unit = TileSize / 32.0f;
+        const float unit = WorldUnits.TileSize / 32.0f;
+        const float offset = 5f;
+        const float center = 16f;
+        const float offsetInv = 32f - offset;
 
         return edge switch {
-            EdgeNorthEast => (2.0f * unit, 16.0f * unit, 90.0f),
-            EdgeSouthEast => (16.0f * unit, 30.0f * unit, 180.0f),
-            EdgeSouthWest => (30.0f * unit, 16.0f * unit, -90.0f),
-            EdgeNorthWest => (16.0f * unit, 2.0f * unit, 0.0f),
+            EdgeNorthEast => (offset * unit, center * unit, 90.0f),
+            EdgeSouthEast => (center * unit, offsetInv * unit, 180.0f),
+            EdgeSouthWest => (offsetInv * unit, center * unit, -90.0f),
+            EdgeNorthWest => (center * unit, offset * unit, 0.0f),
             _ => throw new ArgumentOutOfRangeException(nameof(edge)),
         };
     }

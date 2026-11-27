@@ -74,7 +74,7 @@ MSBuild .\RCT3DViewer\RCT3D-Viewer.csproj /restore /p:Configuration=Release
 dotnet run --project .\RCT3DViewer\RCT3D-Viewer.csproj --configuration Release --no-build
 ```
 
-The application build compiles Slang shaders, builds only the base OpenRCT2 `libopenrct2.vcxproj` target, and copies the adapter, runtime data, and terrain textures to the application output directory. It does not build the full OpenRCT2 solution. The DLL must include the viewer adapter's ABI 6 exports. Alternatively, set `OpenRCT2AdapterDll` to an ABI-compatible adapter DLL path:
+The application build compiles Slang shaders, builds only the base OpenRCT2 `libopenrct2.vcxproj` target, and copies the adapter, runtime data, and terrain textures to the application output directory. It does not build the full OpenRCT2 solution. The DLL must include the viewer adapter's ABI 46 exports. Alternatively, set `OpenRCT2AdapterDll` to an ABI-compatible adapter DLL path:
 
 ```powershell
 MSBuild .\RCT3DViewer\RCT3D-Viewer.csproj /restore /p:Configuration=Release /p:OpenRCT2AdapterDll="D:\path\to\libopenrct2.dll"
@@ -103,6 +103,12 @@ Model paths resolve relative to the application's `Assets\Models\Vehicle` direct
 
 Missing or null `model` uses the existing cube. A configured model that cannot load logs an error once per type per park and also uses the cube. `size` controls only that cube and is baked into its shared geometry; it does not resize imported models. Both model and cube instances carry only pose and dynamic primary vehicle color. The shader multiplies authored base-color RGB by the linearized per-instance color, preserving textures and opacity. Geometry/materials are shared by differently colored vehicles of the same type, and park-specific resources are released on unload/replacement.
 
+## Path accessory models
+
+Place each bin, lamp or bench model at `RCT3DViewer\Assets\Models\Path\<object-id>\model.glb`, for example `Path\rct2.footpath_item.litter1\model.glb`. The folder name must exactly match the loaded OpenRCT2 object's identifier. Models retain their authored scale and origin; Y is up, and the unrotated model is placed at the northwest path edge before rotating for other edges. One world unit is one third of a path tile.
+
+Only matching models are rendered; unmatched accessories are skipped and their identifier hashes are logged. The old lamp and bench manifests and default models are not used as fallbacks. Raw legacy DAT objects can have no modern identifier, so they cannot necessarily match these folders. Unsupported path additions such as fountains are not rendered by this catalog. A directory without `model.glb` or a model that fails to load reports an error.
+
 ## Vehicle reference sprites
 
 AssetExtractor exports four primary flat-track directions for every car type defined by a ride object's metadata. It reads metadata from a `.parkobj` file or, with `--vehicle-metadata`, from a separate JSON file for a DAT source. Configure `OPENRCT2_BIN` in `AssetExtractor\configuration.py`.
@@ -128,7 +134,7 @@ From the `AssetExtractor` directory, run:
 
 Configure `OPENRCT2_BIN` in `configuration.py`. The command discovers `.parkobj` and `.json` footpath surface objects in the installed OpenRCT2 object groups, excluding invisible path and queue surfaces. It exports each complete sprite set to `RAW_DIR\Paths\<object-id>`, with original drawing offsets in `sprite_offsets.json`. Raw exports include preview and slope sprites. OpenRCT2 resolves referenced game sprites using its own data configuration and may use an object's RCT2 fallback images when RCT1 CSG data is unavailable; the appropriate game data must be configured in OpenRCT2.
 
-Square 32x32 RGBA textures are written to `OUTPUT_DIR\path\<object-id>`. Ordinary paths export the 47 flat indices `01`–`16` and `21`–`51`; queues export 11 flat variants, excluding three- and four-way junction indices `08`, `12`, `14`, `15`, and `16`. The raw export still contains all source sprites. Original offsets align cropped sprites to the same tile footprint; preview and slope sprites are not converted. Each object's textures are staged before replacement; previously exported excluded files are not automatically deleted. Errors are reported, other objects are still attempted, and any failure returns a nonzero exit code. Textures are not deployed to the viewer.
+Square 32x32 RGBA textures are written to `OUTPUT_DIR\path\<object-id>`. Ordinary paths export the 47 flat indices `01`–`16` and `21`–`51`; queues export 11 flat variants, excluding three- and four-way junction indices `08`, `12`, `14`, `15`, and `16`. The raw export still contains all source sprites. Original offsets align cropped sprites to the same tile footprint; preview and slope sprites are not converted. The conversion uses OpenRCT2's 1:2 projection, then aligns zero-based odd output columns one pixel downward, repeating the top sample and clipping the bottom pixel. Each object's textures are staged before replacement; previously exported excluded files are not automatically deleted. Errors are reported, other objects are still attempted, and any failure returns a nonzero exit code. Re-export to apply conversion changes to older outputs. Textures are not deployed to the viewer.
 
 Copy the desired object directories to `RCT3DViewer\Assets\Textures\path`. The viewer selects the flat sprite index from the path's connections and corners, including on slopes, and loads only variants used by the park's visible path surfaces. Each base `NN.png` is RGBA albedo and opacity; optional 32x32 `NN_n.png` maps store normal X/Y in R/G and ambient occlusion in B, and `NN_s.png` maps store roughness, metalness and scalar subsurface scattering in R/G/B. Missing companion maps use solid defaults. Missing surface variants and unsupported queue junctions use `path\missing.png` and are logged. Surface opacity is cut out in the visible and shadow passes; platform slabs remain textured, while path supports use builder-supplied solid colors.
 
